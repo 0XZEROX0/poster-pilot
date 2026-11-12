@@ -2,6 +2,8 @@
 export const ar: Record<string, string> = {
   PosterPilot: 'بوستر بايلوت',
   Home: 'الرئيسية',
+  Dashboard: 'لوحة التحكم',
+  'Next 7 days': 'الأيام السبعة القادمة',
   Review: 'مراجعة',
   Fix: 'إصلاح',
   Calendar: 'التقويم',

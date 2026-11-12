@@ -8,9 +8,10 @@ import { PostSheet } from './components/PostSheet'
 import { ReviewView } from './components/ReviewView'
 import { agoLabel, SettingsSheet } from './components/SettingsSheet'
 import { Icon, Toast } from './components/ui'
-import { stageOf } from './data/logic'
+import { useDesktop } from './components/useDesktop'
+import { cairoNow, stageOf } from './data/logic'
 import { signIn, signOutNow, useSession } from './data/store'
-import { t, useLang } from './i18n'
+import { locale, t, useLang } from './i18n'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
@@ -32,6 +33,7 @@ export default function App() {
   const session = useSession()
   const [tab, setTab] = useState<Tab>(tabFromHash)
   const [overlay, setOverlay] = useState<Overlay>(null)
+  const desktop = useDesktop()
 
   // The tab lives in the address, so the phone's back button moves between screens.
   useEffect(() => {
@@ -42,6 +44,7 @@ export default function App() {
   const go = (next: Tab) => {
     location.hash = `#/${next}`
     window.scrollTo(0, 0)
+    document.querySelector('.desk-main')?.scrollTo(0, 0)
   }
   const close = useCallback(() => setOverlay(null), [])
   const open = (id: string) => setOverlay({ kind: 'post', id })
@@ -78,33 +81,87 @@ export default function App() {
   const health = data.health
   const quiet = session.mode === 'cloud' && data.loaded && (!health || Date.now() - health.lastSync > QUIET_MS)
 
+  const title = t(tab === 'home' ? (desktop ? 'Dashboard' : 'PosterPilot') : TABS.find((x) => x.id === tab)!.label)
+  const banners = (
+    <>
+      {session.mode === 'demo' && <p className="banner"><b>{t('Demo mode')}.</b> {t('Sample data in this browser. Nothing is posted.')}</p>}
+      {quiet && <p className="banner banner-bad">{t('The engine has been quiet for a while. Check that n8n is running.')}</p>}
+      {session.error && <p className="banner banner-bad" dir="ltr">{session.error}</p>}
+    </>
+  )
+  const page = !data.loaded ? (
+    <div className="splash">{t('Loading…')}</div>
+  ) : tab === 'home' ? (
+    <HomeView data={data} go={go} onOpen={open} desktop={desktop} />
+  ) : tab === 'review' ? (
+    <ReviewView data={data} onOpen={open} />
+  ) : tab === 'fix' ? (
+    <FixView data={data} onOpen={open} />
+  ) : tab === 'calendar' ? (
+    <CalendarView data={data} onOpen={open} />
+  ) : (
+    <PostedView data={data} onOpen={open} />
+  )
+  const overlays = (
+    <>
+      {openPost && <PostSheet key={openPost.id} post={openPost} data={data} onClose={close} />}
+      {overlay?.kind === 'new' && <NewPostSheet data={data} onClose={close} />}
+      {overlay?.kind === 'settings' && <SettingsSheet session={session} onClose={close} />}
+      <Toast />
+    </>
+  )
+
+  // Desktop website: a sidebar and a dashboard that fills the window.
+  if (desktop) {
+    const name = session.user?.displayName || session.user?.email || t('Demo mode')
+    return (
+      <div className="desk">
+        <aside className="sidebar">
+          <div className="brand"><Logo size={34} />{t('PosterPilot')}</div>
+          <button className="btn btn-primary side-add" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New post')}</button>
+          <nav className="side-nav">
+            {TABS.map((x) => (
+              <button key={x.id} className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>
+                <Icon name={x.icon} size={20} />
+                <span>{t(x.id === 'home' ? 'Dashboard' : x.label)}</span>
+                {counts[x.id] ? <i className={x.id === 'fix' ? 'count count-bad' : 'count'}>{counts[x.id]}</i> : null}
+              </button>
+            ))}
+            <button onClick={() => setOverlay({ kind: 'settings' })}><Icon name="settings" size={20} /><span>{t('Settings')}</span></button>
+          </nav>
+          <div className="side-foot">
+            {session.mode === 'cloud' && (
+              <p className="side-engine"><span className={`health${quiet ? ' health-bad' : ''}`} />{t('Engine')}: {health ? agoLabel(health.lastSync) : '—'}</p>
+            )}
+            <div className="side-user">
+              <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
+              <strong dir="auto">{name}</strong>
+            </div>
+          </div>
+        </aside>
+        <div className="desk-main">
+          <header className="desk-top">
+            <h1>{title}</h1>
+            <span className="muted">{new Date(`${cairoNow().date}T12:00:00Z`).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}</span>
+          </header>
+          {banners}
+          <div className={`desk-content page-${tab}`}>{page}</div>
+        </div>
+        {overlays}
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <header className="top">
         <Logo size={30} />
-        <h1>{t(TABS.find((x) => x.id === tab)!.label === 'Home' ? 'PosterPilot' : TABS.find((x) => x.id === tab)!.label)}</h1>
+        <h1>{title}</h1>
         {session.mode === 'cloud' && <span className={`health${quiet ? ' health-bad' : ''}`} title={health ? agoLabel(health.lastSync) : ''} />}
-        <button className="btn btn-primary top-new" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={18} />{t('New post')}</button>
         <button className="icon-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')}><Icon name="settings" /></button>
       </header>
-      {session.mode === 'demo' && <p className="banner"><b>{t('Demo mode')}.</b> {t('Sample data in this browser. Nothing is posted.')}</p>}
-      {quiet && <p className="banner banner-bad">{t('The engine has been quiet for a while. Check that n8n is running.')}</p>}
-      {session.error && <p className="banner banner-bad" dir="ltr">{session.error}</p>}
-      <main>
-        {!data.loaded ? (
-          <div className="splash">{t('Loading…')}</div>
-        ) : tab === 'home' ? (
-          <HomeView data={data} go={go} onOpen={open} />
-        ) : tab === 'review' ? (
-          <ReviewView data={data} onOpen={open} />
-        ) : tab === 'fix' ? (
-          <FixView data={data} onOpen={open} />
-        ) : tab === 'calendar' ? (
-          <CalendarView data={data} onOpen={open} />
-        ) : (
-          <PostedView data={data} onOpen={open} />
-        )}
-      </main>
+      {banners}
+      <main>{page}</main>
       <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New post')}><Icon name="plus" size={26} /></button>
       <nav className="tabs">
         {TABS.map((x) => (
@@ -117,10 +174,7 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {openPost && <PostSheet key={openPost.id} post={openPost} data={data} onClose={close} />}
-      {overlay?.kind === 'new' && <NewPostSheet data={data} onClose={close} />}
-      {overlay?.kind === 'settings' && <SettingsSheet session={session} onClose={close} />}
-      <Toast />
+      {overlays}
     </div>
   )
 }
