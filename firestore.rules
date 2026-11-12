@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only the Google accounts listed in config/access (field `emails`, a list) may use the app.
+    // That document is edited in the Firebase console; the app can read it but never change it.
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in get(/databases/$(database)/documents/config/access).data.emails;
+    }
+
+    match /config/{id} {
+      allow read: if allowed();
+    }
+    match /posts/{id} {
+      allow read, create, update: if allowed();
+    }
+    match /catalog/{id} {
+      allow read, write: if allowed();
+    }
+    match /status/{id} {
+      allow read: if allowed();
+    }
+  }
+}
