@@ -24,15 +24,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      # .env is not committed: the FIREBASE_ENV repository secret holds the whole file (same lines
-      # as .env.example). Without the secret the site is built in demo mode, with sample data.
-      - name: Build web app
-        env:
-          FIREBASE_ENV: ${{ secrets.FIREBASE_ENV }}
-        run: |
-          printf '%s\n' "$FIREBASE_ENV" | tr -d '\r' > .env
-          grep -q '^VITE_FIREBASE_API_KEY=.' .env || echo "::warning::No FIREBASE_ENV secret: building in demo mode"
-          npm run build
+      # The Firebase web config comes from .env.production in the repository.
+      - run: npm run build
       - name: Publish to the gh-pages branch
         run: |
           cd dist

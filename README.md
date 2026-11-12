@@ -37,7 +37,8 @@ Firebase console (Project settings, Your apps, Web app). Then:
 3. In Firestore, create the document `config/access` with a list field `emails` holding the
    Google accounts that may open the app.
 
-For the published site, put the same lines as `.env` into the repository secret `FIREBASE_ENV`.
+The published site reads the same values from `.env.production`, which is committed: they are the
+web app's public identifiers, not secrets. Access is protected by the rules and the access list.
 
 ## How the data is laid out
 
