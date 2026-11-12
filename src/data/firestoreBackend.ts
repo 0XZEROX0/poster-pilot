@@ -11,7 +11,8 @@ import { emptyData, type CaptionTemplate, type Data, type Health, type Post, typ
 //   config/access       { emails: string[] }   who may open the app (see firestore.rules)
 //
 // Every change made in the app is also listed under the post's `appEdits` map, so the engine can
-// tell what the person changed and carry it out. The engine removes each entry when it is done.
+// tell what the person changed and carry it out. `appDirty` is true while something is waiting, so
+// the engine can ask for just those posts. The engine removes each entry when it is done.
 
 const blankPost: Omit<Post, 'id'> = {
   order: 0, items: [], company: '', priceBefore: '', priceAfter: '', style: '', details: '', posterUrl: '', photoStatus: '', feedback: '',
@@ -52,10 +53,10 @@ export function createFirestoreBackend(db: Firestore): Backend {
     },
     async addPost(post) {
       const ref = doc(collection(db, 'posts'))
-      await setDoc(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), appNew: true, appEditedAt: serverTimestamp() })
+      await setDoc(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), appNew: true, appDirty: true, appEditedAt: serverTimestamp() })
     },
     async updatePost(id, patch) {
-      const edits: Record<string, unknown> = { appEditedAt: serverTimestamp() }
+      const edits: Record<string, unknown> = { appDirty: true, appEditedAt: serverTimestamp() }
       for (const [key, value] of Object.entries(patch)) {
         edits[key] = value
         edits[`appEdits.${key}`] = value
@@ -64,7 +65,7 @@ export function createFirestoreBackend(db: Firestore): Backend {
     },
     async removePost(id) {
       // The engine removes the document after it has cancelled anything already scheduled.
-      await updateDoc(doc(db, 'posts', id), { appDeleted: true, appEditedAt: serverTimestamp(), appEdits: deleteField() })
+      await updateDoc(doc(db, 'posts', id), { appDeleted: true, appDirty: true, appEditedAt: serverTimestamp(), appEdits: deleteField() })
     },
     async saveTemplates(templates) {
       await setDoc(doc(db, 'catalog', 'templates'), { items: templates, appEditedAt: serverTimestamp() })
