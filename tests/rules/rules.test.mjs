@@ -6,7 +6,7 @@ const as = (uid, email, verified = true) => env.authenticatedContext(uid, { emai
 let n = 0, bad = 0
 const ok = async (name, p) => { n++; try { await assertSucceeds(p) } catch (e) { bad++; console.log('SHOULD PASS:', name, String(e.message).slice(0, 120)) } }
 const no = async (name, p) => { n++; try { await assertFails(p) } catch (e) { bad++; console.log('SHOULD FAIL:', name) } }
-const CODE = 'STATIC-AAAA-BBBB-CCCC'
+const CODE = 'STATIC-AAAA-BBBB-CCCC', CODE2 = 'STATIC-DDDD-EEEE-FFFF', CODE3 = 'STATIC-GGGG-HHHH-JJJJ'
 await env.withSecurityRulesDisabled(async (c) => {
   const db = c.firestore()
   await setDoc(doc(db, 'config/access'), { emails: ['boss@x.com', 'old@x.com'] })
@@ -53,7 +53,11 @@ await ok('owner lists requests', getDocs(collection(boss, 'requests')))
 await no('owner accepts as admin directly', setDoc(doc(boss, 'members/u-s'), m('s@x.com', 'admin')))
 await no('owner adds someone with no request', setDoc(doc(boss, 'members/u-zz'), m('zz@x.com', 'member')))
 await no('accept with a different email', setDoc(doc(boss, 'members/u-s'), m('evil@x.com', 'member')))
-{ const b = writeBatch(boss); b.set(doc(boss, 'members/u-s'), m('s@x.com', 'member')); b.delete(doc(boss, 'requests/u-s')); await ok('owner accepts (batch)', b.commit()) }
+await no('owner accepts without changing the code', setDoc(doc(boss, 'members/u-s'), m('s@x.com', 'member')))
+{ const b = writeBatch(boss); b.set(doc(boss, 'members/u-s'), m('s@x.com', 'member')); b.delete(doc(boss, 'requests/u-s')); b.set(doc(boss, 'secret/code'), { code: CODE, changedAt: 2, lastJoin: 'u-s' }, { merge: true }); await no('owner accepts but keeps the same code', b.commit()) }
+{ const b = writeBatch(boss); b.set(doc(boss, 'members/u-s'), m('s@x.com', 'member')); b.delete(doc(boss, 'requests/u-s')); b.set(doc(boss, 'secret/code'), { code: CODE2, changedAt: 2, lastJoin: 'u-s' }, { merge: true }); await ok('owner accepts and the code changes (batch)', b.commit()) }
+await no('the used code no longer files a request', setDoc(doc(as('u-x', 'x@x.com'), 'requests/u-x'), { email: 'x@x.com', name: 'X', code: CODE, createdAt: serverTimestamp() }))
+await ok('the new code files a request', setDoc(doc(as('u-x', 'x@x.com'), 'requests/u-x'), { email: 'x@x.com', name: 'X', code: CODE2, createdAt: serverTimestamp() }))
 await ok('accepted person reads posts', getDoc(doc(stranger, 'posts/p1')))
 // roles
 await no('member promotes self', updateDoc(doc(stranger, 'members/u-s'), { role: 'admin' }))
@@ -72,9 +76,17 @@ await env.withSecurityRulesDisabled(async (c) => {
   await setDoc(doc(c.firestore(), 'requests/u-late'), { email: 'late@x.com', name: 'L', code: CODE, createdAt: new Date(Date.now() - 8 * 86400000) })
   await setDoc(doc(c.firestore(), 'requests/u-new'), { email: 'new@x.com', name: 'N', code: CODE, createdAt: new Date() })
 })
-await no('accept an expired request', setDoc(doc(boss, 'members/u-late'), m('late@x.com', 'member')))
-await ok('owner resets code', setDoc(doc(boss, 'secret/code'), { code: 'STATIC-ZZZZ-ZZZZ-ZZZZ', changedAt: 2 }))
-await no('accept a request made with the old code', setDoc(doc(stranger, 'members/u-new'), m('new@x.com', 'member')))
+{ const b = writeBatch(boss); b.set(doc(boss, 'members/u-late'), m('late@x.com', 'member')); b.set(doc(boss, 'secret/code'), { code: CODE3, changedAt: 3, lastJoin: 'u-late' }, { merge: true }); await no('accept an expired request', b.commit()) }
+// an admin (u-s) accepts u-x, who asked with a code that has not been reset by hand
+await no('admin changes the code on its own', setDoc(doc(stranger, 'secret/code'), { code: CODE3, changedAt: 3, lastJoin: 'u-x' }, { merge: true }))
+await no('admin changes the code naming an existing member', setDoc(doc(stranger, 'secret/code'), { code: CODE3, changedAt: 3, lastJoin: 'u-old' }, { merge: true }))
+{ const b = writeBatch(stranger); b.set(doc(stranger, 'members/u-x'), m('x@x.com', 'member')); b.delete(doc(stranger, 'requests/u-x')); b.set(doc(stranger, 'secret/code'), { code: CODE3, changedAt: 3, lastJoin: 'u-x', resetAt: serverTimestamp() }, { merge: true }); await no('admin sneaks a manual reset into an accept', b.commit()) }
+{ const b = writeBatch(stranger); b.set(doc(stranger, 'members/u-x'), m('x@x.com', 'member')); b.delete(doc(stranger, 'requests/u-x')); b.set(doc(stranger, 'secret/code'), { code: CODE3, changedAt: 3, lastJoin: 'u-x' }, { merge: true }); await ok('admin accepts and the code changes', b.commit()) }
+await ok('request made before an automatic change still stands', getDoc(doc(boss, 'requests/u-new')))
+{ const b = writeBatch(boss); b.set(doc(boss, 'members/u-new'), m('new@x.com', 'member')); b.set(doc(boss, 'secret/code'), { code: 'STATIC-KKKK-KKKK-KKKK', changedAt: 4, lastJoin: 'u-new' }, { merge: true }); await ok('a request from before an automatic change can still be accepted', b.commit()) }
+await env.withSecurityRulesDisabled(async (c) => { await deleteDoc(doc(c.firestore(), 'members/u-new')); await setDoc(doc(c.firestore(), 'requests/u-new'), { email: 'new@x.com', name: 'N', code: CODE, createdAt: new Date() }) })
+await ok('owner resets code', setDoc(doc(boss, 'secret/code'), { code: 'STATIC-ZZZZ-ZZZZ-ZZZZ', changedAt: 2, resetAt: serverTimestamp() }))
+{ const b = writeBatch(stranger); b.set(doc(stranger, 'members/u-new'), m('new@x.com', 'member')); b.set(doc(stranger, 'secret/code'), { code: 'STATIC-MMMM-MMMM-MMMM', changedAt: 5, lastJoin: 'u-new' }, { merge: true }); await no('accept a request made before the owner reset the code', b.commit()) }
 await ok('admin declines', deleteDoc(doc(stranger, 'requests/u-new')))
 // removal and the first list
 await no('member edits first list', updateDoc(doc(old, 'config/access'), { emails: ['boss@x.com'] }))

@@ -1,3 +1,5 @@
+import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
+import { CardSize } from './CardSize'
 import { useState } from 'react'
 import { formatPrice, hasOffer, offerOf, priceOf, stageOf, titleOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName } from '../data/store'
@@ -52,21 +54,39 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   const offers = data.posts.filter((p) => stageOf(p) === 'offer')
   const waiting = offers.filter((p) => offerOf(p) === 'waiting')
   const back = offers.filter((p) => offerOf(p) === 'rejected')
+  const bulk = useBulk(offers.map((p) => p.id))
   if (!offers.length) return <Empty icon="offer" text={t('No offers are waiting. A new post shows up here until someone approves it.')} />
+  const post = (id: string) => offers.find((p) => p.id === id)
+  // Only a waiting offer that someone else made can be decided, the same as on its card.
+  const mine = (p: Post) => p.createdBy === myId() && !isOwner()
+  const open = (id: string) => { const p = post(id); return p && offerOf(p) === 'waiting' && !mine(p) ? p : null }
+  const actions: BulkAction[] = [
+    ...(allowed('offers.approve') ? [
+      { label: 'Approve offer', icon: 'check', tone: 'primary' as const, run: (id: string) => (open(id) ? backend.updatePost(id, { offer: 'Approved', offerBy: myName(), offerNote: '' }) : false) },
+      { label: 'Send back', run: (id: string) => (open(id) ? backend.updatePost(id, { offer: 'Rejected', offerBy: myName(), offerNote: '' }) : false) },
+    ] : []),
+    ...(allowed('delete') ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => backend.removePost(id) }] : []),
+  ]
+  const cards = (list: Post[]) => <div className="cards">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id}><OfferCard post={p} onOpen={onOpen} /></Pick>)}</div>
   return (
-    <>
+    <div className="view">
+      <div className="review-bar tools">
+        {actions.length > 0 && <BulkToggle bulk={bulk} />}
+        <CardSize />
+      </div>
       {waiting.length > 0 && (
         <section>
           <h2 className="group">{t('Waiting for approval')} <span className="group-count">{waiting.length}</span></h2>
-          <div className="cards">{waiting.map((p) => <OfferCard key={p.id} post={p} onOpen={onOpen} />)}</div>
+          {cards(waiting)}
         </section>
       )}
       {back.length > 0 && (
         <section>
           <h2 className="group">{t('Sent back')} <span className="group-count">{back.length}</span></h2>
-          <div className="cards">{back.map((p) => <OfferCard key={p.id} post={p} onOpen={onOpen} />)}</div>
+          {cards(back)}
         </section>
       )}
-    </>
+      <BulkBar bulk={bulk} actions={actions} />
+    </div>
   )
 }

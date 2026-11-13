@@ -4,7 +4,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 // Who may use the system (see firestore.rules):
 //   members/{uid}    { email, name, role, joinedAt }    the people inside
 //   requests/{uid}   { email, name, code, createdAt }   someone who typed the code and waits
-//   secret/code      { code, changedAt }                the system code, seen by owner and admins
+//   secret/code      { code, changedAt, resetAt, lastJoin }   the system code, seen by owner and admins; a new one after every accept
 //   config/access    { emails }                         the first list, from before codes existed
 
 //   roles/{id}       { name, perms }                    the roles the owner made, and what each may do
@@ -132,10 +132,16 @@ export async function loadTeam(db: Firestore): Promise<Team> {
 }
 
 export async function accept(db: Firestore, r: JoinRequest) {
-  const batch = writeBatch(db)
-  batch.set(doc(db, 'members', r.uid), { email: r.email, name: r.name, role: 'member', joinedAt: Date.now() })
-  batch.delete(doc(db, 'requests', r.uid))
-  await batch.commit()
+  const run = (rotate: boolean) => {
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'members', r.uid), { email: r.email, name: r.name, role: 'member', joinedAt: Date.now() })
+    batch.delete(doc(db, 'requests', r.uid))
+    // The code is used up: the next person needs the new one. The database insists on this.
+    if (rotate) batch.set(doc(db, 'secret', 'code'), { code: newCode(), changedAt: Date.now(), lastJoin: r.uid }, { merge: true })
+    return batch.commit()
+  }
+  // A database still on the earlier rules knows nothing about changing the code here.
+  await run(true).catch((e) => (denied(e) ? run(false) : Promise.reject(e)))
 }
 
 export const decline = (db: Firestore, uid: string) => deleteDoc(doc(db, 'requests', uid))
@@ -159,6 +165,6 @@ export const newRoleId = () => `r${Date.now().toString(36)}`
 /** A new code. Requests made with the old one can no longer be accepted. */
 export async function resetCode(db: Firestore): Promise<string> {
   const code = newCode()
-  await setDoc(doc(db, 'secret', 'code'), { code, changedAt: Date.now() })
+  await setDoc(doc(db, 'secret', 'code'), { code, changedAt: Date.now(), resetAt: serverTimestamp() })
   return code
 }

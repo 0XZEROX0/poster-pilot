@@ -6,7 +6,8 @@ import { locale, t } from '../i18n'
 import { byWhen } from './HomeView'
 import { Poster } from './Poster'
 import { PostCard } from './PostRow'
-import { Empty, Icon, SearchBox, dayLabel, showToast, timeLabel } from './ui'
+import { CardSize } from './CardSize'
+import { Empty, Icon, SearchBox, StyleChips, styleOn, dayLabel, showToast, timeLabel } from './ui'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 /** The steps of the day view, in minutes, from widest to finest. */
@@ -46,6 +47,7 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
   const today = cairoNow().date
   const [month, setMonth] = useState(today.slice(0, 7))
   const [day, setDay] = useState<string | null>(null)
+  const [style, setStyle] = useState('')
 
   const byDay = new Map<string, Post[]>()
   const waiting: Post[] = []
@@ -95,8 +97,12 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
       </div>
       {waiting.length > 0 && (
         <section>
-          <h2>{t('Approved, no time yet')} <span className="group-count">{waiting.length}</span></h2>
-          <div className="cards cards-sm">{waiting.map((p) => <PostCard key={p.id} post={p} onOpen={onOpen} />)}</div>
+          <div className="review-bar">
+            <h2>{t('Approved, no time yet')} <span className="group-count">{waiting.length}</span></h2>
+            <CardSize />
+          </div>
+          <StyleChips posts={waiting} value={style} onChange={setStyle} />
+          <div className="cards cards-sm">{waiting.filter((p) => !styleOn(waiting, style) || p.style === style).map((p) => <PostCard key={p.id} post={p} onOpen={onOpen} />)}</div>
         </section>
       )}
     </div>
@@ -117,10 +123,7 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
 
   const onDay = posts.filter((p) => (stageOf(p) === 'posted' || movable(p)) && whenOf(p)?.date === day).sort(byWhen)
   const allTray = posts.filter((p) => movable(p) && whenOf(p)?.date !== day)
-  const styles = new Map<string, number>()
-  for (const p of allTray) styles.set(p.style, (styles.get(p.style) ?? 0) + 1)
-  // A style whose last post was just planned falls back to all styles.
-  const active = styles.has(style) ? style : ''
+  const active = styleOn(allTray, style) ? style : ''
   const tray = allTray.filter((p) => (!active || p.style === active) && matchesSearch(p, query)).sort(byWhen)
   // Posts with no time come first: they are the ones waiting to be planned.
   tray.sort((a, b) => Number(Boolean(whenOf(a))) - Number(Boolean(whenOf(b))))
@@ -274,16 +277,9 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
         </div>
 
         <aside className="tray">
-          <h2>{t('Approved posts')} <span className="group-count">{tray.length}</span></h2>
+          <div className="review-bar"><h2>{t('Approved posts')} <span className="group-count">{tray.length}</span></h2><CardSize /></div>
           <p className="hint">{picked ? t('Now tap a time to place it.') : t('Drag a post onto a time, or tap it and then tap a time.')}</p>
-          {styles.size > 1 && (
-            <div className="filters tray-filters" role="group" aria-label={t('Style')}>
-              <button className={active ? 'filter' : 'filter on'} aria-pressed={!active} onClick={() => setStyle('')}>{t('All')} <i>{allTray.length}</i></button>
-              {[...styles].sort((a, b) => a[0].localeCompare(b[0])).map(([name, n]) => (
-                <button key={name} className={active === name ? 'filter on' : 'filter'} aria-pressed={active === name} onClick={() => setStyle(name)}>{name || t('No style')} <i>{n}</i></button>
-              ))}
-            </div>
-          )}
+          <StyleChips posts={allTray} value={style} onChange={setStyle} className="tray-filters" />
           {allTray.length > 4 || query ? <SearchBox value={query} onChange={setQuery} /> : null}
           {tray.length ? (
             <div className="tray-list">

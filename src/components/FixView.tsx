@@ -1,5 +1,7 @@
-import { problemOf, redoFailed, stageOf, titleOf } from '../data/logic'
-import { backend } from '../data/store'
+import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
+import { CardSize } from './CardSize'
+import { problemOf, redoFailed, stageOf, titleOf, onFacebook } from '../data/logic'
+import { allowed, backend } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { Poster } from './Poster'
@@ -76,10 +78,25 @@ function FixCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void
 /** Every post with a problem, each with its reason and a way to retry, edit or ignore it. */
 export function FixView({ data, onOpen }: { data: Data; onOpen: (id: string) => void }) {
   const posts = data.posts.filter((p) => stageOf(p) === 'fix')
+  const bulk = useBulk(posts.map((p) => p.id))
   if (!posts.length) return <div className="view"><Empty icon="posted" text={t('No problems. Everything is running.')} /></div>
+  const post = (id: string) => posts.find((p) => p.id === id)
+  const actions: BulkAction[] = [
+    ...(allowed('fix') ? [
+      // A retry only helps a poster problem; a publishing problem needs a new time.
+      { label: 'Retry', icon: 'redo', tone: 'primary' as const, run: (id: string) => { const k = post(id) && problemOf(post(id)!)?.kind; return k && k !== 'facebook' && k !== 'instagram' ? backend.updatePost(id, { feedback: 'Redo' }) : false } },
+      { label: 'Ignore', icon: 'close', run: (id: string) => { const pr = post(id) && problemOf(post(id)!); return pr ? backend.updatePost(id, { ignoredProblem: pr.text }) : false } },
+    ] : []),
+    ...(allowed('delete') ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => (post(id) && !onFacebook(post(id)!) ? backend.removePost(id) : false) }] : []),
+  ]
   return (
     <div className="view">
-      <div className="cards">{posts.map((p) => <FixCard key={p.id} post={p} onOpen={onOpen} />)}</div>
+      <div className="review-bar tools">
+        {actions.length > 0 && <BulkToggle bulk={bulk} />}
+        <CardSize />
+      </div>
+      <div className="cards">{posts.map((p) => <Pick key={p.id} bulk={bulk} id={p.id}><FixCard post={p} onOpen={onOpen} /></Pick>)}</div>
+      <BulkBar bulk={bulk} actions={actions} />
     </div>
   )
 }

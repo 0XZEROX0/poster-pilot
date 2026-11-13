@@ -41,7 +41,7 @@ export function MembersSection({ session }: { session: Session }) {
       <h3>{t('People')}</h3>
       <div className="item-box">
         <b>{t('System code')}</b>
-        <p className="hint">{t('Give this code only to people you want in. It lets someone ask to join; you still have to accept them.')}</p>
+        <p className="hint">{t('Give this code only to the person you want in. They ask to join with it and you accept them. A new code is made automatically each time someone is accepted, so a code cannot be reused or passed on.')}</p>
         <code className="code" dir="ltr">{team.code || '—'}</code>
         <div className="actions">
           <button className="btn btn-primary" onClick={copy} disabled={!team.code}><Icon name="link" size={18} />{t('Copy')}</button>
@@ -54,7 +54,7 @@ export function MembersSection({ session }: { session: Session }) {
             <button className="btn" onClick={() => setConfirm('reset')}><Icon name="redo" size={18} />{t('New code')}</button>
           ))}
         </div>
-        {confirm === 'reset' && <p className="hint">{t('The old code stops working, and requests made with it can no longer be accepted.')}</p>}
+        {confirm === 'reset' && <p className="hint">{t('The old code stops working, and the people still waiting have to ask again with the new one.')}</p>}
       </div>
 
       <div className="item-box">

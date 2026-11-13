@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { formatPrice, hasOffer, matchesSearch, priceOf, stageOf, titleOf } from '../data/logic'
+import { formatPrice, hasOffer, matchesSearch, priceOf, stageOf, titleOf, onFacebook } from '../data/logic'
 import { allowed, backend } from '../data/store'
+import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
+import { CardSize } from './CardSize'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { Poster } from './Poster'
@@ -161,13 +163,24 @@ export function ReviewView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   const posts = data.posts.filter((p) => stageOf(p) === 'review')
   // Skipped posters that do have a poster: the ones worth a second look.
   const skipped = data.posts.filter((p) => stageOf(p) === 'skipped' && p.posterUrl)
-  if (!posts.length && !skipped.length) return <div className="view"><Empty icon="review" text={t('Nothing to review. New posters will show up here.')} /></div>
   const counts = new Map<string, number>()
   for (const p of posts) counts.set(p.style, (counts.get(p.style) ?? 0) + 1)
   // A style whose last poster was just decided falls back to all styles.
   const active = style === SKIPPED ? (skipped.length ? SKIPPED : '') : counts.has(style) ? style : ''
   const shown = (active ? posts.filter((p) => p.style === active) : posts).filter((p) => matchesSearch(p, query))
   const shownSkipped = skipped.filter((p) => matchesSearch(p, query))
+  const listed = active === SKIPPED ? shownSkipped : shown
+  const bulk = useBulk(listed.map((p) => p.id))
+  if (!posts.length && !skipped.length) return <div className="view"><Empty icon="review" text={t('Nothing to review. New posters will show up here.')} /></div>
+  const post = (id: string) => listed.find((p) => p.id === id)
+  const set = (feedback: '' | 'Done' | 'Redo' | 'ignore') => (id: string) => backend.updatePost(id, { feedback })
+  const remove: BulkAction = { label: 'Delete', icon: 'trash', tone: 'danger', confirm: true, run: (id) => (post(id) && !onFacebook(post(id)!) ? backend.removePost(id) : false) }
+  const actions: BulkAction[] = active === SKIPPED
+    ? [...(allowed('designs.approve') ? [{ label: 'Back to review', icon: 'redo', tone: 'primary' as const, run: set('') }] : []), ...(allowed('delete') ? [remove] : [])]
+    : [
+        ...(allowed('designs.approve') ? [{ label: 'Approve', icon: 'check', tone: 'primary' as const, run: set('Done') }, { label: 'Redo', icon: 'redo', run: set('Redo') }, { label: 'Skip', icon: 'skip', run: set('ignore') }] : []),
+        ...(allowed('delete') ? [remove] : []),
+      ]
   const pickMode = (next: 'cards' | 'swipe') => {
     setMode(next)
     try {
@@ -192,17 +205,20 @@ export function ReviewView({ data, onOpen }: { data: Data; onOpen: (id: string) 
             <button className={mode === 'swipe' ? 'on' : ''} onClick={() => pickMode('swipe')}>{t('Swipe')}</button>
           </div>
         )}
+        {(active === SKIPPED || mode === 'cards') && actions.length > 0 && <BulkToggle bulk={bulk} />}
+        <CardSize />
       </div>
       <SearchBox value={query} onChange={setQuery} />
       {active === SKIPPED && shownSkipped.length ? (
-        <div className="cards">{shownSkipped.map((p) => <SkippedCard key={p.id} post={p} onOpen={onOpen} />)}</div>
+        <div className="cards">{shownSkipped.map((p) => <Pick key={p.id} bulk={bulk} id={p.id}><SkippedCard post={p} onOpen={onOpen} /></Pick>)}</div>
       ) : active === SKIPPED || !shown.length ? (
         <Empty icon="review" text={query.trim() ? t('No post matches your search.') : t('Nothing to review. New posters will show up here.')} />
       ) : mode === 'swipe' ? (
         <SwipeDeck posts={shown} onOpen={onOpen} />
       ) : (
-        <div className="cards">{shown.map((p) => <ReviewCard key={p.id} post={p} onOpen={onOpen} />)}</div>
+        <div className="cards">{shown.map((p) => <Pick key={p.id} bulk={bulk} id={p.id}><ReviewCard post={p} onOpen={onOpen} /></Pick>)}</div>
       )}
+      {(active === SKIPPED || mode === 'cards') && <BulkBar bulk={bulk} actions={actions} />}
     </div>
   )
 }

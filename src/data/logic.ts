@@ -62,6 +62,9 @@ export function offerOf(p: Pick<Post, 'offer' | 'appNew'>): 'waiting' | 'rejecte
   return p.offer === '' || (p.offer === undefined && p.appNew === true) ? 'waiting' : null
 }
 
+/** A post Facebook already holds cannot be deleted from the app. */
+export const onFacebook = (p: Pick<Post, 'fbStatus' | 'fbPostId'>) => /^(scheduled|published)/i.test(p.fbStatus.trim()) || p.fbPostId !== ''
+
 export function stageOf(p: Post): Stage {
   if (p.fbStatus.trim() === 'Published') return 'posted'
   if (offerOf(p)) return 'offer'

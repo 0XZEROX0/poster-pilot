@@ -2,6 +2,7 @@ import { stageOf, whenOf } from '../data/logic'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { byWhen } from './HomeView'
+import { CardSize } from './CardSize'
 import { PostCard } from './PostRow'
 import { Empty, dayLabel } from './ui'
 
@@ -16,6 +17,7 @@ export function PostedView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   }
   return (
     <div className="view">
+      <div className="review-bar tools"><CardSize /></div>
       {[...groups].map(([date, list]) => (
         <section key={date}>
           <h2>{date ? dayLabel(date) : t('Posted')} <span className="group-count">{list.length}</span></h2>

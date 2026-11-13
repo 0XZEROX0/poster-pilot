@@ -23,6 +23,7 @@ const paths: Record<string, string> = {
   image: 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 2.5-2.5L20 18M15.5 9.5v.01',
   edit: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   minus: 'M5 12h14',
+  cards: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
   grip: 'M9 6v.01M15 6v.01M9 12v.01M15 12v.01M9 18v.01M15 18v.01',
 }
@@ -89,5 +90,24 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
       <input type="search" value={value} placeholder={placeholder ?? t('Search by item name…')} onChange={(e) => onChange(e.target.value)} aria-label={t('Search')} />
       {value && <button onClick={() => onChange('')} aria-label={t('Clear')}><Icon name="close" size={16} /></button>}
     </span>
+  )
+}
+
+/** Whether `style` is one of the styles these posts use. A style whose last post left falls back to all. */
+export const styleOn = (posts: { style: string }[], style: string) => posts.some((p) => p.style === style)
+
+/** Filter chips, one per style the posts use, each with its count. Hidden when there is only one style. */
+export function StyleChips({ posts, value, onChange, className = '' }: { posts: { style: string }[]; value: string; onChange: (style: string) => void; className?: string }) {
+  const counts = new Map<string, number>()
+  for (const p of posts) counts.set(p.style, (counts.get(p.style) ?? 0) + 1)
+  if (counts.size < 2) return null
+  const active = counts.has(value) ? value : null
+  return (
+    <div className={`filters ${className}`} role="group" aria-label={t('Style')}>
+      <button className={active === null ? 'filter on' : 'filter'} aria-pressed={active === null} onClick={() => onChange('')}>{t('All')} <i>{posts.length}</i></button>
+      {[...counts].sort((a, b) => a[0].localeCompare(b[0])).map(([name, n]) => (
+        <button key={name} className={active === name ? 'filter on' : 'filter'} aria-pressed={active === name} onClick={() => onChange(name)}>{name || t('No style')} <i>{n}</i></button>
+      ))}
+    </div>
   )
 }

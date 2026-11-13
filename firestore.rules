@@ -76,11 +76,20 @@ service cloud.firestore {
     function currentCode() {
       return get(/databases/$(database)/documents/secret/code).data.code;
     }
+    function secretPath() {
+      return /databases/$(database)/documents/secret/code;
+    }
+    // A request can only be filed with the code that is valid at that moment, so a request that
+    // exists was made by someone who had the code. It stops counting after 7 days, or when the
+    // owner makes a new code by hand. Accepting it must change the code in the same step, so a
+    // code lets exactly one new person in and cannot be passed on.
     function goodRequest(uid) {
       let r = get(/databases/$(database)/documents/requests/$(uid)).data;
-      return r.code == currentCode()
-        && r.createdAt > request.time - duration.value(7, 'd')
-        && r.email == request.resource.data.email;
+      let s = get(secretPath()).data;
+      return r.createdAt > request.time - duration.value(7, 'd')
+        && (!('resetAt' in s) || r.createdAt > s.resetAt)
+        && r.email == request.resource.data.email
+        && getAfter(secretPath()).data.code != s.code;
     }
 
     match /members/{uid} {
@@ -127,10 +136,21 @@ service cloud.firestore {
 
     match /secret/code {
       allow read: if isAdmin();
-      allow write: if isOwner()
-        && request.resource.data.keys().hasOnly(['code', 'changedAt'])
+      // The owner makes a new code by hand, which also drops the requests still waiting.
+      allow create, update: if isOwner()
+        && request.resource.data.keys().hasOnly(['code', 'changedAt', 'resetAt', 'lastJoin'])
         && request.resource.data.code is string
-        && request.resource.data.code.size() >= 16;
+        && request.resource.data.code.size() >= 16
+        && (!('resetAt' in request.resource.data) || request.resource.data.resetAt is timestamp);
+      // Someone who manages people can change the code only as part of accepting a new person.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code', 'changedAt', 'lastJoin'])
+        && request.resource.data.code is string
+        && request.resource.data.code.size() >= 16
+        && request.resource.data.code != resource.data.code
+        && request.resource.data.lastJoin is string
+        && !exists(memberPath(request.resource.data.lastJoin))
+        && existsAfter(memberPath(request.resource.data.lastJoin));
     }
 
     match /config/access {
