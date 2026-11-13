@@ -95,7 +95,7 @@ export function FixView({ data, onOpen }: { data: Data; onOpen: (id: string) => 
         {actions.length > 0 && <BulkToggle bulk={bulk} />}
         <CardSize />
       </div>
-      <div className="cards">{posts.map((p) => <Pick key={p.id} bulk={bulk} id={p.id}><FixCard post={p} onOpen={onOpen} /></Pick>)}</div>
+      <div className="cards">{posts.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><FixCard post={p} onOpen={onOpen} /></Pick>)}</div>
       <BulkBar bulk={bulk} actions={actions} />
     </div>
   )

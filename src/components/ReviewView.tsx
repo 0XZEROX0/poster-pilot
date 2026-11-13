@@ -210,13 +210,13 @@ export function ReviewView({ data, onOpen }: { data: Data; onOpen: (id: string) 
       </div>
       <SearchBox value={query} onChange={setQuery} />
       {active === SKIPPED && shownSkipped.length ? (
-        <div className="cards">{shownSkipped.map((p) => <Pick key={p.id} bulk={bulk} id={p.id}><SkippedCard post={p} onOpen={onOpen} /></Pick>)}</div>
+        <div className="cards">{shownSkipped.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><SkippedCard post={p} onOpen={onOpen} /></Pick>)}</div>
       ) : active === SKIPPED || !shown.length ? (
         <Empty icon="review" text={query.trim() ? t('No post matches your search.') : t('Nothing to review. New posters will show up here.')} />
       ) : mode === 'swipe' ? (
         <SwipeDeck posts={shown} onOpen={onOpen} />
       ) : (
-        <div className="cards">{shown.map((p) => <Pick key={p.id} bulk={bulk} id={p.id}><ReviewCard post={p} onOpen={onOpen} /></Pick>)}</div>
+        <div className="cards">{shown.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><ReviewCard post={p} onOpen={onOpen} /></Pick>)}</div>
       )}
       {(active === SKIPPED || mode === 'cards') && <BulkBar bulk={bulk} actions={actions} />}
     </div>

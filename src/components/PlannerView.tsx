@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { addDays, addMinutes, cairoNow, matchesSearch, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
-import { backend } from '../data/store'
+import { addDays, addMinutes, cairoNow, matchesSearch, onFacebook, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
+import { allowed, backend } from '../data/store'
+import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import type { Data, Post } from '../data/types'
 import { locale, t } from '../i18n'
 import { byWhen } from './HomeView'
@@ -59,6 +60,18 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
     else byDay.set(when.date, [...(byDay.get(when.date) ?? []), p])
   }
 
+  const shownWaiting = waiting.filter((p) => !styleOn(waiting, style) || p.style === style)
+  const coming = [...byDay.values()].flat().filter((p) => stageOf(p) !== 'posted').sort(byWhen)
+  const bulk = useBulk([...shownWaiting, ...coming].map((p) => p.id))
+  const post = (id: string) => data.posts.find((p) => p.id === id)
+  const free = (id: string) => { const p = post(id); return p && !onFacebook(p) && p.feedback !== 'Cancel' ? p : null }
+  const actions: BulkAction[] = [
+    // The engine takes the post off Facebook, empties its date and time and leaves it approved.
+    ...(allowed('schedule') ? [{ label: 'Cancel schedule', run: (id: string) => { const p = post(id); return p && p.feedback === 'Done' && whenOf(p) ? backend.updatePost(id, { feedback: 'Cancel' }) : false } }] : []),
+    ...(allowed('designs.approve') ? [{ label: 'Back to review', icon: 'redo', run: (id: string) => (free(id) ? backend.updatePost(id, { feedback: '' }) : false) }] : []),
+    ...(allowed('delete') ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => (free(id) ? backend.removePost(id) : false) }] : []),
+  ]
+
   if (day) return <DayView day={day} setDay={setDay} posts={data.posts} onOpen={onOpen} />
 
   const first = `${month}-01`
@@ -95,16 +108,26 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
         </div>
         <p className="hint cal-hint">{t('Pick a day to plan its posts.')}</p>
       </div>
+      {(waiting.length > 0 || coming.length > 0) && (
+        <div className="review-bar tools">
+          {actions.length > 0 && <BulkToggle bulk={bulk} />}
+          <CardSize />
+        </div>
+      )}
       {waiting.length > 0 && (
         <section>
-          <div className="review-bar">
-            <h2>{t('Approved, no time yet')} <span className="group-count">{waiting.length}</span></h2>
-            <CardSize />
-          </div>
+          <h2 className="group">{t('Approved, no time yet')} <span className="group-count">{waiting.length}</span></h2>
           <StyleChips posts={waiting} value={style} onChange={setStyle} />
-          <div className="cards cards-sm">{waiting.filter((p) => !styleOn(waiting, style) || p.style === style).map((p) => <PostCard key={p.id} post={p} onOpen={onOpen} />)}</div>
+          <div className="cards cards-sm">{shownWaiting.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><PostCard post={p} onOpen={onOpen} /></Pick>)}</div>
         </section>
       )}
+      {coming.length > 0 && (
+        <section>
+          <h2 className="group">{t('On the schedule')} <span className="group-count">{coming.length}</span></h2>
+          <div className="cards cards-sm">{coming.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><PostCard post={p} onOpen={onOpen} /></Pick>)}</div>
+        </section>
+      )}
+      <BulkBar bulk={bulk} actions={actions} />
     </div>
   )
 }

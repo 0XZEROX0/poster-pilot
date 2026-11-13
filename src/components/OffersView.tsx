@@ -67,7 +67,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
     ] : []),
     ...(allowed('delete') ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => backend.removePost(id) }] : []),
   ]
-  const cards = (list: Post[]) => <div className="cards">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id}><OfferCard post={p} onOpen={onOpen} /></Pick>)}</div>
+  const cards = (list: Post[]) => <div className="cards">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><OfferCard post={p} onOpen={onOpen} /></Pick>)}</div>
   return (
     <div className="view">
       <div className="review-bar tools">

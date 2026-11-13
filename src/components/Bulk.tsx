@@ -16,35 +16,35 @@ export type Bulk = {
 
 /** Selecting several cards of one list. `ids` are the cards on screen now, so a card that left is forgotten. */
 export function useBulk(ids: string[]): Bulk {
-  const [on, setOn] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const picked = ids.filter((id) => sel.has(id))
   return {
-    on,
+    on: picked.length > 0,
     picked,
     total: ids.length,
     has: (id) => sel.has(id),
     toggle: (id) => setSel((s) => { const next = new Set(s); if (next.has(id)) next.delete(id); else next.add(id); return next }),
     setAll: (all) => setSel(new Set(all ? ids : [])),
-    start: () => setOn(true),
-    stop: () => { setOn(false); setSel(new Set()) },
+    start: () => setSel(new Set(ids)),
+    stop: () => setSel(new Set()),
   }
 }
 
-/** The button that turns selecting on and off. */
+/** Selects every card, or none. Single cards are selected with the round mark on their corner. */
 export function BulkToggle({ bulk }: { bulk: Bulk }) {
-  return <button className={`btn btn-small${bulk.on ? ' btn-primary' : ''}`} onClick={bulk.on ? bulk.stop : bulk.start}><Icon name="check" size={16} />{t(bulk.on ? 'Done selecting' : 'Select')}</button>
+  const all = bulk.total > 0 && bulk.picked.length === bulk.total
+  return <button className={`btn btn-small${bulk.on ? ' btn-primary' : ''}`} onClick={all ? bulk.stop : bulk.start}><Icon name="check" size={16} />{t(all ? 'Select none' : 'Select all')}</button>
 }
 
-/** Wraps a card. While selecting, a tap anywhere on the card selects it instead of using its buttons. */
-export function Pick({ bulk, id, children }: { bulk: Bulk; id: string; children: ReactNode }) {
-  if (!bulk.on) return <>{children}</>
+/** Wraps a card with a round mark on its corner. The card and its own buttons keep working. */
+export function Pick({ bulk, id, children, show = true }: { bulk: Bulk; id: string; children: ReactNode; show?: boolean }) {
+  if (!show) return <>{children}</>
   const picked = bulk.has(id)
   return (
     <div className={`sel${picked ? ' sel-on' : ''}`}>
       {children}
-      <button className="sel-hit" role="checkbox" aria-checked={picked} aria-label={t('Select')} onClick={() => bulk.toggle(id)}>
-        <span className="sel-mark">{picked && <Icon name="check" size={18} />}</span>
+      <button className="sel-mark" role="checkbox" aria-checked={picked} aria-label={t('Select')} onClick={() => bulk.toggle(id)}>
+        {picked && <Icon name="check" size={18} />}
       </button>
     </div>
   )

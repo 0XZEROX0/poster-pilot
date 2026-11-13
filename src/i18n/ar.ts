@@ -244,6 +244,7 @@ export const ar: Record<string, string> = {
   'Done selecting': 'إنهاء التحديد',
   'selected': 'محدد',
   'Select all': 'تحديد الكل',
+  'On the schedule': 'في الجدول',
   'Select none': 'إلغاء التحديد',
   'Selected posts': 'البوستات المحددة',
   'not done': 'لم يتم',
