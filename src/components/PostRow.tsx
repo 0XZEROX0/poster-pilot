@@ -8,6 +8,7 @@ import { Chip, Icon, dayLabel, timeLabel } from './ui'
 export function StageChip({ post }: { post: Post }) {
   const stage = stageOf(post)
   const when = whenOf(post)
+  if (stage === 'offer') return <Chip tone="warn">{t(post.offer === 'Rejected' ? 'Offer sent back' : 'Waiting for offer approval')}</Chip>
   if (stage === 'posted') return <Chip tone="good">{t('Published')}</Chip>
   if (stage === 'fix') return <Chip tone="bad">{problemOf(post)?.text.slice(0, 28)}</Chip>
   if (stage === 'building') return <Chip tone="info">{t('Being built')}</Chip>

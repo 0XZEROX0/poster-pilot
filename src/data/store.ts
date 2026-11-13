@@ -85,6 +85,11 @@ if (firebaseConfigured && auth && firestore) {
 
 const inside = () => state.access === 'legacy' || state.access === 'in'
 
+/** The signed-in person's id. In the demo there is nobody, so every offer counts as someone else's. */
+export const myId = () => state.user?.uid ?? ''
+export const myName = () => state.user?.displayName || state.user?.email || ''
+export const isOwner = () => state.mode === 'demo' || state.role === 'owner'
+
 /** Whether the person may do this. Only hides what would be refused anyway: the database rules decide. */
 export const allowed = (perm: Perm) => state.mode === 'demo' || state.access === 'legacy' || state.role === 'owner' || state.perms.includes(perm)
 let stopWaiting = () => {}

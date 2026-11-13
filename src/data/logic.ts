@@ -1,7 +1,7 @@
 import type { CaptionTemplate, Post } from './types'
 
 /** Where a post is in its life. Each post is in exactly one stage. */
-export type Stage = 'building' | 'fix' | 'review' | 'scheduled' | 'posted' | 'skipped'
+export type Stage = 'offer' | 'building' | 'fix' | 'review' | 'scheduled' | 'posted' | 'skipped'
 
 /** Facebook states that are not problems. A post waiting for its time, or taken off the schedule, is fine. */
 const fbFine = (s: string) => s === '' || /^(scheduled|published|cancelled|waiting)\b/i.test(s)
@@ -53,8 +53,18 @@ const isRedoing = (p: Post) => isRedo(p) && !redoFailed(p)
 
 export const isBuilding = (p: Post) => isRedoing(p) || isBusy(p) || (!anyProblemOf(p) && (!p.posterUrl || !p.photoStatus))
 
+/**
+ * Where the offer stands before a poster is made: waiting for someone to approve it, sent back to
+ * its maker, or null once approved. A post from before offers existed has no `offer` and counts as approved.
+ */
+export function offerOf(p: Pick<Post, 'offer' | 'appNew'>): 'waiting' | 'rejected' | null {
+  if (p.offer === 'Rejected') return 'rejected'
+  return p.offer === '' || (p.offer === undefined && p.appNew === true) ? 'waiting' : null
+}
+
 export function stageOf(p: Post): Stage {
   if (p.fbStatus.trim() === 'Published') return 'posted'
+  if (offerOf(p)) return 'offer'
   if (isRedoing(p) || isBusy(p)) return 'building'
   if (problemOf(p)) return 'fix'
   if (isDeadEnd(p)) return 'skipped'

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { buildCaption, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
-import { allowed, backend } from '../data/store'
+import { allowed, backend, isOwner, myId, myName } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { problemText } from './FixView'
@@ -32,7 +32,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   async function save(extra: Partial<Post>, message: string) {
     const patch = { ...changes(), ...extra }
     // A new price or style means a new poster, as in the sheet.
-    if (!extra.feedback && !posted && ('priceBefore' in patch || 'priceAfter' in patch || 'style' in patch || 'items' in patch)) patch.feedback = 'Redo'
+    if (!extra.feedback && !posted && stage !== 'offer' && ('priceBefore' in patch || 'priceAfter' in patch || 'style' in patch || 'items' in patch)) patch.feedback = 'Redo'
     if (Object.keys(patch).length) await backend.updatePost(post.id, patch)
     showToast(t(message))
     onClose()
@@ -56,7 +56,17 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     post.fbPostId && <a className="btn btn-primary" href={`https://www.facebook.com/${post.fbPostId}`} target="_blank" rel="noreferrer"><Icon name="link" size={18} />{t('Open on Facebook')}</a>
   ) : (
     <>
-      {stage === 'fix' || stage === 'building' ? (
+      {stage === 'offer' ? (
+        <>
+          {mayEdit && <button className="btn btn-primary" disabled={!dirty} onClick={() => save({}, 'Saved')}>{t('Save')}</button>}
+          {post.offer !== 'Rejected' && allowed('offers.approve') && (isOwner() || post.createdBy !== myId()) && (
+            <button className="btn" onClick={() => save({ offer: 'Approved', offerBy: myName(), offerNote: '' }, 'Offer approved. The poster is being made.')}><Icon name="check" size={18} />{t('Approve offer')}</button>
+          )}
+          {post.offer === 'Rejected' && (isOwner() || post.createdBy === myId()) && (
+            <button className="btn" onClick={() => save({ offer: '' }, 'Sent for approval again')}><Icon name="redo" size={18} />{t('Send again')}</button>
+          )}
+        </>
+      ) : stage === 'fix' || stage === 'building' ? (
         <>
           {mayEdit && <button className="btn btn-primary" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Retry')}</button>}
           {mayPlan && post.feedback === 'Done' && (onFacebook || when) && (
@@ -92,6 +102,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
           <p className="post-state"><StageChip post={post} />{when && posted && <span className="muted small">{when.date} · {when.time}</span>}</p>
         </div>
         <div className="form">
+          {post.offer === 'Rejected' && <div className="alert"><b><Icon name="fix" size={18} />{t('Offer sent back')}{post.offerBy ? ` · ${post.offerBy}` : ''}</b>{post.offerNote && <p dir="auto">{post.offerNote}</p>}</div>}
           {problem && (
             <div className="alert">
               <b><Icon name="fix" size={18} />{problem.title}</b>

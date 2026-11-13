@@ -134,3 +134,18 @@ describe('waiting and cancelled posts', () => {
     expect(whenOf(cancelling)).toBeNull()
   })
 })
+
+describe('offers', () => {
+  it('holds a post until its offer is approved', () => {
+    expect(stageOf(post({ offer: '' }))).toBe('offer')
+    expect(stageOf(post({ offer: 'Rejected' }))).toBe('offer')
+    expect(stageOf(post({ offer: undefined, appNew: true, posterUrl: '' }))).toBe('offer')
+    expect(stageOf(post({ offer: 'Approved', posterUrl: '', photoStatus: '' }))).toBe('building')
+  })
+  it('treats a post from before offers existed as approved', () => {
+    expect(stageOf(post({ offer: undefined }))).not.toBe('offer')
+  })
+  it('never hides a published post', () => {
+    expect(stageOf(post({ offer: '', fbStatus: 'Published' }))).toBe('posted')
+  })
+})

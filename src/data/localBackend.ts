@@ -41,6 +41,8 @@ export function createLocalBackend(): Backend {
     timers.set(id, setTimeout(() => {
       const p = data.posts.find((x) => x.id === id)
       if (!p) return
+      // No poster is made for an offer nobody approved yet.
+      if (p.offer === '' || p.offer === 'Rejected') return
       if (p.feedback === 'Redo' || !p.posterUrl || !p.photoStatus) {
         patchPost(id, { posterUrl: DEMO_POSTER, photoStatus: 'OK', feedback: '', caption: p.caption || buildCaption(p, data.templates), items: p.items.map((i) => ({ ...i, nextPhoto: false })) })
       } else if (p.feedback === 'Done' && p.fbStatus !== 'Published') {
@@ -62,7 +64,7 @@ export function createLocalBackend(): Backend {
     async addPost(post) {
       const id = `local-${Date.now()}`
       const order = Math.min(0, ...data.posts.map((p) => p.order)) - 1
-      commit({ ...data, posts: [{ ...post, id, order, posterUrl: '', photoStatus: '', feedback: '', scheduledFor: '', caption: '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: Date.now() }, ...data.posts] })
+      commit({ ...data, posts: [{ ...post, id, order, posterUrl: '', photoStatus: '', feedback: '', scheduledFor: '', caption: '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: Date.now(), offer: '', createdBy: 'demo-maker', createdByName: 'Demo maker' }, ...data.posts] })
       engine(id)
     },
     async updatePost(id, patch) {

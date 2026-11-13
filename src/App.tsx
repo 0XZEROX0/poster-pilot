@@ -4,14 +4,15 @@ import { FixView } from './components/FixView'
 import { HomeView, type Tab } from './components/HomeView'
 import { JoinScreen } from './components/JoinScreen'
 import { NewPostSheet } from './components/NewPostSheet'
+import { OffersView } from './components/OffersView'
 import { PostedView } from './components/PostedView'
 import { PostSheet } from './components/PostSheet'
 import { ReviewView } from './components/ReviewView'
 import { agoLabel, SettingsSheet } from './components/SettingsSheet'
 import { Icon, Toast } from './components/ui'
 import { useDesktop } from './components/useDesktop'
-import { cairoNow, stageOf } from './data/logic'
-import { allowed, signIn, signOutNow, useSession } from './data/store'
+import { cairoNow, offerOf, stageOf } from './data/logic'
+import { allowed, isOwner, myId, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, useLang } from './i18n'
 
@@ -20,6 +21,7 @@ const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix
 
 const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'offers', label: 'Offers', icon: 'offer' },
   { id: 'review', label: 'Review', icon: 'review' },
   { id: 'fix', label: 'Fix', icon: 'fix' },
   { id: 'calendar', label: 'Planner', icon: 'calendar' },
@@ -37,7 +39,7 @@ export default function App() {
   useLang()
   const session = useSession()
   const [wanted, setTab] = useState<Tab>(tabFromHash)
-  const TABS = ALL_TABS.filter((x) => !NEEDS[x.id] || allowed(NEEDS[x.id]!))
+  const TABS = ALL_TABS.filter((x) => (x.id === 'offers' ? allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -92,6 +94,8 @@ export default function App() {
 
   const { data } = session
   const counts: Partial<Record<Tab, number>> = {
+    // Offers waiting for this person: ones to approve, or their own that were sent back.
+    offers: data.posts.filter((p) => stageOf(p) === 'offer' && (offerOf(p) === 'waiting' ? allowed('offers.approve') && (isOwner() || p.createdBy !== myId()) : p.createdBy === myId() || isOwner())).length,
     review: data.posts.filter((p) => stageOf(p) === 'review').length,
     fix: data.posts.filter((p) => stageOf(p) === 'fix').length,
   }
@@ -111,6 +115,8 @@ export default function App() {
     <div className="splash">{t('Loading…')}</div>
   ) : tab === 'home' ? (
     <HomeView data={data} go={go} onOpen={open} desktop={desktop} />
+  ) : tab === 'offers' ? (
+    <OffersView data={data} onOpen={open} />
   ) : tab === 'review' ? (
     <ReviewView data={data} onOpen={open} />
   ) : tab === 'fix' ? (

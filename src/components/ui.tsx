@@ -4,6 +4,7 @@ import { locale, t } from '../i18n'
 
 const paths: Record<string, string> = {
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
+  offer: 'M4 12.5V5h7.5l8.5 8.5-7 7zM8.5 9.5h.01',
   review: 'M4 5h16v11H4zM8 20h8M12 16v4M9 10.5l2 2 4-4',
   fix: 'M12 3 2.5 20h19zM12 10v4.5M12 17.2v.3',
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',

@@ -41,6 +41,16 @@ export type Post = {
   igStatus: string
   fbPostId: string
   createdAt: number
+  /** The decision on the offer itself, before any poster is made (sheet: Offer approval). Missing on posts from before offers existed. */
+  offer?: '' | 'Approved' | 'Rejected'
+  /** App only: why the offer was sent back, and who decided. */
+  offerNote?: string
+  offerBy?: string
+  /** App only: who made the post in the app. */
+  createdBy?: string
+  createdByName?: string
+  /** True until the engine has written a post made in the app into the sheet. */
+  appNew?: boolean
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
   /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */

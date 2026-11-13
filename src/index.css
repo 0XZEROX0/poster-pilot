@@ -410,3 +410,5 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .perm span { display: grid; gap: 1px; }
 .perm small { font-size: 0.8rem; }
 .role-pick { width: auto; max-width: 150px; min-height: 40px; }
+.offer-items { margin: 0; padding-inline-start: 18px; font-size: 0.9rem; color: var(--text-2); }
+.offer .card-body { gap: 8px; }
