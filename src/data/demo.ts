@@ -1,5 +1,5 @@
-import { addDays, buildCaption, cairoNow } from './logic'
-import type { CaptionTemplate, Data, Post, PostItem, Product } from './types'
+import { addDays, buildCaption, cairoNow, marketKey } from './logic'
+import type { CaptionTemplate, Data, MarketItem, Post, PostItem, Product } from './types'
 
 // Sample data for demo mode (no Firebase configured). The products, prices and caption templates are
 // a small copy of the real Posts sheet; the states are spread out so every screen has something to show.
@@ -72,7 +72,22 @@ export function demoPosts(): Post[] {
   })
   const posted = (date: string, time: string): Partial<Post> => ({ feedback: 'Done', postDate: date, postTime: time, scheduledFor: `${date} ${time}`, fbStatus: 'Published', igStatus: `Published ${date} ${time}`, fbPostId: '242283423247894_0' })
   const scheduled = (date: string, time: string, auto = false): Partial<Post> => ({ feedback: 'Done', postDate: auto ? '' : date, postTime: auto ? '' : time, scheduledFor: `${date} ${time}`, fbStatus: 'Scheduled' })
+  // Offers waiting for approval, with competitor prices as the engine writes them.
+  const hit = (shop: string, price: number, inStock: boolean | null, title: string) => ({ shop, price, inStock, title, url: 'https://example.com/' })
+  const withMarket = (p: Post, items: Omit<MarketItem, 'name'>[]): Post =>
+    ({ ...p, market: { checkedAt: Date.now() - 4 * 60000, key: marketKey(p), shops: ['Compumarts', 'Elnekhely', 'Elbadr', 'Sigma'], items: items.map((it, i) => ({ name: p.items[i].name, ...it })) } })
+  const offer: Partial<Post> = { posterUrl: '', photoStatus: '', offer: '', createdByName: 'Demo' }
+  const offers = [
+    withMarket(post([item('CPU', 'Intel Core I5-14400F tray'), item('VGA', 'ASUS Dual RTX 5060 OC Edition 8GB')], 'Intel + Asus', '38,000', '37,499', 'Static BlackFriday', offer), [
+      { best: hit('Elnekhely', 7850, true, 'Intel Core i5-14400F Processor (MPK)'), others: [hit('Elbadr', 7500, null, 'Intel Core i5-14400F'), hit('Sigma', 8050, true, 'INTEL Core i5-14400F Tray'), hit('Compumarts', 8050, false, 'CPU INTEL CORE i5-14400F')], similar: [] },
+      { best: hit('Sigma', 29000, true, 'ASUS Dual GeForce RTX 5060 8GB GDDR7'), others: [hit('Elnekhely', 29499, true, 'ASUS Dual GeForce RTX 5060 8GB GDDR7 OC Edition')], similar: [hit('Compumarts', 27270, true, 'ASUS PRIME GeForce RTX 5060 8GB GDDR7')] },
+    ]),
+    withMarket(post([item('Monitor', 'Asus TUF Gaming VG27AQL5A 27 QHD Fast IPS 210Hz')], 'Asus', '11,900', '11,499', 'Static', offer), [
+      { best: hit('Elnekhely', 11899, true, 'ASUS TUF Gaming VG27AQL5A 27-Inch QHD 210Hz'), others: [hit('Elbadr', 11899, null, 'ASUS TUF Gaming VG27AQL5A'), hit('Compumarts', 11899, false, 'ASUS TUF Gaming VG27AQL5A')], similar: [] },
+    ]),
+  ]
   return [
+    ...offers,
     // Needs fixing
     post([item('Monitor', 'MSI MAG 276QE27 27" WQHD IPS 275Hz 0.5MS'), { ...item('Acc', 'MAZE M252 Monitor Arm'), photoMissing: true }], 'MSI + MAZE', '13,000', '', 'Static', { posterUrl: '', photoStatus: 'MISSING' }),
     post([item('MB', 'Gigabyte B860M D3HP'), item('CPU', 'Intel Core I5-14400F tray')], 'Gigabyte + Intel', '14,500', '13,499', 'Static BlackFriday', { posterUrl: '', photoStatus: 'AI ERROR' }),

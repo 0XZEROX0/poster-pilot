@@ -66,7 +66,8 @@ service cloud.firestore {
           // The maker may send an offer that was sent back in again, and nothing else.
           || (can('offers.create') && was.get('createdBy', '') == request.auth.uid && was.get('offer', '') == 'Rejected'
             && now.get('offer', '') == '' && edits.get('offer', '') == '' && !keys.hasAny(['offerNote', 'offerBy'])))
-        && !keys.hasAny(['createdBy', 'createdByName']);
+        // Competitor prices are written by the engine only.
+        && !keys.hasAny(['createdBy', 'createdByName', 'market']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may
     // walk in once without a request. Admins can only shorten it.
@@ -179,7 +180,7 @@ service cloud.firestore {
       allow read: if isMember();
       allow create: if can('offers.create')
         && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid
-        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy']);
+        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market']);
       allow update: if isMember() && postChangeOk();
     }
     match /catalog/{id} {
