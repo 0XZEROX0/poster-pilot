@@ -186,4 +186,6 @@ export const ar: Record<string, string> = {
   'Yes, remove': 'نعم، احذف',
   Remove: 'حذف',
   Removed: 'تم الحذف',
+  'If you were given a system code, refresh to get the screen where you can enter it.': 'إذا كان معك كود النظام، حدّث الصفحة لتظهر شاشة إدخاله.',
+  Refresh: 'تحديث',
 }

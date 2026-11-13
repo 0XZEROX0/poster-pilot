@@ -70,6 +70,8 @@ export default function App() {
         <Logo size={72} />
         <p className="bad">{t('This account is not allowed to open the app.')}</p>
         <p dir="ltr">{session.user?.email}</p>
+        <p className="hint">{t('If you were given a system code, refresh to get the screen where you can enter it.')}</p>
+        <button className="btn btn-primary" onClick={() => location.reload()}>{t('Refresh')}</button>
         <button className="btn" onClick={() => signOutNow()}>{t('Sign out')}</button>
       </div>
     )
