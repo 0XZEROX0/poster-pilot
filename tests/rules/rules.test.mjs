@@ -114,6 +114,8 @@ await no('role with an unknown permission', setDoc(doc(boss, 'roles/maker'), { n
 await no('role named owner', setDoc(doc(boss, 'roles/owner'), { name: 'Owner', perms: [] }))
 await no('role with extra fields', setDoc(doc(boss, 'roles/maker'), { name: 'Maker', perms: [], boss: true }))
 await ok('owner makes role maker', setDoc(doc(boss, 'roles/maker'), { name: 'Offer maker', perms: ['offers.create'] }))
+await ok('owner saves a role with pages', setDoc(doc(boss, 'roles/pagey'), { name: 'Pagey', perms: ['offers.create'], pages: ['offers', 'fix'] }))
+await no('role with an unknown page', setDoc(doc(boss, 'roles/pagey'), { name: 'Pagey', perms: [], pages: ['secrets'] }))
 await ok('owner makes role approver', setDoc(doc(boss, 'roles/approver'), { name: 'Offer approver', perms: ['offers.approve', 'offers.create'] }))
 await ok('owner makes role reviewer', setDoc(doc(boss, 'roles/reviewer'), { name: 'Reviewer', perms: ['designs.approve'] }))
 await ok('owner makes role scheduler', setDoc(doc(boss, 'roles/scheduler'), { name: 'Scheduler', perms: ['schedule'] }))

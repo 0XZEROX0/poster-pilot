@@ -1,4 +1,5 @@
 import { addDays, cairoNow, stageOf, titleOf, whenOf } from '../data/logic'
+import { seesPage } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { problemText } from './FixView'
@@ -25,12 +26,13 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
   const scheduled = of('scheduled').sort(byWhen)
   const building = of('building')
   const postedToday = of('posted').filter((p) => whenOf(p)?.date === today).length
-  const tiles: { tab: Tab; label: string; count: number; tone: string; icon: string }[] = [
+  const allTiles: { tab: Tab; label: string; count: number; tone: string; icon: string }[] = [
     { tab: 'review', label: t('To review'), count: review.length, tone: 'warn', icon: 'review' },
     { tab: 'fix', label: t('Needs fixing'), count: fix.length, tone: 'bad', icon: 'fix' },
     { tab: 'calendar', label: t('Scheduled'), count: scheduled.length, tone: 'info', icon: 'calendar' },
     { tab: 'posted', label: t('Posted today'), count: postedToday, tone: 'good', icon: 'posted' },
   ]
+  const tiles = allTiles.filter((x) => seesPage(x.tab))
   const tileRow = (
     <div className="tiles">
       {tiles.map((x) => (
@@ -48,7 +50,7 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
       <div className="list">{building.map((p) => <PostRow key={p.id} post={p} onOpen={onOpen} />)}</div>
     </section>
   )
-  const upNext = (count: number) => (
+  const upNext = (count: number) => seesPage('calendar') && (
     <section>
       <h2>{t('Up next')}</h2>
       {scheduled.length ? <div className="list">{scheduled.slice(0, count).map((p) => <PostRow key={p.id} post={p} onOpen={onOpen} />)}</div> : <Empty icon="calendar" text={t('Nothing scheduled yet.')} />}
@@ -71,7 +73,7 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
   return (
     <div className="view">
       {tileRow}
-      <section>
+      {seesPage('calendar') && <section>
         <h2>{t('Next 7 days')}</h2>
         <div className="week">
           {week.map((date) => {
@@ -93,17 +95,17 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
             )
           })}
         </div>
-      </section>
+      </section>}
       <div className="dash">
-        <section>
+        {seesPage('review') && <section>
           <h2>
             {t('To review')}
             {review.length > 3 && <button className="link" onClick={() => go('review')}>{t('All')} ({review.length})</button>}
           </h2>
           {review.length ? <div className="cards cards-3">{review.slice(0, 3).map((p) => <ReviewCard key={p.id} post={p} onOpen={onOpen} />)}</div> : <div className="list"><Empty icon="review" text={t('Nothing to review. New posters will show up here.')} /></div>}
-        </section>
+        </section>}
         <div className="view">
-          <section>
+          {seesPage('fix') && <section>
             <h2>{t('Needs fixing')}</h2>
             <div className="list">
               {fix.map((p) => (
@@ -117,7 +119,7 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
               ))}
               {!fix.length && <Empty icon="posted" text={t('No problems. Everything is running.')} />}
             </div>
-          </section>
+          </section>}
           {buildingBlock}
           {upNext(4)}
         </div>

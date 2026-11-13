@@ -4,7 +4,7 @@ import type { Backend } from './backend'
 import { auth, firebaseConfigured, firestore } from './firebase'
 import { createFirestoreBackend } from './firestoreBackend'
 import { createLocalBackend } from './localBackend'
-import { askToJoin, cancelRequest, findAccess, watchMembership, type Access, type Perm } from './team'
+import { askToJoin, cancelRequest, findAccess, watchMembership, type Access, type Page, type Perm } from './team'
 import { emptyData, type Data } from './types'
 import { showToast } from '../components/ui'
 import { t } from '../i18n'
@@ -22,9 +22,11 @@ export type Session = {
   role: string
   roleName: string
   perms: Perm[]
+  /** The pages the person's role shows in the menu. */
+  pages: Page[]
 }
 
-let state: Session = { mode: firebaseConfigured ? 'cloud' : 'demo', user: firebaseConfigured ? undefined : null, data: emptyData, error: '', access: firebaseConfigured ? 'checking' : 'in', role: firebaseConfigured ? '' : 'owner', roleName: '', perms: [] }
+let state: Session = { mode: firebaseConfigured ? 'cloud' : 'demo', user: firebaseConfigured ? undefined : null, data: emptyData, error: '', access: firebaseConfigured ? 'checking' : 'in', role: firebaseConfigured ? '' : 'owner', roleName: '', perms: [], pages: [] }
 const listeners = new Set<() => void>()
 const set = (patch: Partial<Session>) => {
   state = { ...state, ...patch }
@@ -152,3 +154,6 @@ export function restartDemo() {
 
 /** A member cannot decide on an offer they made themselves. The owner and roles that manage people can. */
 export const ownOffer = (p: { createdBy?: string }) => p.createdBy === myId() && !isOwner() && !allowed('people')
+
+/** Whether the person's role shows this page. The owner, the demo and the old access list see every page. */
+export const seesPage = (page: string) => state.mode === 'demo' || state.access === 'legacy' || state.role === 'owner' || state.pages.includes(page as Page)

@@ -168,7 +168,9 @@ service cloud.firestore {
       allow read: if isMember();
       allow create, update: if isOwner()
         && id != 'owner'
-        && request.resource.data.keys().hasOnly(['name', 'perms'])
+        && request.resource.data.keys().hasOnly(['name', 'perms', 'pages'])
+        && (!('pages' in request.resource.data) || (request.resource.data.pages is list
+          && request.resource.data.pages.hasOnly(['offers', 'review', 'fix', 'calendar', 'posted', 'database'])))
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
         && request.resource.data.perms is list

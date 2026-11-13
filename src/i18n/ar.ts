@@ -245,6 +245,8 @@ export const ar: Record<string, string> = {
   'selected': 'محدد',
   'Select all': 'تحديد الكل',
   'Database': 'قاعدة البيانات',
+  'Pages this role sees': 'الصفحات التي يراها هذا الدور',
+  'Home and Settings are always shown. Review, Fix and Planner also need their permission above.': 'الرئيسية والإعدادات تظهران دائمًا. المراجعة والإصلاح والمخطط تحتاج أيضًا صلاحيتها أعلاه.',
   'Full screen': 'ملء الشاشة',
   'Stage': 'المرحلة',
   'Nothing matches.': 'لا توجد نتائج.',

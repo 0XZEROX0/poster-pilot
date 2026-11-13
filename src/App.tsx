@@ -13,7 +13,7 @@ import { Icon, Toast } from './components/ui'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
 import { DatabaseView } from './components/DatabaseView'
-import { allowed, isOwner, myId, ownOffer, signIn, signOutNow, useSession } from './data/store'
+import { allowed, isOwner, myId, ownOffer, seesPage, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, useLang } from './i18n'
 
@@ -41,7 +41,7 @@ export default function App() {
   useLang()
   const session = useSession()
   const [wanted, setTab] = useState<Tab>(tabFromHash)
-  const TABS = ALL_TABS.filter((x) => (x.id === 'offers' ? allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
+  const TABS = ALL_TABS.filter((x) => x.id === 'home' || seesPage(x.id)).filter((x) => (x.id === 'offers' ? allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)

@@ -480,3 +480,5 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .market-items a { color: var(--accent); font-weight: 600; }
 .market-other { padding-inline-start: 10px; overflow-wrap: anywhere; }
 .market-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.role-pages-title { font-weight: 600; font-size: 0.875rem; margin-top: 6px; }
+.role-pages { display: flex; flex-wrap: wrap; gap: 6px 16px; }

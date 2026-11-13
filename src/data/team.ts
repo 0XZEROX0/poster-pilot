@@ -7,7 +7,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   secret/code      { code, changedAt, resetAt, lastJoin }   the system code, seen by owner and admins; a new one after every accept
 //   config/access    { emails }                         the first list, from before codes existed
 
-//   roles/{id}       { name, perms }                    the roles the owner made, and what each may do
+//   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
 export const PERMS = ['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people'] as const
@@ -23,18 +23,23 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
 }
 /** 'owner', or the id of a role in `roles`. */
 export type Role = string
-export type RoleDef = { id: string; name: string; perms: Perm[] }
+/** The pages a role can be shown or not. Home and Settings are always there. */
+export const PAGES = ['offers', 'review', 'fix', 'calendar', 'posted', 'database'] as const
+export type Page = (typeof PAGES)[number]
+export const PAGE_LABEL: Record<Page, string> = { offers: 'Offers', review: 'Review', fix: 'Fix', calendar: 'Planner', posted: 'Posted', database: 'Database' }
+/** `pages` is what the role sees in the menu. A page also needs its permission, so this can only hide. */
+export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
-  { id: 'admin', name: 'Admin', perms: [...PERMS] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people') },
+  { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }
 /** Where a signed-in person stands. 'legacy' means the database still runs the old access list. */
 export type Access = 'checking' | 'legacy' | 'in' | 'outside' | 'waiting'
 /** Where the person stands, and with which role once inside. */
-export type Standing = { access: Access; role: Role; roleName: string; perms: Perm[] }
+export type Standing = { access: Access; role: Role; roleName: string; perms: Perm[]; pages: Page[] }
 
 /** A request nobody answered for this long no longer counts. */
 export const REQUEST_DAYS = 7
@@ -50,17 +55,18 @@ export function newCode(): string {
   return `STATIC-${letters.match(/.{4}/g)!.join('-')}`
 }
 
-const out = (access: Access): Standing => ({ access, role: '', roleName: '', perms: [] })
-const asRole = (id: string, data: { name?: string; perms?: string[] } | undefined): RoleDef | null =>
-  data ? { id, name: data.name ?? id, perms: PERMS.filter((p) => data.perms?.includes(p)) } : null
+const out = (access: Access): Standing => ({ access, role: '', roleName: '', perms: [], pages: [] })
+const asRole = (id: string, data: { name?: string; perms?: string[]; pages?: string[] } | undefined): RoleDef | null =>
+  // A role saved before pages existed sees every page.
+  data ? { id, name: data.name ?? id, perms: PERMS.filter((p) => data.perms?.includes(p)), pages: PAGES.filter((p) => !Array.isArray(data.pages) || data.pages.includes(p)) } : null
 
 /** What a role may do. A built-in role the owner never saved works as it always did. */
 async function standing(db: Firestore, role: Role): Promise<Standing> {
-  if (role === 'owner') return { access: 'in', role, roleName: 'Owner', perms: [...PERMS] }
-  const fallback = BUILT_IN.find((r) => r.id === role) ?? { id: role, name: role, perms: [] }
+  if (role === 'owner') return { access: 'in', role, roleName: 'Owner', perms: [...PERMS], pages: [...PAGES] }
+  const fallback = BUILT_IN.find((r) => r.id === role) ?? { id: role, name: role, perms: [], pages: [...PAGES] }
   const snap = await getDoc(doc(db, 'roles', role)).catch(() => null)
   const def = (snap?.exists() ? asRole(role, snap.data()) : null) ?? fallback
-  return { access: 'in', role, roleName: def.name, perms: def.perms }
+  return { access: 'in', role, roleName: def.name, perms: def.perms, pages: def.pages }
 }
 
 const profile = (user: User, role: Role) => ({ email: user.email ?? '', name: user.displayName ?? '', role, joinedAt: Date.now() })
@@ -157,7 +163,10 @@ export async function removeMember(db: Firestore, m: Member) {
 /** Gives a person a role. The database accepts only a role that exists. */
 export const setRole = (db: Firestore, uid: string, role: Role) => updateDoc(doc(db, 'members', uid), { role })
 
-export const saveRole = (db: Firestore, r: RoleDef) => setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms })
+export const saveRole = (db: Firestore, r: RoleDef) =>
+  setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms, pages: r.pages })
+    // Rules published before pages existed refuse the field. A role that hides nothing can still be saved without it.
+    .catch((e) => (denied(e) && r.pages.length === PAGES.length ? setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms }) : Promise.reject(e)))
 export const deleteRole = (db: Firestore, id: string) => deleteDoc(doc(db, 'roles', id))
 /** An id for a new role: short, and never one of the reserved names. */
 export const newRoleId = () => `r${Date.now().toString(36)}`

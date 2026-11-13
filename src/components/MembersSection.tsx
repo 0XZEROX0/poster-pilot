@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { firestore } from '../data/firebase'
 import type { Session } from '../data/store'
-import { accept, BUILT_IN, decline, deleteRole, loadTeam, newRoleId, PERM_LABEL, PERMS, removeMember, resetCode, saveRole, setRole, type Member, type Perm, type RoleDef, type Team } from '../data/team'
+import { accept, BUILT_IN, decline, deleteRole, loadTeam, newRoleId, PAGE_LABEL, PAGES, PERM_LABEL, PERMS, removeMember, resetCode, saveRole, setRole, type Member, type Page, type Perm, type RoleDef, type Team } from '../data/team'
 import { t } from '../i18n'
 import { Chip, Icon, showToast } from './ui'
 
@@ -31,6 +31,7 @@ export function MembersSection({ session }: { session: Session }) {
   const roleName = (role: string) => (role === 'owner' ? t('Owner') : (team?.roles.find((r) => r.id === role)?.name ?? t('No role')))
   const editRole = (id: string, patch: Partial<RoleDef>) => setRoles((list) => list!.map((r) => (r.id === id ? { ...r, ...patch } : r)))
   const tick = (r: RoleDef, p: Perm, on: boolean) => editRole(r.id, { perms: PERMS.filter((x) => (x === p ? on : r.perms.includes(x))) })
+  const page = (r: RoleDef, p: Page, on: boolean) => editRole(r.id, { pages: PAGES.filter((x) => (x === p ? on : r.pages.includes(x))) })
   const changed = (r: RoleDef) => JSON.stringify(r) !== JSON.stringify(team?.roles.find((x) => x.id === r.id))
   const builtIn = (id: string) => BUILT_IN.some((r) => r.id === id)
 
@@ -107,6 +108,16 @@ export function MembersSection({ session }: { session: Session }) {
                     <span><b>{t(PERM_LABEL[p][0])}</b><small className="muted">{t(PERM_LABEL[p][1])}</small></span>
                   </label>
                 ))}
+                <span className="role-pages-title">{t('Pages this role sees')}</span>
+                <div className="role-pages">
+                  {PAGES.map((p) => (
+                    <label key={p} className="check">
+                      <input type="checkbox" checked={r.pages.includes(p)} onChange={(e) => page(r, p, e.target.checked)} />
+                      <span>{t(PAGE_LABEL[p])}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="hint">{t('Home and Settings are always shown. Review, Fix and Planner also need their permission above.')}</p>
                 <div className="actions">
                   <button className="btn btn-primary" disabled={!r.name.trim() || (saved && !changed(r))} onClick={() => run(saveRole(db, r), 'Saved')}>{t('Save')}</button>
                   {!builtIn(r.id) && (!saved ? (
@@ -122,7 +133,7 @@ export function MembersSection({ session }: { session: Session }) {
               </fieldset>
             )
           })}
-          <button className="btn" onClick={() => setRoles([...roles, { id: newRoleId(), name: '', perms: [] }])}><Icon name="plus" size={18} />{t('Add a role')}</button>
+          <button className="btn" onClick={() => setRoles([...roles, { id: newRoleId(), name: '', perms: [], pages: [...PAGES] }])}><Icon name="plus" size={18} />{t('Add a role')}</button>
         </div>
       )}
       {error && <p className="bad">{error}</p>}
