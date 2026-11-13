@@ -1,25 +1,107 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only the Google accounts listed in config/access (field `emails`, a list) may use the app.
-    // That document is edited in the Firebase console; the app can read it but never change it.
-    function allowed() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email in get(/databases/$(database)/documents/config/access).data.emails;
+    // Anyone may sign in with Google, but only people in `members` can see or change anything.
+    // A person gets in by typing the system code, which only files a request; an owner or admin
+    // then accepts it. Roles: owner (everything), admin (sees the code, accepts and removes
+    // people), member (uses the app).
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function memberPath(uid) {
+      return /databases/$(database)/documents/members/$(uid);
+    }
+    function isMember() {
+      return signedIn() && exists(memberPath(request.auth.uid));
+    }
+    function myRole() {
+      return get(memberPath(request.auth.uid)).data.role;
+    }
+    function isOwner() {
+      return isMember() && myRole() == 'owner';
+    }
+    function isAdmin() {
+      return isMember() && myRole() in ['owner', 'admin'];
+    }
+    // The first list from before codes existed. Its first email is the owner; the others may
+    // walk in once without a request. Admins can only shorten it.
+    function firstList() {
+      return get(/databases/$(database)/documents/config/access).data.emails;
+    }
+    function currentCode() {
+      return get(/databases/$(database)/documents/secret/code).data.code;
+    }
+    function goodRequest(uid) {
+      let r = get(/databases/$(database)/documents/requests/$(uid)).data;
+      return r.code == currentCode()
+        && r.createdAt > request.time - duration.value(7, 'd')
+        && r.email == request.resource.data.email;
     }
 
-    match /config/{id} {
-      allow read: if allowed();
+    match /members/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['email', 'name', 'role', 'joinedAt'])
+        && request.resource.data.email is string
+        && (
+          // Yourself, from the first list.
+          (request.auth.uid == uid
+            && request.resource.data.email == request.auth.token.email
+            && ((request.resource.data.role == 'owner' && firstList()[0] == request.auth.token.email)
+              || (request.resource.data.role == 'member' && request.auth.token.email in firstList())))
+          // Someone else, by accepting their request.
+          || (request.auth.uid != uid && isAdmin() && request.resource.data.role == 'member' && goodRequest(uid))
+        );
+      // Only the owner changes roles, never their own, and nobody becomes a second owner.
+      allow update: if isOwner()
+        && request.auth.uid != uid
+        && resource.data.role != 'owner'
+        && request.resource.data.role in ['admin', 'member']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']);
+      allow delete: if signedIn() && resource.data.role != 'owner'
+        && (request.auth.uid == uid || isOwner() || (isAdmin() && resource.data.role == 'member'));
+    }
+
+    match /requests/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      // The code is checked here, on the server, so a wrong code cannot even file a request.
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'name', 'code', 'createdAt'])
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string && request.resource.data.name.size() < 200
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.code == currentCode();
+      allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    match /secret/code {
+      allow read: if isAdmin();
+      allow write: if isOwner()
+        && request.resource.data.keys().hasOnly(['code', 'changedAt'])
+        && request.resource.data.code is string
+        && request.resource.data.code.size() >= 16;
+    }
+
+    match /config/access {
+      allow read: if isAdmin();
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['emails'])
+        && request.resource.data.emails.size() >= 1
+        && request.resource.data.emails.size() <= resource.data.emails.size()
+        && request.resource.data.emails[0] == resource.data.emails[0]
+        && resource.data.emails.hasAll(request.resource.data.emails);
     }
     match /posts/{id} {
-      allow read, create, update: if allowed();
+      allow read, create, update: if isMember();
     }
     match /catalog/{id} {
-      allow read, write: if allowed();
+      allow read, write: if isMember();
     }
     match /status/{id} {
-      allow read: if allowed();
+      allow read: if isMember();
     }
   }
 }

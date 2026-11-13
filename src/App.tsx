@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { PlannerView } from './components/PlannerView'
 import { FixView } from './components/FixView'
 import { HomeView, type Tab } from './components/HomeView'
+import { JoinScreen } from './components/JoinScreen'
 import { NewPostSheet } from './components/NewPostSheet'
 import { PostedView } from './components/PostedView'
 import { PostSheet } from './components/PostSheet'
@@ -61,6 +62,8 @@ export default function App() {
       </div>
     )
   }
+  if (session.mode === 'cloud' && session.access === 'checking') return <div className="splash">{session.error ? <p className="bad">{session.error}</p> : t('Loading…')}</div>
+  if (session.mode === 'cloud' && (session.access === 'outside' || session.access === 'waiting')) return <JoinScreen session={session} />
   if (session.mode === 'cloud' && /permission|insufficient/i.test(session.error)) {
     return (
       <div className="splash">

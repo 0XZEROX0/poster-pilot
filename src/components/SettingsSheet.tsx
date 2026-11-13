@@ -3,6 +3,7 @@ import { resetDemo } from '../data/localBackend'
 import { backend, restartDemo, signOutNow, type Session } from '../data/store'
 import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
+import { MembersSection } from './MembersSection'
 import { Sheet } from './Sheet'
 import { Icon, showToast } from './ui'
 
@@ -13,6 +14,8 @@ export function agoLabel(ms: number): string {
   if (min < 60) return `${min} ${t('min ago')}`
   return `${Math.round(min / 60)} ${t('h ago')}`
 }
+
+const ROLE: Partial<Record<Session['access'], string>> = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
 export function SettingsSheet({ session, onClose }: { session: Session; onClose: () => void }) {
   const lang = useLang()
@@ -41,11 +44,12 @@ export function SettingsSheet({ session, onClose }: { session: Session; onClose:
             </>
           ) : (
             <>
-              <p className="hint" dir="ltr">{session.user?.email}</p>
+              <p className="hint" dir="ltr">{session.user?.email}{ROLE[session.access] && <> · {t(ROLE[session.access]!)}</>}</p>
               <button className="btn" onClick={() => signOutNow()}>{t('Sign out')}</button>
             </>
           )}
         </section>
+        {session.mode === 'cloud' && (session.access === 'owner' || session.access === 'admin') && <MembersSection session={session} />}
         {session.mode === 'cloud' && (
           <section className="set">
             <h3>{t('Engine')}</h3>

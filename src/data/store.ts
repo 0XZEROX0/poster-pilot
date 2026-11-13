@@ -4,6 +4,7 @@ import type { Backend } from './backend'
 import { auth, firebaseConfigured, firestore } from './firebase'
 import { createFirestoreBackend } from './firestoreBackend'
 import { createLocalBackend } from './localBackend'
+import { askToJoin, cancelRequest, findAccess, watchMembership, type Access } from './team'
 import { emptyData, type Data } from './types'
 
 export type Session = {
@@ -13,9 +14,11 @@ export type Session = {
   user: User | null | undefined
   data: Data
   error: string
+  /** Where the signed-in person stands: inside with a role, waiting for an answer, or outside. */
+  access: Access
 }
 
-let state: Session = { mode: firebaseConfigured ? 'cloud' : 'demo', user: firebaseConfigured ? undefined : null, data: emptyData, error: '' }
+let state: Session = { mode: firebaseConfigured ? 'cloud' : 'demo', user: firebaseConfigured ? undefined : null, data: emptyData, error: '', access: firebaseConfigured ? 'checking' : 'owner' }
 const listeners = new Set<() => void>()
 const set = (patch: Partial<Session>) => {
   state = { ...state, ...patch }
@@ -36,9 +39,10 @@ function listen() {
 if (firebaseConfigured && auth && firestore) {
   backend = createFirestoreBackend(firestore)
   onAuthStateChanged(auth, (user) => {
-    set({ user, data: emptyData, error: '' })
-    if (user) listen()
-    else stop()
+    stop()
+    stopWaiting()
+    set({ user, data: emptyData, error: '', access: 'checking' })
+    if (user) enter()
   })
   // Every change that reaches an open listener counts against the database's free daily reads.
   // So the app stops listening a minute after it goes to the background and picks up again when it
@@ -55,12 +59,47 @@ if (firebaseConfigured && auth && firestore) {
       }, 60_000)
     } else if (paused) {
       paused = false
-      if (state.user) listen()
+      if (state.user && inside()) listen()
     }
   })
 } else {
   backend = createLocalBackend()
   listen()
+}
+
+const inside = () => ['legacy', 'owner', 'admin', 'member'].includes(state.access)
+let stopWaiting = () => {}
+
+/** Works out whether the person is inside. Only then is any data read. */
+async function enter() {
+  const user = state.user
+  if (!user || !firestore) return
+  stopWaiting()
+  try {
+    const access = await findAccess(firestore, user)
+    if (state.user !== user) return
+    set({ access })
+    if (inside()) listen()
+    // Someone waiting gets in the moment an owner or admin accepts, without reloading.
+    else if (access === 'waiting') stopWaiting = watchMembership(firestore, user.uid, () => { stopWaiting(); void enter() })
+  } catch (e) {
+    set({ error: (e as Error).message })
+  }
+}
+
+/** Sends a request to join with the system code. False when the code is wrong. */
+export async function joinWithCode(code: string): Promise<boolean> {
+  if (!firestore || !state.user) return false
+  const ok = await askToJoin(firestore, state.user, code)
+  if (ok) await enter()
+  return ok
+}
+
+export async function withdrawRequest() {
+  if (!firestore || !state.user) return
+  stopWaiting()
+  await cancelRequest(firestore, state.user.uid)
+  set({ access: 'outside' })
 }
 
 export const useSession = () => useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => state)
