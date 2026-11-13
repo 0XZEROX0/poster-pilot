@@ -82,8 +82,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             </div>
           )}
           {!posted && draft.items.map((it, i) => (
-            <fieldset key={i} className="item-box">
+            <fieldset key={i} className={`item-box${it.photoMissing && problem ? ' item-missing' : ''}`}>
               <legend dir="auto">{it.name}</legend>
+              {it.photoMissing && problem && <p className="problem-title"><Icon name="fix" size={16} />{t('No photo was found for this item.')}</p>}
               <label>
                 <span>{t('Photo link')}</span>
                 <input type="url" inputMode="url" dir="ltr" placeholder={t('Paste a photo link for this product')} value={it.manualPhoto} onChange={(e) => setItem(i, { manualPhoto: e.target.value.trim() })} />

@@ -17,6 +17,7 @@ chunks.forEach((c, k) => {
     if (m.kind === 'mirror') cache[m.id] = ok ? m.hash : '-';
     else if (m.kind === 'delete' && !ok) cache[m.id] = '-';
     else if (m.kind === 'catalog' && ok) catalog[m.id] = m.hash;
+    else if (m.kind === 'beat' && ok) sd.beat = Date.now();
   });
 });
 sd.hash = cache;

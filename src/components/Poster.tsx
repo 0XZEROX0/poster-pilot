@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DEMO_POSTER } from '../data/demo'
-import { formatPrice, hasOffer, isBuilding, previewUrl, priceOf, problemOf, titleOf } from '../data/logic'
+import { formatPrice, hasOffer, anyProblemOf, isBuilding, previewUrl, priceOf, titleOf } from '../data/logic'
 import type { Post } from '../data/types'
 import { t } from '../i18n'
 import { Icon } from './ui'
@@ -11,7 +11,7 @@ import { Icon } from './ui'
  */
 export function Poster({ post, small = false }: { post: Post; small?: boolean }) {
   const [failed, setFailed] = useState(false)
-  const problem = problemOf(post)
+  const problem = anyProblemOf(post)
   const building = isBuilding(post)
   const cls = `poster${small ? ' poster-small' : ''}`
 

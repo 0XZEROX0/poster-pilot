@@ -52,6 +52,15 @@ for (const n of NEED) if (col(n) < 0) throw new Error('Posts sheet: the column "
 const USER_COLS = ['Category 1', 'Category 2', 'Category 3', 'Manual photo 1', 'Manual photo 2', 'Manual photo 3', 'Price after', 'Details', 'Photo status', 'Feedback', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'FB post id'];
 const FEEDBACK = { '': '', 'done': 'Done', 'redo': 'Redo', 'redo next image': 'Redo next image', 'ignore': 'Ignore' };
 
+// The poster workflow paints the cell of an item whose photo it could not find red. Reading that
+// colour tells the app which item of a bundle is the missing one.
+let marks = [];
+try { marks = ((((($('Read item marks').first().json.sheets || [])[0] || {}).data || [])[0] || {}).rowData) || []; } catch (e) { marks = []; }
+const isRed = (i, c) => {
+  const bg = ((((marks[i - 1] || {}).values || [])[c] || {}).userEnteredFormat || {}).backgroundColor;
+  return !!bg && (bg.red || 0) > 0.85 && (bg.green || 0) < 0.5 && (bg.blue || 0) < 0.5;
+};
+
 const rows = [];
 const rowAt = new Map();
 for (let i = 1; i < posts.length; i++) {
@@ -60,7 +69,7 @@ for (let i = 1; i < posts.length; i++) {
   const items = [];
   for (const n of [1, 2, 3]) {
     const name = g('Item ' + n);
-    if (name) items.push({ slot: n, category: g('Category ' + n), name, manualPhoto: g('Manual photo ' + n), nextPhoto: g('Next photo ' + n).toUpperCase() === 'TRUE' });
+    if (name) items.push({ slot: n, category: g('Category ' + n), name, manualPhoto: g('Manual photo ' + n), nextPhoto: g('Next photo ' + n).toUpperCase() === 'TRUE', photoMissing: isRed(i, col('Item ' + n)) });
   }
   const isPost = items.length > 0 || g('Image link') !== '';
   const blank = !isPost && USER_COLS.every(n => g(n) === '');
@@ -227,7 +236,10 @@ for (const k of Object.keys(catalog)) {
 }
 
 // ---------- heartbeat ----------
-push({ update: { name: path('status', 'engine'), fields: fieldsOf({ lastSync: Date.now(), note: 'Sheet sync: ' + postRows.length + ' posts' }) } }, { kind: 'beat', id: 'engine' });
+// The app shows when the engine last answered. One write every ten minutes is enough for that and
+// keeps the database's free daily writes for real changes. A quiet run then writes nothing at all.
+const beatDue = full || !sameSheet || !sd.beat || Date.now() - sd.beat > 10 * 60 * 1000;
+if (beatDue) push({ update: { name: path('status', 'engine'), fields: fieldsOf({ lastSync: Date.now(), note: 'Sheet sync: ' + postRows.length + ' posts' }) } }, { kind: 'beat', id: 'engine' });
 
 stats.sheetRequests = sheetReq.length;
 stats.writes = writes.length;

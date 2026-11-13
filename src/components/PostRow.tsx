@@ -2,7 +2,7 @@ import { formatPrice, hasOffer, priceOf, problemOf, stageOf, titleOf, whenOf } f
 import type { Post } from '../data/types'
 import { t } from '../i18n'
 import { Poster } from './Poster'
-import { Chip, dayLabel, timeLabel } from './ui'
+import { Chip, Icon, dayLabel, timeLabel } from './ui'
 
 /** A post's state as one small coloured label. */
 export function StageChip({ post }: { post: Post }) {
@@ -29,6 +29,24 @@ export function PostRow({ post, onOpen }: { post: Post; onOpen: (id: string) => 
           </span>
           <StageChip post={post} />
         </span>
+      </span>
+    </button>
+  )
+}
+
+/** One post as a small card: poster, name, price and its time or state. Opens the post when tapped. */
+export function PostCard({ post, onOpen }: { post: Post; onOpen: (id: string) => void }) {
+  const when = whenOf(post)
+  const posted = stageOf(post) === 'posted'
+  return (
+    <button className="card card-sm" onClick={() => onOpen(post.id)}>
+      <Poster post={post} />
+      <span className="card-body">
+        <span className="card-title" dir="auto">{titleOf(post)}</span>
+        <span className="price" dir="ltr">
+          {hasOffer(post) && <s>{formatPrice(post.priceBefore)}</s>} {formatPrice(priceOf(post))} EGP
+        </span>
+        {posted && when ? <span className="card-when"><Icon name="posted" size={15} />{timeLabel(when.time)}</span> : <StageChip post={post} />}
       </span>
     </button>
   )

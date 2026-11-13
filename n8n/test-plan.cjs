@@ -12,6 +12,7 @@ const run=(over)=>{
     'Check memory':[{json:{full:!!over.full}}],
     'Read sheet':[{json:{valueRanges:[{values:posts},{values:[["MB Name","MB Price","MB Company","CPU Name","CPU Price","CPU Company"],["Board B","1500","Asus","Chip C","900","AMD"],[" ","5",""]]},{values:[["Static"],["Static BlackFriday"]]},{values:[["Template","Caption text","Notes"],["Default","🔵 {name}","n"]]}]}}],
     'Read row ids':[{json:over.md||{}}],
+    'Read item marks':[{json:{sheets:[{data:[{rowData:[{},{values:[{},{},{},{},{},{},{userEnteredFormat:{backgroundColor:{red:1,green:0.27,blue:0.27}}}]}]}]}]}}],
     'Get app changes':(over.docs||[{readTime:'x'}]).map(json=>({json})),
   };
   const $=n=>({first:()=>nodes[n][0],all:()=>nodes[n]});

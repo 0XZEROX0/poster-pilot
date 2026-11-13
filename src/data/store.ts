@@ -40,6 +40,24 @@ if (firebaseConfigured && auth && firestore) {
     if (user) listen()
     else stop()
   })
+  // Every change that reaches an open listener counts against the database's free daily reads.
+  // So the app stops listening a minute after it goes to the background and picks up again when it
+  // is shown. What is on screen stays, and the offline cache makes coming back cheap.
+  let paused = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(timer)
+    if (document.hidden) {
+      timer = setTimeout(() => {
+        stop()
+        stop = () => {}
+        paused = true
+      }, 60_000)
+    } else if (paused) {
+      paused = false
+      if (state.user) listen()
+    }
+  })
 } else {
   backend = createLocalBackend()
   listen()

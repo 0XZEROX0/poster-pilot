@@ -90,6 +90,23 @@ const readRowIds = node({
   }
 });
 
+const readItemMarks = node({
+  type: 'n8n-nodes-base.httpRequest',
+  version: 4.5,
+  config: {
+    name: 'Read item marks',
+    parameters: {
+      method: 'GET',
+      url: expr("https://sheets.googleapis.com/v4/spreadsheets/{{ $('Settings').first().json.spreadsheetId }}?ranges=Posts!A2:L&fields=sheets.data.rowData.values.userEnteredFormat.backgroundColor"),
+      authentication: 'predefinedCredentialType',
+      nodeCredentialType: 'googleSheetsOAuth2Api',
+      options: { timeout: 60000 }
+    },
+    credentials: { googleSheetsOAuth2Api: { id: 'a9IhhSL1IAi2nC78', name: 'Google Sheets account' } },
+    executeOnce: true, retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, onError: 'continueRegularOutput'
+  }
+});
+
 const planSync = node({
   type: 'n8n-nodes-base.code',
   version: 2,
@@ -170,6 +187,7 @@ export default workflow('posterpilot-sheet-sync', 'PosterPilot - Sheet and App S
   .to(getAppChanges)
   .to(readSheet)
   .to(readRowIds)
+  .to(readItemMarks)
   .to(planSync)
   .to(sheetNeedsChanges
     .onTrue(updateSheet.to(splitWrites))
@@ -177,7 +195,7 @@ export default workflow('posterpilot-sheet-sync', 'PosterPilot - Sheet and App S
   .add(splitWrites)
   .to(writeApp)
   .to(remember)
-  .group('Read both sides', [settings, checkMemory, getAppChanges, readSheet, readRowIds], { description: 'Reads the changes waiting in the app, the Posts sheet, and the hidden id tag of each row.' })
+  .group('Read both sides', [settings, checkMemory, getAppChanges, readSheet, readRowIds, readItemMarks], { description: 'Reads the changes waiting in the app, the Posts sheet, and the hidden id tag of each row.' })
   .group('Plan and update the sheet', [planSync, sheetNeedsChanges, updateSheet, splitWrites], { description: 'Works out what differs. Writes app changes and new app posts into the sheet.' })
   .group('Update the app', [writeApp, remember], { description: 'Sends changed posts, product list and a heartbeat to the app database.' });
 `;

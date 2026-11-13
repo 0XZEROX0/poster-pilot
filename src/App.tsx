@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarView } from './components/CalendarView'
+import { PlannerView } from './components/PlannerView'
 import { FixView } from './components/FixView'
 import { HomeView, type Tab } from './components/HomeView'
 import { NewPostSheet } from './components/NewPostSheet'
@@ -17,7 +17,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
   { id: 'review', label: 'Review', icon: 'review' },
   { id: 'fix', label: 'Fix', icon: 'fix' },
-  { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+  { id: 'calendar', label: 'Planner', icon: 'calendar' },
   { id: 'posted', label: 'Posted', icon: 'posted' },
 ]
 
@@ -26,7 +26,7 @@ type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'setting
 const tabFromHash = (): Tab => TABS.find((x) => `#/${x.id}` === location.hash)?.id ?? 'home'
 
 /** The engine is "quiet" when it has not written its sign of life for this long. */
-const QUIET_MS = 20 * 60 * 1000
+const QUIET_MS = 30 * 60 * 1000
 
 export default function App() {
   useLang()
@@ -98,7 +98,7 @@ export default function App() {
   ) : tab === 'fix' ? (
     <FixView data={data} onOpen={open} />
   ) : tab === 'calendar' ? (
-    <CalendarView data={data} onOpen={open} />
+    <PlannerView data={data} onOpen={open} />
   ) : (
     <PostedView data={data} onOpen={open} />
   )

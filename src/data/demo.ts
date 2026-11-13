@@ -74,7 +74,7 @@ export function demoPosts(): Post[] {
   const scheduled = (date: string, time: string, auto = false): Partial<Post> => ({ feedback: 'Done', postDate: auto ? '' : date, postTime: auto ? '' : time, scheduledFor: `${date} ${time}`, fbStatus: 'Scheduled' })
   return [
     // Needs fixing
-    post([item('Monitor', 'MSI MAG 276QE27 27" WQHD IPS 275Hz 0.5MS')], 'MSI', '11,500', '', 'Static', { posterUrl: '', photoStatus: 'MISSING' }),
+    post([item('Monitor', 'MSI MAG 276QE27 27" WQHD IPS 275Hz 0.5MS'), { ...item('Acc', 'MAZE M252 Monitor Arm'), photoMissing: true }], 'MSI + MAZE', '13,000', '', 'Static', { posterUrl: '', photoStatus: 'MISSING' }),
     post([item('MB', 'Gigabyte B860M D3HP'), item('CPU', 'Intel Core I5-14400F tray')], 'Gigabyte + Intel', '14,500', '13,499', 'Static BlackFriday', { posterUrl: '', photoStatus: 'AI ERROR' }),
     post([item('Case', 'Xigmatek Sun 5 Fan Argb PWM Super Tower Case')], 'Xigmatek', '3,300', '', 'Static', { feedback: 'Done', postDate: today, postTime: '09:00', fbStatus: 'Post time must be at least 15 minutes ahead' }),
     // Being built

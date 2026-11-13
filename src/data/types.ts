@@ -6,6 +6,8 @@ export type PostItem = {
   manualPhoto: string
   /** Ask the engine to try the next search result (sheet: Next photo N). */
   nextPhoto: boolean
+  /** Set by the engine: this is the item whose photo could not be found. */
+  photoMissing?: boolean
 }
 
 /** What the person decided about a finished poster (sheet: Feedback). */
@@ -39,6 +41,8 @@ export type Post = {
   igStatus: string
   fbPostId: string
   createdAt: number
+  /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
+  ignoredProblem?: string
 }
 
 export type Product = { category: string; name: string; price: string; company: string }

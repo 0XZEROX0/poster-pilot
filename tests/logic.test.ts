@@ -48,7 +48,9 @@ describe('buildCaption', () => {
 
 describe('slots', () => {
   it('reads the scheduled time first', () => {
-    expect(whenOf(post({ scheduledFor: '2026-11-10 12:00', postDate: '2026-11-11', postTime: '09:00' }))).toEqual({ date: '2026-11-10', time: '12:00' })
+    expect(whenOf(post({ scheduledFor: '2026-11-10 12:00', postDate: '2026-11-11', postTime: '09:00' }))).toEqual({ date: '2026-11-11', time: '09:00' })
+    expect(whenOf(post({ scheduledFor: '2026-11-10 12:00', postDate: '2026-11-11', postTime: '09:00', fbStatus: 'Published' }))).toEqual({ date: '2026-11-10', time: '12:00' })
+    expect(whenOf(post({ scheduledFor: '2026-11-10 12:00' }))).toEqual({ date: '2026-11-10', time: '12:00' })
     expect(whenOf(post())).toBeNull()
   })
   it('gives the next free slot of five a day from 17:00', () => {
@@ -81,5 +83,17 @@ describe('sheet status words', () => {
   it('keeps real problems in Fix', () => {
     expect(stageOf({ ...base, posterUrl: '', photoStatus: 'MISSING' })).toBe('fix')
     expect(stageOf({ ...base, feedback: 'Done', fbStatus: 'Error: 400 - bad' })).toBe('fix')
+  })
+})
+
+describe('ignoring an error', () => {
+  it('hides the problem until its text changes', () => {
+    const p = post({ feedback: 'Done', fbStatus: 'Error: 400 - bad', ignoredProblem: 'Error: 400 - bad' })
+    expect(problemOf(p)).toBeNull()
+    expect(stageOf(p)).toBe('scheduled')
+    expect(stageOf({ ...p, fbStatus: 'Error: 500 - other' })).toBe('fix')
+  })
+  it('parks a post that has no poster', () => {
+    expect(stageOf(post({ posterUrl: '', photoStatus: 'MISSING', ignoredProblem: 'MISSING' }))).toBe('skipped')
   })
 })

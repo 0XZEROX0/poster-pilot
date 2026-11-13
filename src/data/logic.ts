@@ -5,8 +5,16 @@ export type Stage = 'building' | 'fix' | 'review' | 'scheduled' | 'posted' | 'sk
 
 const FB_FINE = new Set(['', 'Scheduled', 'Published'])
 
-/** A problem the person has to act on, or null. */
-export function problemOf(p: Post): { kind: 'photo' | 'background' | 'ai' | 'facebook' | 'instagram'; text: string } | null {
+export type Problem = { kind: 'photo' | 'background' | 'ai' | 'facebook' | 'instagram'; text: string }
+
+/** A problem the person has to act on, or null. A problem the person ignored stays hidden until its text changes. */
+export function problemOf(p: Post): Problem | null {
+  const problem = anyProblemOf(p)
+  return problem && p.ignoredProblem === problem.text ? null : problem
+}
+
+/** The problem the engine reported, whether or not the person ignored it. */
+export function anyProblemOf(p: Post): Problem | null {
   const s = p.photoStatus.trim()
   if (s && s !== 'OK' && !isBusy(p)) {
     const up = s.toUpperCase()
@@ -26,12 +34,16 @@ export const isBusy = (p: Pick<Post, 'photoStatus'>) => /^(WORKING|PHOTO FOUND)/
 /** A redo was asked for and the engine has not picked it up yet ('Redo' or the sheet's 'Redo next image'). */
 export const isRedo = (p: Pick<Post, 'feedback'>) => /^redo/i.test(p.feedback)
 
-export const isBuilding = (p: Post) => isRedo(p) || isBusy(p) || (!problemOf(p) && (!p.posterUrl || !p.photoStatus))
+/** The person ignored an error that left the post without a poster: nothing more will happen to it. */
+const isDeadEnd = (p: Post) => !p.posterUrl && Boolean(anyProblemOf(p)) && !problemOf(p)
+
+export const isBuilding = (p: Post) => isRedo(p) || isBusy(p) || (!anyProblemOf(p) && (!p.posterUrl || !p.photoStatus))
 
 export function stageOf(p: Post): Stage {
   if (p.fbStatus.trim() === 'Published') return 'posted'
   if (isRedo(p) || isBusy(p)) return 'building'
   if (problemOf(p)) return 'fix'
+  if (isDeadEnd(p)) return 'skipped'
   if (!p.posterUrl || !p.photoStatus) return 'building'
   if (p.feedback === 'ignore') return 'skipped'
   if (p.feedback === 'Done') return 'scheduled'
@@ -93,12 +105,16 @@ export function addDays(date: string, n: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** When a post goes out: the engine's time when scheduled, else the time the person asked for. */
+/**
+ * When a post goes out. A published post keeps the time it went out. Otherwise the date and time the
+ * person asked for win, because the engine follows them within a few minutes; else the engine's slot.
+ */
 export function whenOf(p: Post): { date: string; time: string } | null {
   const m = p.scheduledFor.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/)
-  if (m) return { date: m[1], time: m[2] }
-  if (p.postDate && p.postTime) return { date: p.postDate, time: p.postTime }
-  return null
+  const engine = m ? { date: m[1], time: m[2] } : null
+  if (engine && p.fbStatus.trim() === 'Published') return engine
+  if (p.postDate && p.postTime) return { date: p.postDate, time: p.postTime.padStart(5, '0') }
+  return engine
 }
 
 /** The engine's automatic slots: 17:00 Cairo, then every 15 minutes, 5 a day. */

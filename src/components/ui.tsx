@@ -20,6 +20,9 @@ const paths: Record<string, string> = {
   right: 'M9 5l7 7-7 7',
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
   image: 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 2.5-2.5L20 18M15.5 9.5v.01',
+  edit: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
+  minus: 'M5 12h14',
+  grip: 'M9 6v.01M15 6v.01M9 12v.01M15 12v.01M9 18v.01M15 18v.01',
 }
 
 export function Icon({ name, size = 22 }: { name: keyof typeof paths | string; size?: number }) {

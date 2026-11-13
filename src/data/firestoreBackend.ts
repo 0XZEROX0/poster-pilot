@@ -14,6 +14,8 @@ import { emptyData, type CaptionTemplate, type Data, type Health, type Post, typ
 // tell what the person changed and carry it out. `appDirty` is true while something is waiting, so
 // the engine can ask for just those posts. The engine removes each entry when it is done.
 
+const APP_ONLY = new Set(['ignoredProblem'])
+
 const blankPost: Omit<Post, 'id'> = {
   order: 0, items: [], company: '', priceBefore: '', priceAfter: '', style: '', details: '', posterUrl: '', photoStatus: '', feedback: '',
   postDate: '', postTime: '', scheduledFor: '', caption: '', captionStyle: '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: 0,
@@ -56,11 +58,13 @@ export function createFirestoreBackend(db: Firestore): Backend {
       await setDoc(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), appNew: true, appDirty: true, appEditedAt: serverTimestamp() })
     },
     async updatePost(id, patch) {
-      const edits: Record<string, unknown> = { appDirty: true, appEditedAt: serverTimestamp() }
+      const edits: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(patch)) {
         edits[key] = value
-        edits[`appEdits.${key}`] = value
+        // Fields only the app uses stay out of the engine's to-do list, which saves a sync round.
+        if (!APP_ONLY.has(key)) edits[`appEdits.${key}`] = value
       }
+      if (Object.keys(edits).some((k) => k.startsWith('appEdits.'))) Object.assign(edits, { appDirty: true, appEditedAt: serverTimestamp() })
       await updateDoc(doc(db, 'posts', id), edits)
     },
     async removePost(id) {
