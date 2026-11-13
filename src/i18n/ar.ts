@@ -135,4 +135,6 @@ export const ar: Record<string, string> = {
   'No other approved posts. Approve posters in Review first.': 'لا توجد بوستات أخرى موافق عليها. وافق على البوسترات من المراجعة أولًا.',
   'No photo for': 'لا توجد صورة لـ',
   'No photo was found for this item.': 'لم يتم العثور على صورة لهذا المنتج.',
+  'This post is already on the schedule, so it cannot be deleted here.': 'هذا البوست مجدول بالفعل، لذلك لا يمكن حذفه من هنا.',
+  'Its row in the sheet will be emptied.': 'سيتم تفريغ صفّه في الشيت.',
 }

@@ -84,7 +84,7 @@ for (let i = 1; i < posts.length; i++) {
   rows.push(row);
   rowAt.set(row.r, row);
 }
-const postRows = rows.filter(x => x.isPost);
+let postRows = rows.filter(x => x.isPost);
 
 // ---------- which row is which post ----------
 const sheetReq = [];
@@ -158,7 +158,31 @@ for (const d of docs.filter(x => x.f.appDirty === true)) {
   const row = rowOf.get(d.id);
   if (row && !row.fresh) {
     skipMirror.add(d.id);
-    if (d.f.appDeleted === true) { settle(d, 'Deleting from the app is not connected to the sheet yet. Clear the row in the sheet instead.'); notes.push('delete not carried out: ' + d.id); continue; }
+    if (d.f.appDeleted === true) {
+      // Deleting in the app empties the post's row, the way the sheet's Clear button does. Only a post
+      // that is neither published nor on Facebook's schedule can go, so nothing is left behind there.
+      const cur = name => clean(row.line[col(name)]);
+      const live = /^(published|posted|scheduled)/i;
+      if (live.test(cur('FB status')) || live.test(cur('IG status')) || cur('FB post id') !== '') { settle(d, 'This post is already scheduled or published, so it was not deleted.'); notes.push('delete refused: ' + d.id); continue; }
+      if (/^(WORKING|PHOTO FOUND)/i.test(cur('Photo status'))) { notes.push('delete waits, poster being built: ' + d.id); continue; }
+      const stop = head.findIndex(h => /^clear published/i.test(h));
+      const end = stop > 0 ? stop : head.length;
+      const keep = new Set([col('Company'), col('Price before'), col('Preview')]);
+      let from = -1;
+      for (let c = 0; c <= end; c++) {
+        const wipe = c < end && !keep.has(c);
+        if (wipe && from < 0) from = c;
+        if (!wipe && from >= 0) { sheetReq.push({ updateCells: { range: { sheetId: SHEET, startRowIndex: row.r - 1, endRowIndex: row.r, startColumnIndex: from, endColumnIndex: c }, fields: 'userEnteredValue' } }); from = -1; }
+      }
+      cellReq(row.r, 'Style', str('Static'));
+      for (const n of [1, 2, 3]) if (isRed(row.r - 1, col('Item ' + n))) sheetReq.push({ updateCells: { range: { sheetId: SHEET, startRowIndex: row.r - 1, endRowIndex: row.r, startColumnIndex: col('Item ' + n), endColumnIndex: col('Item ' + n) + 1 }, fields: 'userEnteredFormat.backgroundColor' } });
+      const tag = tags.find(m => clean(m.metadataValue) === d.id && (m.location.dimensionRange.startIndex || 0) + 1 === row.r);
+      if (tag) dropTag(tag);
+      row.isPost = false; row.gone = true; rowOf.delete(d.id);
+      push({ delete: d.name }, { kind: 'delete', id: d.id });
+      stats.removed++;
+      continue;
+    }
     const n = applyEdits(row, (d.f.appEdits && typeof d.f.appEdits === 'object') ? d.f.appEdits : {});
     stats.appEdits++; stats.appCells += n;
     settle(d, '');
@@ -188,6 +212,8 @@ for (const d of docs.filter(x => x.f.appDirty === true)) {
   stats.appNew++;
   settle(d, '');
 }
+
+postRows = postRows.filter(x => !x.gone);
 
 // ---------- sheet -> app ----------
 const MIRROR = ['order', 'items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'posterUrl', 'photoStatus', 'feedback', 'postDate', 'postTime', 'scheduledFor', 'caption', 'captionStyle', 'fbStatus', 'igStatus', 'fbPostId', 'syncHash'];

@@ -16,6 +16,8 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const stage = stageOf(post)
   const posted = stage === 'posted'
   const problem = problemText(post)
+  // Only a post that Facebook does not hold yet can be deleted from here.
+  const locked = /^scheduled/i.test(post.fbStatus) || post.fbPostId !== ''
   const set = (patch: Partial<Post>) => setDraft((d) => ({ ...d, ...patch }))
   const setItem = (i: number, patch: Partial<Post['items'][number]>) => set({ items: draft.items.map((it, k) => (k === i ? { ...it, ...patch } : it)) })
 
@@ -130,9 +132,11 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
           {!posted && <button className="link" onClick={() => set({ caption: buildCaption(draft, data.templates) })}>{t('Rebuild from template')}</button>}
           {!posted && (
             <div className="danger">
-              {confirmDelete ? (
+              {locked ? (
+                <span className="muted">{t('This post is already on the schedule, so it cannot be deleted here.')}</span>
+              ) : confirmDelete ? (
                 <>
-                  <span>{t('Delete this post?')} {t('It will also be taken off the schedule.')}</span>
+                  <span>{t('Delete this post?')} {t('Its row in the sheet will be emptied.')}</span>
                   <button className="btn btn-danger" onClick={remove}>{t('Delete')}</button>
                   <button className="btn btn-ghost" onClick={() => setConfirmDelete(false)}>{t('Cancel')}</button>
                 </>
