@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCaption, hasOffer, nextFreeSlot, previewUrl, problemOf, stageOf, whenOf } from '../src/data/logic'
+import { buildCaption, hasOffer, nextFreeSlot, previewUrl, problemOf, stageOf, whenOf, duplicatesOf, matchesSearch } from '../src/data/logic'
 import type { Post } from '../src/data/types'
 
 const post = (over: Partial<Post> = {}): Post => ({
@@ -95,5 +95,20 @@ describe('ignoring an error', () => {
   })
   it('parks a post that has no poster', () => {
     expect(stageOf(post({ posterUrl: '', photoStatus: 'MISSING', ignoredProblem: 'MISSING' }))).toBe('skipped')
+  })
+})
+
+describe('search and duplicates', () => {
+  const a = post({ id: 'a', items: [{ category: 'MB', name: 'Board B', manualPhoto: '', nextPhoto: false }] })
+  const b = post({ id: 'b', items: [{ category: 'MB', name: 'board  b', manualPhoto: '', nextPhoto: false }, { category: 'CPU', name: 'Chip C', manualPhoto: '', nextPhoto: false }] })
+  it('finds posts by words of the item name', () => {
+    expect(matchesSearch(b, 'chip board')).toBe(true)
+    expect(matchesSearch(a, 'chip')).toBe(false)
+    expect(matchesSearch(a, '  ')).toBe(true)
+  })
+  it('tells an exact repeat from a shared item', () => {
+    expect(duplicatesOf(['Board B'], [a, b])).toEqual({ same: [a], partly: [b] })
+    expect(duplicatesOf(['Chip C', 'Board B'], [a, b])).toEqual({ same: [b], partly: [a] })
+    expect(duplicatesOf(['Other'], [a, b])).toEqual({ same: [], partly: [] })
   })
 })

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { formatPrice, hasOffer, priceOf, stageOf, titleOf } from '../data/logic'
+import { formatPrice, hasOffer, matchesSearch, priceOf, stageOf, titleOf } from '../data/logic'
 import { backend } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { Poster } from './Poster'
-import { Empty, Icon, showToast } from './ui'
+import { Empty, Icon, SearchBox, showToast } from './ui'
 
 /** One finished poster with its decision buttons. */
 export function ReviewCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void }) {
@@ -152,6 +152,7 @@ const SKIPPED = '\u0000skipped'
 export function ReviewView({ data, onOpen }: { data: Data; onOpen: (id: string) => void }) {
   const [style, setStyle] = useState('')
   const [mode, setMode] = useState(savedMode)
+  const [query, setQuery] = useState('')
   const posts = data.posts.filter((p) => stageOf(p) === 'review')
   // Skipped posters that do have a poster: the ones worth a second look.
   const skipped = data.posts.filter((p) => stageOf(p) === 'skipped' && p.posterUrl)
@@ -160,7 +161,8 @@ export function ReviewView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   for (const p of posts) counts.set(p.style, (counts.get(p.style) ?? 0) + 1)
   // A style whose last poster was just decided falls back to all styles.
   const active = style === SKIPPED ? (skipped.length ? SKIPPED : '') : counts.has(style) ? style : ''
-  const shown = active ? posts.filter((p) => p.style === active) : posts
+  const shown = (active ? posts.filter((p) => p.style === active) : posts).filter((p) => matchesSearch(p, query))
+  const shownSkipped = skipped.filter((p) => matchesSearch(p, query))
   const pickMode = (next: 'cards' | 'swipe') => {
     setMode(next)
     try {
@@ -186,10 +188,11 @@ export function ReviewView({ data, onOpen }: { data: Data; onOpen: (id: string) 
           </div>
         )}
       </div>
-      {active === SKIPPED ? (
-        <div className="cards">{skipped.map((p) => <SkippedCard key={p.id} post={p} onOpen={onOpen} />)}</div>
-      ) : !shown.length ? (
-        <Empty icon="review" text={t('Nothing to review. New posters will show up here.')} />
+      <SearchBox value={query} onChange={setQuery} />
+      {active === SKIPPED && shownSkipped.length ? (
+        <div className="cards">{shownSkipped.map((p) => <SkippedCard key={p.id} post={p} onOpen={onOpen} />)}</div>
+      ) : active === SKIPPED || !shown.length ? (
+        <Empty icon="review" text={query.trim() ? t('No post matches your search.') : t('Nothing to review. New posters will show up here.')} />
       ) : mode === 'swipe' ? (
         <SwipeDeck posts={shown} onOpen={onOpen} />
       ) : (

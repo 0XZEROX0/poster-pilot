@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { buildCaption, formatPrice, toNumber } from '../data/logic'
+import { buildCaption, duplicatesOf, formatPrice, stageOf, toNumber, whenOf } from '../data/logic'
 import { backend } from '../data/store'
-import type { Data, NewPost, PostItem, Product } from '../data/types'
+import type { Data, NewPost, Post, PostItem, Product } from '../data/types'
 import { t } from '../i18n'
 import { Sheet } from './Sheet'
-import { Icon, showToast } from './ui'
+import { Icon, dayLabel, showToast } from './ui'
 
 /** Start a post: pick 1 to 3 products by searching the product list, then price, style and time. */
 export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => void }) {
@@ -39,6 +39,15 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
     company: [...new Set(picked.map((p) => p.company).filter(Boolean))].join(' + '),
     priceBefore: before, priceAfter, style, details, captionStyle, postDate, postTime,
   }
+  // Posts that already use these products, so the same offer is not made twice by accident.
+  const dup = duplicatesOf(picked.map((p) => p.name), data.posts)
+  const stateOf = (p: Post) => {
+    const stage = stageOf(p)
+    const when = whenOf(p)
+    if (stage === 'posted') return `${t('Published')}${when ? ` ${dayLabel(when.date)}` : ''}`
+    if (stage === 'scheduled') return when ? `${t('Scheduled')} ${dayLabel(when.date)}` : t('Approved')
+    return t(stage === 'review' ? 'To review' : stage === 'fix' ? 'Needs fixing' : stage === 'skipped' ? 'Skipped' : 'Being built')
+  }
   async function create() {
     if (!picked.length) return setError(t('Pick at least one product.'))
     await backend.addPost(draft)
@@ -47,7 +56,7 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
   }
 
   return (
-    <Sheet title={t('New post')} onClose={onClose} footer={<button className="btn btn-primary" onClick={create}><Icon name="plus" size={18} />{t('Create post')}</button>}>
+    <Sheet title={t('New post')} onClose={onClose} footer={<button className="btn btn-primary" onClick={create}><Icon name="plus" size={18} />{t(dup.same.length ? 'Create anyway' : 'Create post')}</button>}>
       <div className="form narrow">
         <label>
           <span>{t('Products')}</span>
@@ -80,6 +89,16 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
           </div>
         )}
         <p className="hint">{error ? <b className="bad">{error}</b> : t('Add up to 3 products.')}</p>
+        {(dup.same.length > 0 || dup.partly.length > 0) && (
+          <div className={dup.same.length ? 'alert' : 'alert alert-info'}>
+            <b><Icon name="fix" size={18} />{t(dup.same.length ? (picked.length > 1 ? 'You already made this bundle.' : 'You already made a post for this item.') : 'Some of these items are already in other posts.')}</b>
+            <ul className="dup-list">
+              {[...dup.same, ...dup.partly].slice(0, 5).map((p) => (
+                <li key={p.id} dir="auto">{p.items.map((i) => i.name).join(' + ')} <span className="muted">· {formatPrice(p.priceAfter || p.priceBefore)} EGP · {stateOf(p)}</span></li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="two">
           <label><span>{t('Price before')}</span><input inputMode="numeric" dir="ltr" value={before} onChange={(e) => setPriceBefore(e.target.value)} /></label>
           <label><span>{t('Offer price (optional)')}</span><input inputMode="numeric" dir="ltr" value={priceAfter} onChange={(e) => setPriceAfter(e.target.value)} /></label>

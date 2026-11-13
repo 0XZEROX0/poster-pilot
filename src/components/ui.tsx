@@ -22,6 +22,7 @@ const paths: Record<string, string> = {
   image: 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 2.5-2.5L20 18M15.5 9.5v.01',
   edit: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   minus: 'M5 12h14',
+  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
   grip: 'M9 6v.01M15 6v.01M9 12v.01M15 12v.01M9 18v.01M15 18v.01',
 }
 
@@ -76,5 +77,16 @@ export function Empty({ icon, text }: { icon: string; text: string }) {
       <Icon name={icon} size={36} />
       <p>{text}</p>
     </div>
+  )
+}
+
+/** A search field with a clear button. */
+export function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <span className="search">
+      <Icon name="search" size={18} />
+      <input type="search" value={value} placeholder={placeholder ?? t('Search by item name…')} onChange={(e) => onChange(e.target.value)} aria-label={t('Search')} />
+      {value && <button onClick={() => onChange('')} aria-label={t('Clear')}><Icon name="close" size={16} /></button>}
+    </span>
   )
 }

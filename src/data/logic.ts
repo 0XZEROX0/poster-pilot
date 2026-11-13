@@ -149,3 +149,32 @@ export function previewUrl(link: string, width = 900): string {
   const m = link.match(/drive\.google\.com\/file\/d\/([\w-]+)/) ?? link.match(/[?&]id=([\w-]+)/)
   return m ? `https://lh3.googleusercontent.com/d/${m[1]}=w${width}` : link
 }
+
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+
+/** True when every word typed is found in the post's item names, company or style. */
+export function matchesSearch(p: Post, query: string): boolean {
+  const words = norm(query).split(' ').filter(Boolean)
+  if (!words.length) return true
+  const hay = norm(`${p.items.map((i) => `${i.category} ${i.name}`).join(' ')} ${p.company} ${p.style}`)
+  return words.every((w) => hay.includes(w))
+}
+
+/**
+ * Posts that already use the given items. "same" holds posts with exactly these items (a single item
+ * or the whole bundle, in any order); "partly" holds posts that share at least one of them.
+ */
+export function duplicatesOf(names: string[], posts: Post[]): { same: Post[]; partly: Post[] } {
+  const want = new Set(names.map(norm).filter(Boolean))
+  const same: Post[] = []
+  const partly: Post[] = []
+  if (!want.size) return { same, partly }
+  for (const p of posts) {
+    const have = new Set(p.items.map((i) => norm(i.name)).filter(Boolean))
+    const shared = [...want].filter((n) => have.has(n)).length
+    if (!shared) continue
+    if (shared === want.size && have.size === want.size) same.push(p)
+    else partly.push(p)
+  }
+  return { same, partly }
+}

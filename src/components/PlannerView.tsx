@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { addDays, addMinutes, cairoNow, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
+import { addDays, addMinutes, cairoNow, matchesSearch, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
 import { backend } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { locale, t } from '../i18n'
 import { byWhen } from './HomeView'
 import { Poster } from './Poster'
 import { PostCard } from './PostRow'
-import { Empty, Icon, dayLabel, showToast, timeLabel } from './ui'
+import { Empty, Icon, SearchBox, dayLabel, showToast, timeLabel } from './ui'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 /** The steps of the day view, in minutes, from widest to finest. */
@@ -109,12 +109,14 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
   const [early, setEarly] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
+  const [query, setQuery] = useState('')
   const timeline = useRef<HTMLDivElement>(null)
   const justDragged = useRef(false)
   const now = cairoNow()
 
   const onDay = posts.filter((p) => (stageOf(p) === 'posted' || movable(p)) && whenOf(p)?.date === day).sort(byWhen)
-  const tray = posts.filter((p) => movable(p) && whenOf(p)?.date !== day).sort(byWhen)
+  const allTray = posts.filter((p) => movable(p) && whenOf(p)?.date !== day)
+  const tray = allTray.filter((p) => matchesSearch(p, query)).sort(byWhen)
   // Posts with no time come first: they are the ones waiting to be planned.
   tray.sort((a, b) => Number(Boolean(whenOf(a))) - Number(Boolean(whenOf(b))))
 
@@ -268,6 +270,7 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
         <aside className="tray">
           <h2>{t('Approved posts')} <span className="group-count">{tray.length}</span></h2>
           <p className="hint">{picked ? t('Now tap a time to place it.') : t('Drag a post onto a time, or tap it and then tap a time.')}</p>
+          {allTray.length > 4 || query ? <SearchBox value={query} onChange={setQuery} /> : null}
           {tray.length ? (
             <div className="tray-list">
               {tray.map((p) => {
@@ -283,7 +286,7 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
               })}
             </div>
           ) : (
-            <Empty icon="review" text={t('No other approved posts. Approve posters in Review first.')} />
+            <Empty icon="review" text={query.trim() ? t('No post matches your search.') : t('No other approved posts. Approve posters in Review first.')} />
           )}
         </aside>
       </div>

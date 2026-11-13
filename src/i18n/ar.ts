@@ -143,4 +143,12 @@ export const ar: Record<string, string> = {
   'Back in review': 'عاد إلى المراجعة',
   Cards: 'كروت',
   Swipe: 'سحب',
+  'Search by item name…': 'ابحث باسم المنتج…',
+  Search: 'بحث',
+  Clear: 'مسح',
+  'No post matches your search.': 'لا يوجد بوست مطابق للبحث.',
+  'Create anyway': 'إنشاء على أي حال',
+  'You already made this bundle.': 'هذا العرض موجود بالفعل.',
+  'You already made a post for this item.': 'يوجد بوست لهذا المنتج بالفعل.',
+  'Some of these items are already in other posts.': 'بعض هذه المنتجات موجودة في بوستات أخرى.',
 }

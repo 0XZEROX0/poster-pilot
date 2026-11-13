@@ -384,3 +384,11 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .stamp-left { inset-inline-start: auto; inset-inline-end: 22px; transform: rotate(6deg); }
 .review-bar .filters { flex: 1 1 260px; }
 .deck-actions .btn { white-space: normal; line-height: 1.2; min-height: 52px; font-size: 0.875rem; text-align: center; }
+.search { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); color: var(--muted); max-width: 460px; }
+.search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; min-height: 42px; color: var(--text); }
+.search input::-webkit-search-cancel-button { display: none; }
+.search:focus-within { outline: 2px solid var(--accent); }
+.search button { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; }
+.tray .search { background: var(--surface-2); box-shadow: none; max-width: none; }
+.alert-info { background: var(--warn-soft); color: var(--warn); }
+.dup-list { margin: 0; padding-inline-start: 18px; color: var(--text); font-size: 0.875rem; line-height: 1.5; }
