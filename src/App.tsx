@@ -11,10 +11,14 @@ import { agoLabel, SettingsSheet } from './components/SettingsSheet'
 import { Icon, Toast } from './components/ui'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, stageOf } from './data/logic'
-import { signIn, signOutNow, useSession } from './data/store'
+import { allowed, signIn, signOutNow, useSession } from './data/store'
+import type { Perm } from './data/team'
 import { locale, t, useLang } from './i18n'
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
+/** What a tab needs. A tab the person's role cannot use is not shown. */
+const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule' }
+
+const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
   { id: 'review', label: 'Review', icon: 'review' },
   { id: 'fix', label: 'Fix', icon: 'fix' },
@@ -24,7 +28,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'settings' } | null
 
-const tabFromHash = (): Tab => TABS.find((x) => `#/${x.id}` === location.hash)?.id ?? 'home'
+const tabFromHash = (): Tab => ALL_TABS.find((x) => `#/${x.id}` === location.hash)?.id ?? 'home'
 
 /** The engine is "quiet" when it has not written its sign of life for this long. */
 const QUIET_MS = 30 * 60 * 1000
@@ -32,7 +36,10 @@ const QUIET_MS = 30 * 60 * 1000
 export default function App() {
   useLang()
   const session = useSession()
-  const [tab, setTab] = useState<Tab>(tabFromHash)
+  const [wanted, setTab] = useState<Tab>(tabFromHash)
+  const TABS = ALL_TABS.filter((x) => !NEEDS[x.id] || allowed(NEEDS[x.id]!))
+  const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
+  const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
   const desktop = useDesktop()
 
@@ -129,7 +136,7 @@ export default function App() {
       <div className="desk">
         <aside className="sidebar">
           <div className="brand"><Logo size={34} />{t('PosterPilot')}</div>
-          <button className="btn btn-primary side-add" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New post')}</button>
+          {canAdd && <button className="btn btn-primary side-add" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New post')}</button>}
           <nav className="side-nav">
             {TABS.map((x) => (
               <button key={x.id} className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>
@@ -173,7 +180,7 @@ export default function App() {
       </header>
       {banners}
       <main>{page}</main>
-      <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New post')}><Icon name="plus" size={26} /></button>
+      {canAdd && <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New post')}><Icon name="plus" size={26} /></button>}
       <nav className="tabs">
         {TABS.map((x) => (
           <button key={x.id} className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>

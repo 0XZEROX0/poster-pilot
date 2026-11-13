@@ -1,3 +1,4 @@
+import { getAuth } from 'firebase/auth'
 import { collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, type Firestore } from 'firebase/firestore'
 import type { Backend } from './backend'
 import { emptyData, type CaptionTemplate, type Data, type Health, type Post, type Product } from './types'
@@ -55,7 +56,8 @@ export function createFirestoreBackend(db: Firestore): Backend {
     },
     async addPost(post) {
       const ref = doc(collection(db, 'posts'))
-      await setDoc(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), appNew: true, appDirty: true, appEditedAt: serverTimestamp() })
+      const me = getAuth(db.app).currentUser
+      await setDoc(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), createdBy: me?.uid ?? '', createdByName: me?.displayName || me?.email || '', appNew: true, appDirty: true, appEditedAt: serverTimestamp() })
     },
     async updatePost(id, patch) {
       const edits: Record<string, unknown> = {}

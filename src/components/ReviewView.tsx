@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatPrice, hasOffer, matchesSearch, priceOf, stageOf, titleOf } from '../data/logic'
-import { backend } from '../data/store'
+import { allowed, backend } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { Poster } from './Poster'
@@ -22,11 +22,13 @@ export function ReviewCard({ post: p, onOpen }: { post: Post; onOpen: (id: strin
         <p className="price">
           <span dir="ltr">{hasOffer(p) && <s>{formatPrice(p.priceBefore)}</s>} {formatPrice(priceOf(p))} EGP</span> <span className="muted">· {p.style}</span>
         </p>
+        {allowed('designs.approve') && (
         <div className="actions">
           <button className="btn btn-primary" onClick={() => decide('Done', 'Approved')}><Icon name="check" size={18} />{t('Approve')}</button>
           <button className="btn" onClick={() => decide('Redo', 'Sent for redo')}><Icon name="redo" size={18} />{t('Redo')}</button>
           <button className="btn btn-ghost" onClick={() => decide('ignore', 'Skipped')}><Icon name="skip" size={18} />{t('Skip')}</button>
         </div>
+        )}
       </div>
     </article>
   )

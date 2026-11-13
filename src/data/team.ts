@@ -7,11 +7,34 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   secret/code      { code, changedAt }                the system code, seen by owner and admins
 //   config/access    { emails }                         the first list, from before codes existed
 
-export type Role = 'owner' | 'admin' | 'member'
+//   roles/{id}       { name, perms }                    the roles the owner made, and what each may do
+
+/** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
+export const PERMS = ['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people'] as const
+export type Perm = (typeof PERMS)[number]
+export const PERM_LABEL: Record<Perm, [string, string]> = {
+  'offers.create': ['Create offers', 'Make a new post and edit its items, prices and caption.'],
+  'offers.approve': ['Approve offers', 'Approve or send back offers made by other people.'],
+  'designs.approve': ['Approve designs', 'Approve, redo or skip posters in Review.'],
+  fix: ['Fix problems', 'Retry, change photos and ignore errors in Fix.'],
+  schedule: ['Schedule', 'Set, move and cancel times in the Planner.'],
+  delete: ['Delete posts', 'Delete posts that are not on the schedule.'],
+  people: ['Manage people', 'See the system code, accept and remove people.'],
+}
+/** 'owner', or the id of a role in `roles`. */
+export type Role = string
+export type RoleDef = { id: string; name: string; perms: Perm[] }
+/** The two roles every system starts with. The owner can change what they may do. */
+export const BUILT_IN: RoleDef[] = [
+  { id: 'admin', name: 'Admin', perms: [...PERMS] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people') },
+]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }
 /** Where a signed-in person stands. 'legacy' means the database still runs the old access list. */
-export type Access = 'checking' | 'legacy' | Role | 'outside' | 'waiting'
+export type Access = 'checking' | 'legacy' | 'in' | 'outside' | 'waiting'
+/** Where the person stands, and with which role once inside. */
+export type Standing = { access: Access; role: Role; roleName: string; perms: Perm[] }
 
 /** A request nobody answered for this long no longer counts. */
 export const REQUEST_DAYS = 7
@@ -27,35 +50,48 @@ export function newCode(): string {
   return `STATIC-${letters.match(/.{4}/g)!.join('-')}`
 }
 
+const out = (access: Access): Standing => ({ access, role: '', roleName: '', perms: [] })
+const asRole = (id: string, data: { name?: string; perms?: string[] } | undefined): RoleDef | null =>
+  data ? { id, name: data.name ?? id, perms: PERMS.filter((p) => data.perms?.includes(p)) } : null
+
+/** What a role may do. A built-in role the owner never saved works as it always did. */
+async function standing(db: Firestore, role: Role): Promise<Standing> {
+  if (role === 'owner') return { access: 'in', role, roleName: 'Owner', perms: [...PERMS] }
+  const fallback = BUILT_IN.find((r) => r.id === role) ?? { id: role, name: role, perms: [] }
+  const snap = await getDoc(doc(db, 'roles', role)).catch(() => null)
+  const def = (snap?.exists() ? asRole(role, snap.data()) : null) ?? fallback
+  return { access: 'in', role, roleName: def.name, perms: def.perms }
+}
+
 const profile = (user: User, role: Role) => ({ email: user.email ?? '', name: user.displayName ?? '', role, joinedAt: Date.now() })
 
 /**
  * Finds out where the person stands, and lets the people of the first list in: the owner is its
  * first email, the others become members. Everyone else has to ask with the code.
  */
-export async function findAccess(db: Firestore, user: User): Promise<Access> {
+export async function findAccess(db: Firestore, user: User): Promise<Standing> {
   const mine = doc(db, 'members', user.uid)
   try {
     const snap = await getDocFromServer(mine)
-    if (snap.exists()) return snap.data().role as Role
+    if (snap.exists()) return standing(db, snap.data().role as Role)
   } catch (e) {
     // Old rules know nothing about members: carry on as before.
-    if (denied(e)) return 'legacy'
+    if (denied(e)) return out('legacy')
     // Offline: trust what this device last saw.
     const cached = await getDoc(mine).catch(() => null)
-    return cached?.exists() ? (cached.data().role as Role) : 'checking'
+    return cached?.exists() ? standing(db, cached.data().role as Role) : out('checking')
   }
   for (const role of ['owner', 'member'] as const) {
     try {
       await setDoc(mine, profile(user, role))
       if (role === 'owner') await setDoc(doc(db, 'secret', 'code'), { code: newCode(), changedAt: Date.now() }).catch(() => {})
-      return role
+      return standing(db, role)
     } catch (e) {
       if (!denied(e)) throw e
     }
   }
   const asked = await getDocFromServer(doc(db, 'requests', user.uid)).catch(() => null)
-  return asked?.exists() && Date.now() - millis(asked.data().createdAt) < REQUEST_DAYS * 86400000 ? 'waiting' : 'outside'
+  return out(asked?.exists() && Date.now() - millis(asked.data().createdAt) < REQUEST_DAYS * 86400000 ? 'waiting' : 'outside')
 }
 
 /** Asks to join with the system code. Returns false when the code is not the right one. */
@@ -75,15 +111,19 @@ export const cancelRequest = (db: Firestore, uid: string) => deleteDoc(doc(db, '
 export const watchMembership = (db: Firestore, uid: string, onRole: (role: Role) => void) =>
   onSnapshot(doc(db, 'members', uid), (snap) => snap.exists() && onRole(snap.data().role as Role), () => {})
 
-export type Team = { code: string; members: Member[]; requests: JoinRequest[] }
+export type Team = { code: string; members: Member[]; requests: JoinRequest[]; roles: RoleDef[] }
 
 /** Everything the Members section shows. Read once when it opens, not listened to. */
 export async function loadTeam(db: Firestore): Promise<Team> {
-  const [code, members, requests] = await Promise.all([getDoc(doc(db, 'secret', 'code')), getDocs(collection(db, 'members')), getDocs(collection(db, 'requests'))])
-  const order: Record<Role, number> = { owner: 0, admin: 1, member: 2 }
+  const [code, members, requests, saved] = await Promise.all([getDoc(doc(db, 'secret', 'code')), getDocs(collection(db, 'members')), getDocs(collection(db, 'requests')), getDocs(collection(db, 'roles')).catch(() => null)])
+  const roles = (saved?.docs ?? []).map((d) => asRole(d.id, d.data())!).filter(Boolean)
+  for (const r of [...BUILT_IN].reverse()) if (!roles.some((x) => x.id === r.id)) roles.unshift(r)
+  const rank = (role: Role) => (role === 'owner' ? -1 : roles.findIndex((r) => r.id === role))
+  const order = { get: rank }
   return {
+    roles,
     code: (code.data()?.code as string | undefined) ?? '',
-    members: members.docs.map((d) => ({ ...(d.data() as Omit<Member, 'uid'>), uid: d.id })).sort((a, b) => order[a.role] - order[b.role] || a.email.localeCompare(b.email)),
+    members: members.docs.map((d) => ({ ...(d.data() as Omit<Member, 'uid'>), uid: d.id })).sort((a, b) => order.get(a.role) - order.get(b.role) || a.email.localeCompare(b.email)),
     requests: requests.docs
       .map((d) => ({ uid: d.id, email: d.data().email as string, name: d.data().name as string, createdAt: millis(d.data().createdAt) }))
       .filter((r) => Date.now() - r.createdAt < REQUEST_DAYS * 86400000)
@@ -108,7 +148,13 @@ export async function removeMember(db: Firestore, m: Member) {
   await deleteDoc(doc(db, 'members', m.uid))
 }
 
-export const setRole = (db: Firestore, uid: string, role: 'admin' | 'member') => updateDoc(doc(db, 'members', uid), { role })
+/** Gives a person a role. The database accepts only a role that exists. */
+export const setRole = (db: Firestore, uid: string, role: Role) => updateDoc(doc(db, 'members', uid), { role })
+
+export const saveRole = (db: Firestore, r: RoleDef) => setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms })
+export const deleteRole = (db: Firestore, id: string) => deleteDoc(doc(db, 'roles', id))
+/** An id for a new role: short, and never one of the reserved names. */
+export const newRoleId = () => `r${Date.now().toString(36)}`
 
 /** A new code. Requests made with the old one can no longer be accepted. */
 export async function resetCode(db: Firestore): Promise<string> {

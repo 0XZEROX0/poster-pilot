@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { buildCaption, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
-import { backend } from '../data/store'
+import { allowed, backend } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { problemText } from './FixView'
@@ -47,6 +47,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     set({ postDate: slot.date, postTime: slot.time })
   }
   const when = whenOf(post)
+  const mayReview = allowed('designs.approve')
+  const mayPlan = allowed('schedule')
+  const mayEdit = allowed('offers.create') || allowed('fix') || mayReview
   const dirty = Object.keys(changes()).length > 0
 
   const footer = posted ? (
@@ -55,8 +58,8 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     <>
       {stage === 'fix' || stage === 'building' ? (
         <>
-          <button className="btn btn-primary" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Retry')}</button>
-          {post.feedback === 'Done' && (onFacebook || when) && (
+          {mayEdit && <button className="btn btn-primary" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Retry')}</button>}
+          {mayPlan && post.feedback === 'Done' && (onFacebook || when) && (
             <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Schedule cancelled. The post stays approved.')}>{t('Cancel schedule')}</button>
           )}
         </>
@@ -64,18 +67,18 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
         <>
           <button className="btn btn-primary" disabled={!dirty} onClick={() => save({}, 'Saved')}>{t('Save')}</button>
           {/* The engine takes the post off Facebook, empties its date and time and leaves it approved. */}
-          {post.feedback !== 'Cancel' && (onFacebook || when) && (
+          {mayPlan && post.feedback !== 'Cancel' && (onFacebook || when) && (
             <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Schedule cancelled. The post stays approved.')}>{t('Cancel schedule')}</button>
           )}
-          {post.feedback !== 'Cancel' && !onFacebook && (
+          {mayReview && post.feedback !== 'Cancel' && !onFacebook && (
             <button className="btn btn-ghost" onClick={() => save({ feedback: '' }, 'Saved')}>{t('Back to review')}</button>
           )}
         </>
       ) : (
         <>
-          <button className="btn btn-primary" onClick={() => save({ feedback: 'Done' }, draft.postDate && draft.postTime ? 'Approved' : 'Approved. Give it a time in the Planner.')}><Icon name="check" size={18} />{t('Approve')}</button>
-          <button className="btn" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Redo')}</button>
-          {dirty ? <button className="btn btn-ghost" onClick={() => save({}, 'Saved')}>{t('Save')}</button> : <button className="btn btn-ghost" onClick={() => save({ feedback: 'ignore' }, 'Skipped')}>{t('Skip')}</button>}
+          {mayReview && <button className="btn btn-primary" onClick={() => save({ feedback: 'Done' }, draft.postDate && draft.postTime ? 'Approved' : 'Approved. Give it a time in the Planner.')}><Icon name="check" size={18} />{t('Approve')}</button>}
+          {mayEdit && <button className="btn" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Redo')}</button>}
+          {dirty ? <button className="btn btn-ghost" onClick={() => save({}, 'Saved')}>{t('Save')}</button> : mayReview && <button className="btn btn-ghost" onClick={() => save({ feedback: 'ignore' }, 'Skipped')}>{t('Skip')}</button>}
         </>
       )}
     </>
@@ -129,11 +132,11 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
                 </label>
               </div>
               <div className="two">
-                <label><span>{t('Date')}</span><input type="date" value={draft.postDate} onChange={(e) => set({ postDate: e.target.value })} /></label>
-                <label><span>{t('Time')}</span><input type="time" value={draft.postTime} onChange={(e) => set({ postTime: e.target.value })} /></label>
+                <label><span>{t('Date')}</span><input type="date" disabled={!mayPlan} value={draft.postDate} onChange={(e) => set({ postDate: e.target.value })} /></label>
+                <label><span>{t('Time')}</span><input type="time" disabled={!mayPlan} value={draft.postTime} onChange={(e) => set({ postTime: e.target.value })} /></label>
               </div>
               <p className="hint">
-                {t('A post goes out only when it has a date and a time. You can also set them in the Planner.')} <button className="link" onClick={useNextSlot}>{t('Next free slot')}</button>
+                {t('A post goes out only when it has a date and a time. You can also set them in the Planner.')} {mayPlan && <button className="link" onClick={useNextSlot}>{t('Next free slot')}</button>}
               </p>
             </>
           )}
@@ -142,7 +145,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             <textarea dir="auto" rows={9} readOnly={posted} value={draft.caption} onChange={(e) => set({ caption: e.target.value })} />
           </label>
           {!posted && <button className="link" onClick={() => set({ caption: buildCaption(draft, data.templates) })}>{t('Rebuild from template')}</button>}
-          {!posted && (
+          {!posted && allowed('delete') && (
             <div className="danger">
               {locked ? (
                 <span className="muted">{t('This post is already on the schedule, so it cannot be deleted here.')}</span>

@@ -4,8 +4,10 @@ import type { Backend } from './backend'
 import { auth, firebaseConfigured, firestore } from './firebase'
 import { createFirestoreBackend } from './firestoreBackend'
 import { createLocalBackend } from './localBackend'
-import { askToJoin, cancelRequest, findAccess, watchMembership, type Access } from './team'
+import { askToJoin, cancelRequest, findAccess, watchMembership, type Access, type Perm } from './team'
 import { emptyData, type Data } from './types'
+import { showToast } from '../components/ui'
+import { t } from '../i18n'
 
 export type Session = {
   /** 'demo' when Firebase is not configured; then nobody signs in. */
@@ -16,9 +18,13 @@ export type Session = {
   error: string
   /** Where the signed-in person stands: inside with a role, waiting for an answer, or outside. */
   access: Access
+  /** 'owner' or the id of the person's role, its name, and what it may do. */
+  role: string
+  roleName: string
+  perms: Perm[]
 }
 
-let state: Session = { mode: firebaseConfigured ? 'cloud' : 'demo', user: firebaseConfigured ? undefined : null, data: emptyData, error: '', access: firebaseConfigured ? 'checking' : 'owner' }
+let state: Session = { mode: firebaseConfigured ? 'cloud' : 'demo', user: firebaseConfigured ? undefined : null, data: emptyData, error: '', access: firebaseConfigured ? 'checking' : 'in', role: firebaseConfigured ? '' : 'owner', roleName: '', perms: [] }
 const listeners = new Set<() => void>()
 const set = (patch: Partial<Session>) => {
   state = { ...state, ...patch }
@@ -26,6 +32,16 @@ const set = (patch: Partial<Session>) => {
 }
 
 export let backend: Backend
+
+/** A change the person's role does not allow is refused by the database: say so instead of failing silently. */
+function guarded(b: Backend): Backend {
+  const tell = <A extends unknown[]>(work: (...args: A) => Promise<void>) => (...args: A) =>
+    work(...args).catch((e: { code?: string }) => {
+      if (e.code === 'permission-denied') showToast(t('Your role does not allow this.'))
+      throw e
+    })
+  return { ...b, addPost: tell(b.addPost), updatePost: tell(b.updatePost), removePost: tell(b.removePost), saveTemplates: tell(b.saveTemplates) }
+}
 let stop = () => {}
 
 function listen() {
@@ -37,7 +53,7 @@ function listen() {
 }
 
 if (firebaseConfigured && auth && firestore) {
-  backend = createFirestoreBackend(firestore)
+  backend = guarded(createFirestoreBackend(firestore))
   onAuthStateChanged(auth, (user) => {
     stop()
     stopWaiting()
@@ -67,7 +83,10 @@ if (firebaseConfigured && auth && firestore) {
   listen()
 }
 
-const inside = () => ['legacy', 'owner', 'admin', 'member'].includes(state.access)
+const inside = () => state.access === 'legacy' || state.access === 'in'
+
+/** Whether the person may do this. Only hides what would be refused anyway: the database rules decide. */
+export const allowed = (perm: Perm) => state.mode === 'demo' || state.access === 'legacy' || state.role === 'owner' || state.perms.includes(perm)
 let stopWaiting = () => {}
 
 /** Works out whether the person is inside. Only then is any data read. */
@@ -76,9 +95,10 @@ async function enter() {
   if (!user || !firestore) return
   stopWaiting()
   try {
-    const access = await findAccess(firestore, user)
+    const found = await findAccess(firestore, user)
     if (state.user !== user) return
-    set({ access })
+    const access = found.access
+    set(found)
     if (inside()) listen()
     // Someone waiting gets in the moment an owner or admin accepts, without reloading.
     else if (access === 'waiting') stopWaiting = watchMembership(firestore, user.uid, () => { stopWaiting(); void enter() })

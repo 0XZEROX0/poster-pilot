@@ -3,8 +3,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Anyone may sign in with Google, but only people in `members` can see or change anything.
     // A person gets in by typing the system code, which only files a request; an owner or admin
-    // then accepts it. Roles: owner (everything), admin (sees the code, accepts and removes
-    // people), member (uses the app).
+    // then accepts it. The owner can do everything. Everyone else has one role, and a role is a
+    // list of permissions the owner ticks (roles/{id}): what a person may do is checked here.
     function signedIn() {
       return request.auth != null && request.auth.token.email_verified == true;
     }
@@ -20,8 +20,49 @@ service cloud.firestore {
     function isOwner() {
       return isMember() && myRole() == 'owner';
     }
+    function allPerms() {
+      return ['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people'];
+    }
+    function rolePath(role) {
+      return /databases/$(database)/documents/roles/$(role);
+    }
+    // 'admin' and 'member' work as they always did until the owner saves them as roles.
+    function permsOf(role) {
+      return role == 'owner' ? allPerms()
+        : exists(rolePath(role)) ? get(rolePath(role)).data.perms
+        : role == 'admin' ? allPerms()
+        : role == 'member' ? ['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete']
+        : [];
+    }
+    function can(perm) {
+      return isMember() && perm in permsOf(myRole());
+    }
     function isAdmin() {
-      return isMember() && myRole() in ['owner', 'admin'];
+      return can('people');
+    }
+    // Who may set which Feedback. Taking a post off the schedule belongs to scheduling.
+    function feedbackOk(value, was) {
+      return value == 'Cancel' ? can('schedule')
+        : (value == 'Done' && was == 'Cancel') ? (can('schedule') || can('designs.approve'))
+        : value in ['Redo', 'Redo next image'] ? (can('designs.approve') || can('fix') || can('offers.create'))
+        : can('designs.approve');
+    }
+    // A change to a post, field by field. `appEdits` is the copy of the change that the engine
+    // carries to the sheet, so it is held to the same rules.
+    function postChangeOk() {
+      let now = request.resource.data;
+      let was = resource.data;
+      let edits = now.get('appEdits', {});
+      let sent = edits.diff(was.get('appEdits', {}));
+      let keys = now.diff(was).affectedKeys().union(sent.addedKeys()).union(sent.changedKeys());
+      return (!keys.hasAny(['postDate', 'postTime']) || can('schedule'))
+        && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', '')) && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''))))
+        && (!keys.hasAny(['appDeleted']) || can('delete'))
+        && (!keys.hasAny(['ignoredProblem']) || can('fix'))
+        && (!keys.hasAny(['items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle']) || can('offers.create') || can('fix') || can('designs.approve'))
+        // An offer is approved by someone other than the person who made it. The owner always may.
+        && (!keys.hasAny(['offer', 'offerNote', 'offerBy']) || (can('offers.approve') && (isOwner() || was.get('createdBy', '') != request.auth.uid)))
+        && !keys.hasAny(['createdBy', 'createdByName']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may
     // walk in once without a request. Admins can only shorten it.
@@ -57,10 +98,13 @@ service cloud.firestore {
       allow update: if isOwner()
         && request.auth.uid != uid
         && resource.data.role != 'owner'
-        && request.resource.data.role in ['admin', 'member']
+        && request.resource.data.role is string
+        && request.resource.data.role != 'owner'
+        && (request.resource.data.role in ['admin', 'member'] || exists(rolePath(request.resource.data.role)))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']);
       allow delete: if signedIn() && resource.data.role != 'owner'
-        && (request.auth.uid == uid || isOwner() || (isAdmin() && resource.data.role == 'member'));
+        // Someone who manages people cannot remove another person who manages people.
+        && (request.auth.uid == uid || isOwner() || (isAdmin() && !('people' in permsOf(resource.data.role))));
     }
 
     match /requests/{uid} {
@@ -94,8 +138,25 @@ service cloud.firestore {
         && request.resource.data.emails[0] == resource.data.emails[0]
         && resource.data.emails.hasAll(request.resource.data.emails);
     }
+    // The roles the owner made. Everyone inside reads them to know what they may do.
+    match /roles/{id} {
+      allow read: if isMember();
+      allow create, update: if isOwner()
+        && id != 'owner'
+        && request.resource.data.keys().hasOnly(['name', 'perms'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.perms is list
+        && request.resource.data.perms.size() <= 20
+        && request.resource.data.perms.hasOnly(allPerms());
+      allow delete: if isOwner() && !(id in ['admin', 'member']);
+    }
     match /posts/{id} {
-      allow read, create, update: if isMember();
+      allow read: if isMember();
+      allow create: if can('offers.create')
+        && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid
+        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy']);
+      allow update: if isMember() && postChangeOk();
     }
     match /catalog/{id} {
       allow read, write: if isMember();

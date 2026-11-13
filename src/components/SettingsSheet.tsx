@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { resetDemo } from '../data/localBackend'
-import { backend, restartDemo, signOutNow, type Session } from '../data/store'
+import { allowed, backend, restartDemo, signOutNow, type Session } from '../data/store'
 import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
 import { MembersSection } from './MembersSection'
@@ -15,7 +15,6 @@ export function agoLabel(ms: number): string {
   return `${Math.round(min / 60)} ${t('h ago')}`
 }
 
-const ROLE: Partial<Record<Session['access'], string>> = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
 export function SettingsSheet({ session, onClose }: { session: Session; onClose: () => void }) {
   const lang = useLang()
@@ -44,12 +43,12 @@ export function SettingsSheet({ session, onClose }: { session: Session; onClose:
             </>
           ) : (
             <>
-              <p className="hint" dir="ltr">{session.user?.email}{ROLE[session.access] && <> · {t(ROLE[session.access]!)}</>}</p>
+              <p className="hint" dir="ltr">{session.user?.email}{session.roleName && <> · {t(session.roleName)}</>}</p>
               <button className="btn" onClick={() => signOutNow()}>{t('Sign out')}</button>
             </>
           )}
         </section>
-        {session.mode === 'cloud' && (session.access === 'owner' || session.access === 'admin') && <MembersSection session={session} />}
+        {session.mode === 'cloud' && session.access === 'in' && allowed('people') && <MembersSection session={session} />}
         {session.mode === 'cloud' && (
           <section className="set">
             <h3>{t('Engine')}</h3>
