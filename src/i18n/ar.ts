@@ -245,6 +245,7 @@ export const ar: Record<string, string> = {
   'selected': 'محدد',
   'Select all': 'تحديد الكل',
   'Database': 'قاعدة البيانات',
+  'Ready to schedule': 'جاهز للجدولة',
   'All categories': 'كل الفئات',
   'Bundle': 'باقة',
   'Other': 'أخرى',

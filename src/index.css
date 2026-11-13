@@ -102,6 +102,7 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 
 /* Home tiles */
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tiles > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 .tile { text-align: start; padding: 16px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 2px; border-inline-start: 4px solid var(--tone); }
 .tile b { font-size: 2rem; line-height: 1.1; font-weight: 700; color: var(--tone); }
 .tile span { color: var(--text-2); font-size: 0.875rem; }
@@ -285,7 +286,8 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 
 /* Tablets and wider: sheets become centred dialogs. */
 @media (min-width: 760px) {
-  .tiles { grid-template-columns: repeat(4, 1fr); }
+  .tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .tiles > :last-child:nth-child(odd) { grid-column: auto; }
   .sheet-back { align-items: center; padding: 24px; }
   .sheet { height: auto; max-height: calc(100dvh - 48px); border-radius: 20px; overflow: hidden; }
   .sheet-head { padding-top: 10px; }

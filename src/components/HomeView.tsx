@@ -23,12 +23,15 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
   const of = (stage: string) => data.posts.filter((p) => stageOf(p) === stage)
   const review = of('review')
   const fix = of('fix')
-  const scheduled = of('scheduled').sort(byWhen)
+  // Approved posts split in two: the ones with a time are on the schedule, the rest still wait for one.
+  const scheduled = of('scheduled').filter((p) => whenOf(p)).sort(byWhen)
+  const ready = of('scheduled').filter((p) => !whenOf(p))
   const building = of('building')
   const postedToday = of('posted').filter((p) => whenOf(p)?.date === today).length
   const allTiles: { tab: Tab; label: string; count: number; tone: string; icon: string }[] = [
     { tab: 'review', label: t('To review'), count: review.length, tone: 'warn', icon: 'review' },
     { tab: 'fix', label: t('Needs fixing'), count: fix.length, tone: 'bad', icon: 'fix' },
+    { tab: 'calendar', label: t('Ready to schedule'), count: ready.length, tone: 'warn', icon: 'clock' },
     { tab: 'calendar', label: t('Scheduled'), count: scheduled.length, tone: 'info', icon: 'calendar' },
     { tab: 'posted', label: t('Posted today'), count: postedToday, tone: 'good', icon: 'posted' },
   ]
@@ -36,7 +39,7 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
   const tileRow = (
     <div className="tiles">
       {tiles.map((x) => (
-        <button key={x.tab} className={`tile tile-${x.tone}${x.count ? '' : ' tile-zero'}`} onClick={() => go(x.tab)}>
+        <button key={x.label} className={`tile tile-${x.tone}${x.count ? '' : ' tile-zero'}`} onClick={() => go(x.tab)}>
           {desktop && <span className="tile-icon"><Icon name={x.icon} /></span>}
           <b>{x.count}</b>
           <span>{x.label}</span>
