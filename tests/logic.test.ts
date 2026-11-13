@@ -124,3 +124,11 @@ describe('a redo that fails again', () => {
     expect(stageOf(post({ feedback: 'Redo' }))).toBe('building')
   })
 })
+
+describe('waiting and cancelled posts', () => {
+  it('are not problems', () => {
+    expect(stageOf(post({ feedback: 'Done', fbStatus: 'Waiting for Post date and Post time' }))).toBe('scheduled')
+    expect(stageOf(post({ feedback: '', fbStatus: 'Cancelled' }))).toBe('review')
+    expect(stageOf(post({ feedback: 'Cancel', fbStatus: 'Scheduled', scheduledFor: '2026-11-20 17:00' }))).toBe('review')
+  })
+})

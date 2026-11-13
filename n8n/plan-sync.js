@@ -50,7 +50,7 @@ const col = name => head.indexOf(name);
 const NEED = ['Category 1', 'Category 2', 'Category 3', 'Item 1', 'Item 2', 'Item 3', 'Next photo 1', 'Next photo 2', 'Next photo 3', 'Manual photo 1', 'Manual photo 2', 'Manual photo 3', 'Company', 'Price before', 'Price after', 'Style', 'Details', 'Image link', 'Photo status', 'Feedback', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'FB post id'];
 for (const n of NEED) if (col(n) < 0) throw new Error('Posts sheet: the column "' + n + '" was not found. The sync stopped and changed nothing.');
 const USER_COLS = ['Category 1', 'Category 2', 'Category 3', 'Manual photo 1', 'Manual photo 2', 'Manual photo 3', 'Price after', 'Details', 'Photo status', 'Feedback', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'FB post id'];
-const FEEDBACK = { '': '', 'done': 'Done', 'redo': 'Redo', 'redo next image': 'Redo next image', 'ignore': 'Ignore' };
+const FEEDBACK = { '': '', 'done': 'Done', 'redo': 'Redo', 'redo next image': 'Redo next image', 'ignore': 'Ignore', 'cancel': 'Cancel' };
 
 // The poster workflow paints the cell of an item whose photo it could not find red. Reading that
 // colour tells the app which item of a bundle is the missing one.

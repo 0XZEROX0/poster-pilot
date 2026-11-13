@@ -119,7 +119,7 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
           <label><span>{t('Date')}</span><input type="date" value={postDate} onChange={(e) => setPostDate(e.target.value)} /></label>
           <label><span>{t('Time')}</span><input type="time" value={postTime} onChange={(e) => setPostTime(e.target.value)} /></label>
         </div>
-        <p className="hint">{t('Leave empty to use the next free slot.')}</p>
+        <p className="hint">{t('A post goes out only when it has a date and a time. You can also set them in the Planner.')}</p>
         {picked.length > 0 && (
           <label>
             <span>{t('Caption preview')}</span>

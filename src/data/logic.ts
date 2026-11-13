@@ -3,7 +3,8 @@ import type { CaptionTemplate, Post } from './types'
 /** Where a post is in its life. Each post is in exactly one stage. */
 export type Stage = 'building' | 'fix' | 'review' | 'scheduled' | 'posted' | 'skipped'
 
-const FB_FINE = new Set(['', 'Scheduled', 'Published'])
+/** Facebook states that are not problems. A post waiting for its time, or taken off the schedule, is fine. */
+const fbFine = (s: string) => s === '' || /^(scheduled|published|cancelled|waiting)\b/i.test(s)
 
 export type Problem = { kind: 'photo' | 'background' | 'ai' | 'facebook' | 'instagram'; text: string }
 
@@ -22,7 +23,7 @@ export function anyProblemOf(p: Post): Problem | null {
     if (up.startsWith('BACKGROUND')) return { kind: 'background', text: s }
     return { kind: 'ai', text: s }
   }
-  if (!FB_FINE.has(p.fbStatus.trim())) return { kind: 'facebook', text: p.fbStatus }
+  if (!fbFine(p.fbStatus.trim())) return { kind: 'facebook', text: p.fbStatus }
   const ig = p.igStatus.trim()
   if (ig && /error|fail/i.test(ig)) return { kind: 'instagram', text: ig }
   return null
@@ -59,6 +60,7 @@ export function stageOf(p: Post): Stage {
   if (isDeadEnd(p)) return 'skipped'
   if (!p.posterUrl || !p.photoStatus) return 'building'
   if (p.feedback === 'ignore') return 'skipped'
+  // 'Cancel' asks the engine to take the post off Facebook's schedule; it then returns to review.
   if (p.feedback === 'Done') return 'scheduled'
   return 'review'
 }

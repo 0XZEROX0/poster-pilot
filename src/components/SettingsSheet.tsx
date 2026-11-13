@@ -58,7 +58,7 @@ export function SettingsSheet({ session, onClose }: { session: Session; onClose:
         )}
         <section className="set">
           <h3>{t('Posting rules')}</h3>
-          <p className="hint">{t('Automatic slots start at 17:00 Cairo time, one every 15 minutes, 5 a day. A post with its own date and time ignores them.')}</p>
+          <p className="hint">{t('An approved post is scheduled only once it has a date and a time. Set them in the post or drag it onto a time in the Planner. Nothing is scheduled automatically.')}</p>
         </section>
         <section className="set">
           <h3>{t('Caption templates')}</h3>

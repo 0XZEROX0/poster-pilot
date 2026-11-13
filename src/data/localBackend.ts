@@ -1,6 +1,6 @@
 import type { Backend } from './backend'
 import { DEMO_POSTER, demoData } from './demo'
-import { buildCaption, nextFreeSlot } from './logic'
+import { buildCaption } from './logic'
 import type { Data, Post } from './types'
 
 const KEY = 'posterpilot.demo.v2'
@@ -44,8 +44,11 @@ export function createLocalBackend(): Backend {
       if (p.feedback === 'Redo' || !p.posterUrl || !p.photoStatus) {
         patchPost(id, { posterUrl: DEMO_POSTER, photoStatus: 'OK', feedback: '', caption: p.caption || buildCaption(p, data.templates), items: p.items.map((i) => ({ ...i, nextPhoto: false })) })
       } else if (p.feedback === 'Done' && p.fbStatus !== 'Published') {
-        const slot = p.postDate && p.postTime ? { date: p.postDate, time: p.postTime } : nextFreeSlot(data.posts.filter((x) => x.id !== id))
-        patchPost(id, { scheduledFor: `${slot.date} ${slot.time}`, fbStatus: 'Scheduled', caption: p.caption || buildCaption(p, data.templates) })
+        // Nothing is scheduled without a date and a time.
+        if (p.postDate && p.postTime) patchPost(id, { scheduledFor: `${p.postDate} ${p.postTime}`, fbStatus: 'Scheduled', caption: p.caption || buildCaption(p, data.templates) })
+        else patchPost(id, { fbStatus: 'Waiting for Post date and Post time' })
+      } else if (p.feedback === 'Cancel') {
+        patchPost(id, { feedback: '', scheduledFor: '', fbStatus: 'Cancelled', fbPostId: '' })
       }
     }, 2500))
   }

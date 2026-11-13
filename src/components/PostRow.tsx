@@ -12,7 +12,7 @@ export function StageChip({ post }: { post: Post }) {
   if (stage === 'fix') return <Chip tone="bad">{problemOf(post)?.text.slice(0, 28)}</Chip>
   if (stage === 'building') return <Chip tone="info">{t('Being built')}</Chip>
   if (stage === 'skipped') return <Chip>{t('Skipped')}</Chip>
-  if (stage === 'scheduled') return when && post.fbStatus === 'Scheduled' ? <Chip tone="good">{dayLabel(when.date)} · {timeLabel(when.time)}</Chip> : <Chip tone="warn">{t('Waiting for a slot')}</Chip>
+  if (stage === 'scheduled') return when && post.fbStatus === 'Scheduled' ? <Chip tone="good">{dayLabel(when.date)} · {timeLabel(when.time)}</Chip> : <Chip tone="warn">{t(when ? 'Being scheduled' : 'Needs a time')}</Chip>
   return <Chip tone="warn">{t('To review')}</Chip>
 }
 

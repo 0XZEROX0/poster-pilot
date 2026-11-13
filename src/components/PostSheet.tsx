@@ -17,6 +17,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const posted = stage === 'posted'
   const problem = problemText(post)
   // Only a post that Facebook does not hold yet can be deleted from here.
+  const onFacebook = /^scheduled/i.test(post.fbStatus) || post.fbPostId !== ''
   const locked = /^scheduled/i.test(post.fbStatus) || post.fbPostId !== ''
   const set = (patch: Partial<Post>) => setDraft((d) => ({ ...d, ...patch }))
   const setItem = (i: number, patch: Partial<Post['items'][number]>) => set({ items: draft.items.map((it, k) => (k === i ? { ...it, ...patch } : it)) })
@@ -57,11 +58,15 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
       ) : stage === 'scheduled' ? (
         <>
           <button className="btn btn-primary" disabled={!dirty} onClick={() => save({}, 'Saved')}>{t('Save')}</button>
-          <button className="btn" onClick={() => save({ feedback: '' }, 'Saved')}>{t('Back to review')}</button>
+          {onFacebook ? (
+            <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Taking it off the schedule')}>{t('Take off the schedule')}</button>
+          ) : (
+            <button className="btn" onClick={() => save({ feedback: '' }, 'Saved')}>{t('Back to review')}</button>
+          )}
         </>
       ) : (
         <>
-          <button className="btn btn-primary" onClick={() => save({ feedback: 'Done' }, 'Approved')}><Icon name="check" size={18} />{t('Approve')}</button>
+          <button className="btn btn-primary" onClick={() => save({ feedback: 'Done' }, draft.postDate && draft.postTime ? 'Approved' : 'Approved. Give it a time in the Planner.')}><Icon name="check" size={18} />{t('Approve')}</button>
           <button className="btn" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Redo')}</button>
           {dirty ? <button className="btn btn-ghost" onClick={() => save({}, 'Saved')}>{t('Save')}</button> : <button className="btn btn-ghost" onClick={() => save({ feedback: 'ignore' }, 'Skipped')}>{t('Skip')}</button>}
         </>
@@ -121,7 +126,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
                 <label><span>{t('Time')}</span><input type="time" value={draft.postTime} onChange={(e) => set({ postTime: e.target.value })} /></label>
               </div>
               <p className="hint">
-                {t('Leave empty to use the next free slot.')} <button className="link" onClick={useNextSlot}>{t('Next free slot')}</button>
+                {t('A post goes out only when it has a date and a time. You can also set them in the Planner.')} <button className="link" onClick={useNextSlot}>{t('Next free slot')}</button>
               </p>
             </>
           )}

@@ -6,9 +6,12 @@ import { t } from '../i18n'
 import { Poster } from './Poster'
 import { Empty, Icon, SearchBox, showToast } from './ui'
 
+/** An approved post goes out only once it has a date and a time, so say when one is still needed. */
+export const approvedText = (p: Post) => (p.postDate && p.postTime ? 'Approved' : 'Approved. Give it a time in the Planner.')
+
 /** One finished poster with its decision buttons. */
 export function ReviewCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void }) {
-  const decide = (feedback: 'Done' | 'Redo' | 'ignore', message: string) => backend.updatePost(p.id, { feedback }).then(() => showToast(t(message)))
+  const decide = (feedback: 'Done' | 'Redo' | 'ignore', message: string) => backend.updatePost(p.id, { feedback }).then(() => showToast(t(feedback === 'Done' ? approvedText(p) : message)))
   return (
     <article className="card">
       <button className="card-poster" onClick={() => onOpen(p.id)} aria-label={t('Edit')}>
@@ -61,7 +64,7 @@ function SwipeDeck({ posts, onOpen }: { posts: Post[]; onOpen: (id: string) => v
     setLeaving(dir)
     // The card flies off first, then the decision is saved and the next card takes its place.
     setTimeout(() => {
-      backend.updatePost(top.id, { feedback: SWIPES[dir].feedback }).then(() => showToast(t(SWIPES[dir].done)))
+      backend.updatePost(top.id, { feedback: SWIPES[dir].feedback }).then(() => showToast(t(dir === 'up' ? approvedText(top) : SWIPES[dir].done)))
       setLeaving(null)
       setMove(null)
     }, 180)

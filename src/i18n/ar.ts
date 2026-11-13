@@ -190,4 +190,11 @@ export const ar: Record<string, string> = {
   Refresh: 'تحديث',
   'It was tried again and failed the same way. Open it and paste a photo link, or try the next photo.': 'تمت المحاولة مرة أخرى وفشلت بنفس السبب. افتحه والصق رابط صورة أو جرّب الصورة التالية.',
   'Fix it': 'إصلاح',
+  'Being scheduled': 'جاري الجدولة',
+  'Needs a time': 'يحتاج وقتًا',
+  'Approved. Give it a time in the Planner.': 'تمت الموافقة. حدد له وقتًا من المخطط.',
+  'Take off the schedule': 'إلغاء الجدولة',
+  'Taking it off the schedule': 'جاري إلغاء الجدولة',
+  'A post goes out only when it has a date and a time. You can also set them in the Planner.': 'البوست لا يُنشر إلا إذا كان له تاريخ ووقت. يمكنك تحديدهما من المخطط أيضًا.',
+  'An approved post is scheduled only once it has a date and a time. Set them in the post or drag it onto a time in the Planner. Nothing is scheduled automatically.': 'البوست الموافق عليه لا يُجدول إلا بعد تحديد تاريخ ووقت. حددهما في البوست أو اسحبه إلى وقت في المخطط. لا شيء يُجدول تلقائيًا.',
 }
