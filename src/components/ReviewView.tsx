@@ -17,7 +17,7 @@ export function ReviewCard({ post: p, onOpen }: { post: Post; onOpen: (id: strin
   return (
     <article className="card">
       <button className="card-poster" onClick={() => onOpen(p.id)} aria-label={t('Edit')}>
-        <Poster post={p} />
+        <Poster post={p} zoom />
       </button>
       <div className="card-body">
         <h3 dir="auto">{titleOf(p)}</h3>
@@ -118,7 +118,7 @@ function SwipeDeck({ posts, onOpen }: { posts: Post[]; onOpen: (id: string) => v
       <div className="deck-stack">
         {posts[1] && <article className="card deck-card deck-next" aria-hidden="true"><div className="card-poster"><Poster post={posts[1]} /></div></article>}
         <article key={top.id} className="card deck-card" style={style} onPointerDown={start} onDragStart={(e) => e.preventDefault()} onClick={() => !moved.current && onOpen(top.id)}>
-          <div className="card-poster"><Poster post={top} /></div>
+          <div className="card-poster"><Poster post={top} zoom /></div>
           <div className="card-body">
             <h3 dir="auto">{titleOf(top)}</h3>
             <p className="price">
@@ -142,7 +142,7 @@ function SwipeDeck({ posts, onOpen }: { posts: Post[]; onOpen: (id: string) => v
 function SkippedCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void }) {
   return (
     <article className="card">
-      <button className="card-poster" onClick={() => onOpen(p.id)} aria-label={t('Edit')}><Poster post={p} /></button>
+      <button className="card-poster" onClick={() => onOpen(p.id)} aria-label={t('Edit')}><Poster post={p} zoom /></button>
       <div className="card-body">
         <h3 dir="auto">{titleOf(p)}</h3>
         <div className="actions">

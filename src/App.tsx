@@ -12,6 +12,7 @@ import { agoLabel, SettingsSheet } from './components/SettingsSheet'
 import { Icon, Toast } from './components/ui'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
+import { DatabaseView } from './components/DatabaseView'
 import { allowed, isOwner, myId, ownOffer, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, useLang } from './i18n'
@@ -26,6 +27,7 @@ const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'fix', label: 'Fix', icon: 'fix' },
   { id: 'calendar', label: 'Planner', icon: 'calendar' },
   { id: 'posted', label: 'Posted', icon: 'posted' },
+  { id: 'database', label: 'Database', icon: 'database' },
 ]
 
 type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'settings' } | null
@@ -123,6 +125,8 @@ export default function App() {
     <FixView data={data} onOpen={open} />
   ) : tab === 'calendar' ? (
     <PlannerView data={data} onOpen={open} />
+  ) : tab === 'database' ? (
+    <DatabaseView data={data} onOpen={open} />
   ) : (
     <PostedView data={data} onOpen={open} />
   )

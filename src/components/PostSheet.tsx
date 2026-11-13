@@ -98,7 +98,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     <Sheet title={titleOf(post)} onClose={onClose} footer={footer}>
       <div className="post-grid">
         <div>
-          <Poster post={post} />
+          <Poster post={post} zoom />
           <p className="post-state"><StageChip post={post} />{when && posted && <span className="muted small">{when.date} · {when.time}</span>}</p>
         </div>
         <div className="form">

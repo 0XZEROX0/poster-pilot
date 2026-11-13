@@ -41,7 +41,7 @@ function FixCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void
   return (
     <article className="card card-problem">
       <button className="card-poster" onClick={() => onOpen(p.id)} aria-label={t('Edit')}>
-        <Poster post={p} />
+        <Poster post={p} zoom />
       </button>
       <div className="card-body">
         <h3 dir="auto">{titleOf(p)}</h3>

@@ -19,3 +19,9 @@ How it works
 - Never written: Company, Price before and Preview (formulas), and everything the other workflows fill in.
 - Deleting a post from the app is not carried over to the sheet yet.
 - The `Settings` node has `dryRun`. When it is on, the run only reports what it would do.
+
+## Removing deleted posters from Drive
+
+After "Remember what was synced", six small nodes ("Remove deleted posters") move the poster of a post
+deleted in the app to the Google Drive bin: only a file inside the AI Designs folder or one of its
+style folders, and only when no other row still uses it. Facebook and Instagram are not touched.
