@@ -110,13 +110,18 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
   const [picked, setPicked] = useState<string | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
   const [query, setQuery] = useState('')
+  const [style, setStyle] = useState('')
   const timeline = useRef<HTMLDivElement>(null)
   const justDragged = useRef(false)
   const now = cairoNow()
 
   const onDay = posts.filter((p) => (stageOf(p) === 'posted' || movable(p)) && whenOf(p)?.date === day).sort(byWhen)
   const allTray = posts.filter((p) => movable(p) && whenOf(p)?.date !== day)
-  const tray = allTray.filter((p) => matchesSearch(p, query)).sort(byWhen)
+  const styles = new Map<string, number>()
+  for (const p of allTray) styles.set(p.style, (styles.get(p.style) ?? 0) + 1)
+  // A style whose last post was just planned falls back to all styles.
+  const active = styles.has(style) ? style : ''
+  const tray = allTray.filter((p) => (!active || p.style === active) && matchesSearch(p, query)).sort(byWhen)
   // Posts with no time come first: they are the ones waiting to be planned.
   tray.sort((a, b) => Number(Boolean(whenOf(a))) - Number(Boolean(whenOf(b))))
 
@@ -271,6 +276,14 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
         <aside className="tray">
           <h2>{t('Approved posts')} <span className="group-count">{tray.length}</span></h2>
           <p className="hint">{picked ? t('Now tap a time to place it.') : t('Drag a post onto a time, or tap it and then tap a time.')}</p>
+          {styles.size > 1 && (
+            <div className="filters tray-filters" role="group" aria-label={t('Style')}>
+              <button className={active ? 'filter' : 'filter on'} aria-pressed={!active} onClick={() => setStyle('')}>{t('All')} <i>{allTray.length}</i></button>
+              {[...styles].sort((a, b) => a[0].localeCompare(b[0])).map(([name, n]) => (
+                <button key={name} className={active === name ? 'filter on' : 'filter'} aria-pressed={active === name} onClick={() => setStyle(name)}>{name || t('No style')} <i>{n}</i></button>
+              ))}
+            </div>
+          )}
           {allTray.length > 4 || query ? <SearchBox value={query} onChange={setQuery} /> : null}
           {tray.length ? (
             <div className="tray-list">
