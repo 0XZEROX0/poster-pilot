@@ -10,9 +10,10 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
+  'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
   'offers.create': ['Create offers', 'Make a new post and edit its items, prices and caption.'],
   'offers.approve': ['Approve offers', 'Approve or send back offers made by other people.'],
   'designs.approve': ['Approve designs', 'Approve, redo or skip posters in Review.'],

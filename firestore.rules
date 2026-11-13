@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -31,7 +31,7 @@ service cloud.firestore {
       return role == 'owner' ? allPerms()
         : exists(rolePath(role)) ? get(rolePath(role)).data.perms
         : role == 'admin' ? allPerms()
-        : role == 'member' ? ['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete']
+        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete']
         : [];
     }
     // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
@@ -53,6 +53,10 @@ service cloud.firestore {
     function mayReadPost() {
       let pg = myPages();
       return pg.hasAll(allPages()) || resource.data.zone in zonesOf(pg);
+    }
+    // Someone who may only look (for example 'See offers') cannot change a post in any way.
+    function canAct() {
+      return isMember() && permsOf(myRole()).hasAny(['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete']);
     }
     function can(perm) {
       return isMember() && perm in permsOf(myRole());
@@ -203,7 +207,7 @@ service cloud.firestore {
       allow create: if can('offers.create')
         && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid
         && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market']);
-      allow update: if isMember() && postChangeOk();
+      allow update: if canAct() && postChangeOk();
     }
     match /catalog/{id} {
       allow read, write: if isMember();

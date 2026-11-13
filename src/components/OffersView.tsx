@@ -62,6 +62,7 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
   const mine = ownOffer(p)
   const rejected = offerOf(p) === 'rejected'
   const mayDecide = allowed('offers.approve') && !mine
+  const mayEdit = allowed('offers.create') || allowed('fix') || allowed('designs.approve')
   const approve = () => backend.updatePost(p.id, { offer: 'Approved', offerBy: myName(), offerNote: '' }).then(() => showToast(t('Offer approved. The poster is being made.')))
   const sendBack = () => backend.updatePost(p.id, { offer: 'Rejected', offerBy: myName(), offerNote: (note ?? '').trim() }).then(() => showToast(t('Offer sent back')))
   const again = () => backend.updatePost(p.id, { offer: '' }).then(() => showToast(t('Sent for approval again')))
@@ -90,7 +91,7 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
             {!rejected && mayDecide && <button className="btn btn-primary" onClick={approve}><Icon name="check" size={18} />{t('Approve offer')}</button>}
             {!rejected && mayDecide && <button className="btn" onClick={() => setNote('')}>{t('Send back')}</button>}
             {rejected && (p.createdBy === myId() || isOwner()) && <button className="btn btn-primary" onClick={again}><Icon name="redo" size={18} />{t('Send again')}</button>}
-            <button className="btn btn-ghost" onClick={() => onOpen(p.id)}><Icon name="edit" size={18} />{t('Edit')}</button>
+            <button className="btn btn-ghost" onClick={() => onOpen(p.id)}><Icon name={mayEdit ? 'edit' : 'expand'} size={18} />{t(mayEdit ? 'Edit' : 'View')}</button>
           </div>
         )}
         {!rejected && mine && <p className="hint">{t('Someone else has to approve your offer.')}</p>}
