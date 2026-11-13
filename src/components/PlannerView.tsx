@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { addDays, addMinutes, cairoNow, matchesSearch, onFacebook, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
+import { addDays, addMinutes, cairoNow, categoryOf, matchesSearch, onFacebook, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
 import { allowed, backend } from '../data/store'
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import type { Data, Post } from '../data/types'
@@ -8,7 +8,7 @@ import { byWhen } from './HomeView'
 import { Poster } from './Poster'
 import { PostCard } from './PostRow'
 import { CardSize } from './CardSize'
-import { Empty, Icon, SearchBox, StyleChips, styleOn, dayLabel, showToast, timeLabel } from './ui'
+import { CategoryChips, categoryOn, Empty, Icon, SearchBox, StyleChips, styleOn, dayLabel, showToast, timeLabel } from './ui'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 /** The steps of the day view, in minutes, from widest to finest. */
@@ -49,6 +49,7 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
   const [month, setMonth] = useState(today.slice(0, 7))
   const [day, setDay] = useState<string | null>(null)
   const [style, setStyle] = useState('')
+  const [category, setCategory] = useState('')
 
   const byDay = new Map<string, Post[]>()
   const waiting: Post[] = []
@@ -60,8 +61,12 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
     else byDay.set(when.date, [...(byDay.get(when.date) ?? []), p])
   }
 
-  const shownWaiting = waiting.filter((p) => !styleOn(waiting, style) || p.style === style)
-  const coming = [...byDay.values()].flat().filter((p) => stageOf(p) !== 'posted').sort(byWhen)
+  const allComing = [...byDay.values()].flat().filter((p) => stageOf(p) !== 'posted').sort(byWhen)
+  // One set of filters for both lists under the month.
+  const pool = [...waiting, ...allComing]
+  const keep = (p: Post) => (!styleOn(pool, style) || p.style === style) && (!categoryOn(pool, category) || categoryOf(p) === category)
+  const shownWaiting = waiting.filter(keep)
+  const coming = allComing.filter(keep)
   const bulk = useBulk([...shownWaiting, ...coming].map((p) => p.id))
   const post = (id: string) => data.posts.find((p) => p.id === id)
   const free = (id: string) => { const p = post(id); return p && !onFacebook(p) && p.feedback !== 'Cancel' ? p : null }
@@ -108,16 +113,17 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
         </div>
         <p className="hint cal-hint">{t('Pick a day to plan its posts.')}</p>
       </div>
-      {(waiting.length > 0 || coming.length > 0) && (
+      {pool.length > 0 && <StyleChips posts={pool} value={style} onChange={setStyle} />}
+      {pool.length > 0 && <CategoryChips posts={pool} value={category} onChange={setCategory} />}
+      {pool.length > 0 && (
         <div className="review-bar tools">
           {actions.length > 0 && <BulkToggle bulk={bulk} />}
           <CardSize />
         </div>
       )}
-      {waiting.length > 0 && (
+      {shownWaiting.length > 0 && (
         <section>
-          <h2 className="group">{t('Approved, no time yet')} <span className="group-count">{waiting.length}</span></h2>
-          <StyleChips posts={waiting} value={style} onChange={setStyle} />
+          <h2 className="group">{t('Approved, no time yet')} <span className="group-count">{shownWaiting.length}</span></h2>
           <div className="cards cards-sm">{shownWaiting.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><PostCard post={p} onOpen={onOpen} /></Pick>)}</div>
         </section>
       )}
@@ -140,6 +146,7 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
   const [drag, setDrag] = useState<Drag | null>(null)
   const [query, setQuery] = useState('')
   const [style, setStyle] = useState('')
+  const [category, setCategory] = useState('')
   const timeline = useRef<HTMLDivElement>(null)
   const justDragged = useRef(false)
   const now = cairoNow()
@@ -147,7 +154,7 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
   const onDay = posts.filter((p) => (stageOf(p) === 'posted' || movable(p)) && whenOf(p)?.date === day).sort(byWhen)
   const allTray = posts.filter((p) => movable(p) && whenOf(p)?.date !== day)
   const active = styleOn(allTray, style) ? style : ''
-  const tray = allTray.filter((p) => (!active || p.style === active) && matchesSearch(p, query)).sort(byWhen)
+  const tray = allTray.filter((p) => (!active || p.style === active) && (!categoryOn(allTray, category) || categoryOf(p) === category) && matchesSearch(p, query)).sort(byWhen)
   // Posts with no time come first: they are the ones waiting to be planned.
   tray.sort((a, b) => Number(Boolean(whenOf(a))) - Number(Boolean(whenOf(b))))
 
@@ -303,6 +310,7 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
           <div className="review-bar"><h2>{t('Approved posts')} <span className="group-count">{tray.length}</span></h2><CardSize /></div>
           <p className="hint">{picked ? t('Now tap a time to place it.') : t('Drag a post onto a time, or tap it and then tap a time.')}</p>
           <StyleChips posts={allTray} value={style} onChange={setStyle} className="tray-filters" />
+          <CategoryChips posts={allTray} value={category} onChange={setCategory} className="tray-filters" />
           {allTray.length > 4 || query ? <SearchBox value={query} onChange={setQuery} /> : null}
           {tray.length ? (
             <div className="tray-list">

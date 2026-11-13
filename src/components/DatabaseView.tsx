@@ -1,15 +1,12 @@
 import { useState } from 'react'
-import { matchesSearch, onFacebook, stageOf } from '../data/logic'
+import { categoryOf, matchesSearch, onFacebook, stageOf } from '../data/logic'
 import { allowed, backend } from '../data/store'
-import type { Data, Post } from '../data/types'
+import type { Data } from '../data/types'
 import { t } from '../i18n'
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { CardSize } from './CardSize'
 import { PostCard } from './PostRow'
-import { Empty, SearchBox, StyleChips, styleOn } from './ui'
-
-/** A post's category: its item's category from the product list, or Bundle when it holds more than one item. */
-const categoryOf = (p: Post) => (p.items.length > 1 ? 'Bundle' : p.items[0]?.category.trim() || 'Other')
+import { CategoryChips, categoryOn, Empty, SearchBox, StyleChips, styleOn } from './ui'
 
 const STAGES = ['review', 'fix', 'scheduled', 'posted'] as const
 const STAGE_LABEL: Record<string, string> = { review: 'Review', fix: 'Fix', scheduled: 'Approved', posted: 'Posted' }
@@ -22,10 +19,7 @@ export function DatabaseView({ data, onOpen }: { data: Data; onOpen: (id: string
   const [category, setCategory] = useState('')
   const all = data.posts.filter((p) => p.posterUrl !== '')
   const inStage = all.filter((p) => !stage || stageOf(p) === stage)
-  const cats = new Map<string, number>()
-  for (const p of inStage) cats.set(categoryOf(p), (cats.get(categoryOf(p)) ?? 0) + 1)
-  const cat = cats.has(category) ? category : ''
-  const byStage = inStage.filter((p) => !cat || categoryOf(p) === cat)
+  const byStage = inStage.filter((p) => !categoryOn(inStage, category) || categoryOf(p) === category)
   const shown = byStage.filter((p) => (!styleOn(byStage, style) || p.style === style) && matchesSearch(p, query))
   const bulk = useBulk(shown.map((p) => p.id))
   if (!all.length) return <div className="view"><Empty icon="database" text={t('No designs yet. Every post that has a poster shows up here.')} /></div>
@@ -42,14 +36,7 @@ export function DatabaseView({ data, onOpen }: { data: Data; onOpen: (id: string
           <button key={s} className={stage === s ? 'filter on' : 'filter'} onClick={() => setStage(s)}>{t(STAGE_LABEL[s])} <i>{count(s)}</i></button>
         ))}
       </div>
-      {cats.size > 1 && (
-        <div className="filters" role="group" aria-label={t('Category')}>
-          <button className={cat === '' ? 'filter on' : 'filter'} onClick={() => setCategory('')}>{t('All categories')} <i>{inStage.length}</i></button>
-          {[...cats].sort((a, b) => (a[0] === 'Bundle' ? 1 : b[0] === 'Bundle' ? -1 : a[0].localeCompare(b[0]))).map(([name, n]) => (
-            <button key={name} className={cat === name ? 'filter on' : 'filter'} onClick={() => setCategory(name)}><span dir="auto">{name === 'Bundle' || name === 'Other' ? t(name) : name}</span> <i>{n}</i></button>
-          ))}
-        </div>
-      )}
+      <CategoryChips posts={inStage} value={category} onChange={setCategory} />
       <StyleChips posts={byStage} value={style} onChange={setStyle} />
       <div className="review-bar tools">
         <SearchBox value={query} onChange={setQuery} />

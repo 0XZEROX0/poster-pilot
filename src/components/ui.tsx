@@ -1,5 +1,6 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
-import { addDays, cairoNow } from '../data/logic'
+import { addDays, cairoNow, categoryOf } from '../data/logic'
+import type { Post } from '../data/types'
 import { locale, t } from '../i18n'
 
 const paths: Record<string, string> = {
@@ -109,6 +110,25 @@ export function StyleChips({ posts, value, onChange, className = '' }: { posts: 
       <button className={active === null ? 'filter on' : 'filter'} aria-pressed={active === null} onClick={() => onChange('')}>{t('All')} <i>{posts.length}</i></button>
       {[...counts].sort((a, b) => a[0].localeCompare(b[0])).map(([name, n]) => (
         <button key={name} className={active === name ? 'filter on' : 'filter'} aria-pressed={active === name} onClick={() => onChange(name)}>{name || t('No style')} <i>{n}</i></button>
+      ))}
+    </div>
+  )
+}
+
+/** Whether the category filter applies: the chosen category still has posts in the list. */
+export const categoryOn = (posts: Pick<Post, 'items'>[], category: string) => category !== '' && posts.some((p) => categoryOf(p) === category)
+
+/** Filter chips by category, with Bundle last. Hidden when the posts are all of one category. */
+export function CategoryChips({ posts, value, onChange, className = '' }: { posts: Pick<Post, 'items'>[]; value: string; onChange: (category: string) => void; className?: string }) {
+  const counts = new Map<string, number>()
+  for (const p of posts) counts.set(categoryOf(p), (counts.get(categoryOf(p)) ?? 0) + 1)
+  if (counts.size < 2) return null
+  const active = counts.has(value) ? value : ''
+  return (
+    <div className={`filters ${className}`} role="group" aria-label={t('Category')}>
+      <button className={active === '' ? 'filter on' : 'filter'} aria-pressed={active === ''} onClick={() => onChange('')}>{t('All categories')} <i>{posts.length}</i></button>
+      {[...counts].sort((a, b) => (a[0] === 'Bundle' ? 1 : b[0] === 'Bundle' ? -1 : a[0].localeCompare(b[0]))).map(([name, n]) => (
+        <button key={name} className={active === name ? 'filter on' : 'filter'} aria-pressed={active === name} onClick={() => onChange(name)}><span dir="auto">{name === 'Bundle' || name === 'Other' ? t(name) : name}</span> <i>{n}</i></button>
       ))}
     </div>
   )

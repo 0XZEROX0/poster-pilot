@@ -55,7 +55,7 @@ export function Poster({ post, small = false, zoom = false }: { post: Post; smal
         <img src={previewUrl(post.posterUrl, small ? 300 : 900)} alt={titleOf(post)} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
         {zoom && (
           // A span, because the poster often sits inside a button already.
-          <span className="zoom" role="button" tabIndex={0} aria-label={t('Full screen')} onPointerDown={(e) => e.stopPropagation()}
+          <span className="poster-zoom" role="button" tabIndex={0} aria-label={t('Full screen')} onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFull(true) }}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setFull(true) } }}>
             <Icon name="expand" size={18} />

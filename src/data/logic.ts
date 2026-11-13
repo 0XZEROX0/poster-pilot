@@ -232,3 +232,6 @@ export function duplicatesOf(names: string[], posts: Post[]): { same: Post[]; pa
   }
   return { same, partly }
 }
+
+/** A post's category: its item's category from the product list, or Bundle when it holds more than one item. */
+export const categoryOf = (p: Pick<Post, 'items'>) => (p.items.length > 1 ? 'Bundle' : p.items[0]?.category.trim() || 'Other')
