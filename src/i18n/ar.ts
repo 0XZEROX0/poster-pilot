@@ -197,4 +197,7 @@ export const ar: Record<string, string> = {
   'Taking it off the schedule': 'جاري إلغاء الجدولة',
   'A post goes out only when it has a date and a time. You can also set them in the Planner.': 'البوست لا يُنشر إلا إذا كان له تاريخ ووقت. يمكنك تحديدهما من المخطط أيضًا.',
   'An approved post is scheduled only once it has a date and a time. Set them in the post or drag it onto a time in the Planner. Nothing is scheduled automatically.': 'البوست الموافق عليه لا يُجدول إلا بعد تحديد تاريخ ووقت. حددهما في البوست أو اسحبه إلى وقت في المخطط. لا شيء يُجدول تلقائيًا.',
+  'Cancel schedule': 'إلغاء الجدولة',
+  'Schedule cancelled. The post stays approved.': 'تم إلغاء الجدولة. البوست ما زال موافقًا عليه.',
+  'Cancelling the schedule': 'جارٍ إلغاء الجدولة',
 }

@@ -48,7 +48,7 @@ export function createLocalBackend(): Backend {
         if (p.postDate && p.postTime) patchPost(id, { scheduledFor: `${p.postDate} ${p.postTime}`, fbStatus: 'Scheduled', caption: p.caption || buildCaption(p, data.templates) })
         else patchPost(id, { fbStatus: 'Waiting for Post date and Post time' })
       } else if (p.feedback === 'Cancel') {
-        patchPost(id, { feedback: '', scheduledFor: '', fbStatus: 'Cancelled', fbPostId: '' })
+        patchPost(id, { feedback: 'Done', postDate: '', postTime: '', scheduledFor: '', fbStatus: 'Waiting for Post date and Post time', fbPostId: '' })
       }
     }, 2500))
   }

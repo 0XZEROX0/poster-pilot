@@ -54,14 +54,21 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   ) : (
     <>
       {stage === 'fix' || stage === 'building' ? (
-        <button className="btn btn-primary" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Retry')}</button>
+        <>
+          <button className="btn btn-primary" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Retry')}</button>
+          {post.feedback === 'Done' && (onFacebook || when) && (
+            <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Schedule cancelled. The post stays approved.')}>{t('Cancel schedule')}</button>
+          )}
+        </>
       ) : stage === 'scheduled' ? (
         <>
           <button className="btn btn-primary" disabled={!dirty} onClick={() => save({}, 'Saved')}>{t('Save')}</button>
-          {onFacebook ? (
-            <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Taking it off the schedule')}>{t('Take off the schedule')}</button>
-          ) : (
-            <button className="btn" onClick={() => save({ feedback: '' }, 'Saved')}>{t('Back to review')}</button>
+          {/* The engine takes the post off Facebook, empties its date and time and leaves it approved. */}
+          {post.feedback !== 'Cancel' && (onFacebook || when) && (
+            <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Schedule cancelled. The post stays approved.')}>{t('Cancel schedule')}</button>
+          )}
+          {post.feedback !== 'Cancel' && !onFacebook && (
+            <button className="btn btn-ghost" onClick={() => save({ feedback: '' }, 'Saved')}>{t('Back to review')}</button>
           )}
         </>
       ) : (

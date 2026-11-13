@@ -60,8 +60,8 @@ export function stageOf(p: Post): Stage {
   if (isDeadEnd(p)) return 'skipped'
   if (!p.posterUrl || !p.photoStatus) return 'building'
   if (p.feedback === 'ignore') return 'skipped'
-  // 'Cancel' asks the engine to take the post off Facebook's schedule; it then returns to review.
-  if (p.feedback === 'Done') return 'scheduled'
+  // 'Cancel' asks the engine to take the post off Facebook's schedule. It stays approved, without a time.
+  if (p.feedback === 'Done' || p.feedback === 'Cancel') return 'scheduled'
   return 'review'
 }
 
@@ -128,6 +128,7 @@ export function whenOf(p: Post): { date: string; time: string } | null {
   const m = p.scheduledFor.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/)
   const engine = m ? { date: m[1], time: m[2] } : null
   if (engine && p.fbStatus.trim() === 'Published') return engine
+  if (p.feedback === 'Cancel') return null
   if (p.postDate && p.postTime) return { date: p.postDate, time: p.postTime.padStart(5, '0') }
   return engine
 }

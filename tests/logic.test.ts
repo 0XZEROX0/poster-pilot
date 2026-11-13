@@ -129,6 +129,8 @@ describe('waiting and cancelled posts', () => {
   it('are not problems', () => {
     expect(stageOf(post({ feedback: 'Done', fbStatus: 'Waiting for Post date and Post time' }))).toBe('scheduled')
     expect(stageOf(post({ feedback: '', fbStatus: 'Cancelled' }))).toBe('review')
-    expect(stageOf(post({ feedback: 'Cancel', fbStatus: 'Scheduled', scheduledFor: '2026-11-20 17:00' }))).toBe('review')
+    const cancelling = post({ feedback: 'Cancel', fbStatus: 'Scheduled', scheduledFor: '2026-11-20 17:00', postDate: '2026-11-20', postTime: '17:00' })
+    expect(stageOf(cancelling)).toBe('scheduled')
+    expect(whenOf(cancelling)).toBeNull()
   })
 })
