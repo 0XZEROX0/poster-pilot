@@ -27,6 +27,15 @@ export type Role = string
 export const PAGES = ['offers', 'review', 'fix', 'calendar', 'posted', 'database'] as const
 export type Page = (typeof PAGES)[number]
 export const PAGE_LABEL: Record<Page, string> = { offers: 'Offers', review: 'Review', fix: 'Fix', calendar: 'Planner', posted: 'Posted', database: 'Database' }
+/**
+ * The kinds of posts a set of pages may read. Every post carries a `zone` the engine keeps up to date
+ * (offer, design, fix, approved, posted). The database rules hold the same table. Null means everything.
+ */
+export function zonesFor(pages: Page[]): string[] | null {
+  if (PAGES.every((p) => pages.includes(p))) return null
+  const has = (...list: Page[]) => list.some((p) => pages.includes(p))
+  return [has('offers') && 'offer', has('review', 'database') && 'design', has('review', 'fix', 'database') && 'fix', has('calendar', 'database') && 'approved', has('calendar', 'posted', 'database') && 'posted'].filter((z): z is string => Boolean(z))
+}
 /** `pages` is what the role sees in the menu. A page also needs its permission, so this can only hide. */
 export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */

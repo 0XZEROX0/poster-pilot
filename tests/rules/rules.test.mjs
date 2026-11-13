@@ -1,5 +1,5 @@
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection, serverTimestamp, writeBatch, query, where } from 'firebase/firestore'
 import fs from 'fs'
 const env = await initializeTestEnvironment({ projectId: 'demo-pp', firestore: { rules: fs.readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: 8085 } })
 const as = (uid, email, verified = true) => env.authenticatedContext(uid, { email, email_verified: verified }).firestore()
@@ -102,6 +102,10 @@ await ok('owner removes admin', deleteDoc(doc(boss, 'members/u-s')))
 await env.withSecurityRulesDisabled(async (c) => {
   const db = c.firestore()
   for (const [uid, role] of [['u-maker', 'maker'], ['u-appr', 'approver'], ['u-rev', 'reviewer'], ['u-sch', 'scheduler'], ['u-hr', 'hr'], ['u-hr2', 'hr'], ['u-plain', 'member'], ['u-ghost', 'gone']]) await setDoc(doc(db, 'members', uid), m(uid + '@x.com', role))
+  await setDoc(doc(db, 'members', 'u-pg'), m('u-pg@x.com', 'pagey'))
+  await setDoc(doc(db, 'posts/z1'), { zone: 'offer', createdBy: 'x' })
+  await setDoc(doc(db, 'posts/z2'), { zone: 'design', createdBy: 'x' })
+  await setDoc(doc(db, 'posts/z3'), { createdBy: 'x' })
   await setDoc(doc(db, 'members', 'u-adm'), m('u-adm@x.com', 'admin'))
   await setDoc(doc(db, 'posts/p9'), { feedback: '', postDate: '', postTime: '', priceAfter: '1', createdBy: 'u-adm', offer: '' })
   await setDoc(doc(db, 'posts/p2'), { feedback: '', postDate: '', postTime: '', priceAfter: '1', createdBy: 'u-maker' })
@@ -116,6 +120,19 @@ await no('role with extra fields', setDoc(doc(boss, 'roles/maker'), { name: 'Mak
 await ok('owner makes role maker', setDoc(doc(boss, 'roles/maker'), { name: 'Offer maker', perms: ['offers.create'] }))
 await ok('owner saves a role with pages', setDoc(doc(boss, 'roles/pagey'), { name: 'Pagey', perms: ['offers.create'], pages: ['offers', 'fix'] }))
 await no('role with an unknown page', setDoc(doc(boss, 'roles/pagey'), { name: 'Pagey', perms: [], pages: ['secrets'] }))
+{
+  const pg = P('u-pg')
+  await ok('limited role reads a post of its pages', getDoc(doc(pg, 'posts/z1')))
+  await no('limited role reads a post of a hidden page', getDoc(doc(pg, 'posts/z2')))
+  await no('limited role reads a post with no zone', getDoc(doc(pg, 'posts/z3')))
+  await ok('limited role lists its own zones', getDocs(query(collection(pg, 'posts'), where('zone', 'in', ['offer', 'fix']))))
+  await ok('limited role lists one of its zones', getDocs(query(collection(pg, 'posts'), where('zone', 'in', ['offer']))))
+  await no('limited role lists every post', getDocs(collection(pg, 'posts')))
+  await no('limited role lists a hidden zone too', getDocs(query(collection(pg, 'posts'), where('zone', 'in', ['offer', 'design']))))
+  await ok('limited role still creates an offer', setDoc(doc(pg, 'posts/z9'), { items: [], createdBy: 'u-pg', zone: 'offer' }))
+  await ok('role without a pages list lists every post', getDocs(collection(maker, 'posts')))
+  await ok('owner lists every post', getDocs(collection(boss, 'posts')))
+}
 await ok('owner makes role approver', setDoc(doc(boss, 'roles/approver'), { name: 'Offer approver', perms: ['offers.approve', 'offers.create'] }))
 await ok('owner makes role reviewer', setDoc(doc(boss, 'roles/reviewer'), { name: 'Reviewer', perms: ['designs.approve'] }))
 await ok('owner makes role scheduler', setDoc(doc(boss, 'roles/scheduler'), { name: 'Scheduler', perms: ['schedule'] }))

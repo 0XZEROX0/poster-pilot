@@ -4,7 +4,7 @@ import type { Backend } from './backend'
 import { auth, firebaseConfigured, firestore } from './firebase'
 import { createFirestoreBackend } from './firestoreBackend'
 import { createLocalBackend } from './localBackend'
-import { askToJoin, cancelRequest, findAccess, watchMembership, type Access, type Page, type Perm } from './team'
+import { askToJoin, cancelRequest, findAccess, watchMembership, zonesFor, type Access, type Page, type Perm } from './team'
 import { emptyData, type Data } from './types'
 import { showToast } from '../components/ui'
 import { t } from '../i18n'
@@ -55,7 +55,7 @@ function listen() {
 }
 
 if (firebaseConfigured && auth && firestore) {
-  backend = guarded(createFirestoreBackend(firestore))
+  backend = guarded(createFirestoreBackend(firestore, () => (state.role === 'owner' || state.access === 'legacy' ? null : zonesFor(state.pages))))
   onAuthStateChanged(auth, (user) => {
     stop()
     stopWaiting()

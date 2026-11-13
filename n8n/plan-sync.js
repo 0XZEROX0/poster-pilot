@@ -85,6 +85,12 @@ for (let i = 1; i < posts.length; i++) {
     fbStatus: g('FB status'), igStatus: g('IG status'), fbPostId: g('FB post id'),
   };
   if (isPost && OFFER_COL) row.d.offer = OFFER[g('Offer approval').toLowerCase()] || '';
+  if (isPost) {
+    // Which part of the work the post is in. The app's access rules use it so that a role only reads the posts of its pages.
+    const ps = g('Photo status'), fbs = g('FB status'), igs = g('IG status');
+    const trouble = (ps !== '' && ps !== 'OK' && !/^(WORKING|PHOTO FOUND)/i.test(ps)) || !(fbs === '' || /^(scheduled|published|cancelled|waiting)\b/i.test(fbs)) || (igs !== '' && /error|fail/i.test(igs));
+    row.d.zone = (OFFER_COL && row.d.offer !== 'Approved') ? 'offer' : trouble ? 'fix' : (/^published/i.test(fb) || /^(published|posted)/i.test(fbs)) ? 'posted' : /^(done|cancel)$/i.test(fb) ? 'approved' : 'design';
+  }
   rows.push(row);
   rowAt.set(row.r, row);
 }
@@ -227,7 +233,7 @@ for (const d of docs.filter(x => x.f.appDirty === true)) {
 postRows = postRows.filter(x => !x.gone);
 
 // ---------- sheet -> app ----------
-const MIRROR = ['order', 'items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'posterUrl', 'photoStatus', 'feedback', 'postDate', 'postTime', 'scheduledFor', 'caption', 'captionStyle', 'fbStatus', 'igStatus', 'fbPostId', 'syncHash'].concat(OFFER_COL ? ['offer'] : []);
+const MIRROR = ['order', 'items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'posterUrl', 'photoStatus', 'feedback', 'postDate', 'postTime', 'scheduledFor', 'caption', 'captionStyle', 'fbStatus', 'igStatus', 'fbPostId', 'syncHash', 'zone'].concat(OFFER_COL ? ['offer'] : []);
 const base = {};
 const old = sameSheet ? (sd.hash || {}) : {};
 for (const row of postRows) {

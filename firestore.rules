@@ -34,6 +34,26 @@ service cloud.firestore {
         : role == 'member' ? ['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete']
         : [];
     }
+    // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
+    // a `zone` (offer, design, fix, approved, posted) that the engine keeps up to date.
+    function allPages() {
+      return ['offers', 'review', 'fix', 'calendar', 'posted', 'database'];
+    }
+    function myPages() {
+      let role = myRole();
+      return role == 'owner' || !exists(rolePath(role)) ? allPages() : get(rolePath(role)).data.get('pages', allPages());
+    }
+    function zonesOf(pg) {
+      return (('offers' in pg) ? ['offer'] : [])
+        .concat(('review' in pg || 'database' in pg) ? ['design'] : [])
+        .concat(('review' in pg || 'fix' in pg || 'database' in pg) ? ['fix'] : [])
+        .concat(('calendar' in pg || 'database' in pg) ? ['approved'] : [])
+        .concat(('calendar' in pg || 'posted' in pg || 'database' in pg) ? ['posted'] : []);
+    }
+    function mayReadPost() {
+      let pg = myPages();
+      return pg.hasAll(allPages()) || resource.data.zone in zonesOf(pg);
+    }
     function can(perm) {
       return isMember() && perm in permsOf(myRole());
     }
@@ -179,7 +199,7 @@ service cloud.firestore {
       allow delete: if isOwner() && !(id in ['admin', 'member']);
     }
     match /posts/{id} {
-      allow read: if isMember();
+      allow read: if isMember() && mayReadPost();
       allow create: if can('offers.create')
         && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid
         && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market']);

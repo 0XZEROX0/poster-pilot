@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase/auth'
-import { collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, type Firestore } from 'firebase/firestore'
+import { collection, deleteField, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, type Firestore } from 'firebase/firestore'
 import type { Backend } from './backend'
 import { emptyData, type CaptionTemplate, type Data, type Health, type Post, type Product } from './types'
 
@@ -22,7 +22,8 @@ const blankPost: Omit<Post, 'id'> = {
   postDate: '', postTime: '', scheduledFor: '', caption: '', captionStyle: '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: 0,
 }
 
-export function createFirestoreBackend(db: Firestore): Backend {
+/** `zones` says which kinds of posts the person's role may read; null means all of them. */
+export function createFirestoreBackend(db: Firestore, zones: () => string[] | null = () => null): Backend {
   return {
     subscribe(onData, onError) {
       let data: Data = emptyData
@@ -32,8 +33,11 @@ export function createFirestoreBackend(db: Firestore): Backend {
         onData(data)
       }
       const fail = (e: Error) => onError(e.message)
+      const mine = zones()
+      // A limited role asks only for its own kinds of posts; the rules refuse anything wider.
+      const source = mine === null ? collection(db, 'posts') : query(collection(db, 'posts'), where('zone', 'in', mine.length ? mine : ['-']))
       const stops = [
-        onSnapshot(collection(db, 'posts'), (snap) => {
+        onSnapshot(source, (snap) => {
           got.posts = true
           const posts = snap.docs
             .map((d) => ({ ...blankPost, ...d.data(), id: d.id }) as Post & { appDeleted?: boolean })
@@ -57,7 +61,7 @@ export function createFirestoreBackend(db: Firestore): Backend {
     async addPost(post) {
       const ref = doc(collection(db, 'posts'))
       const me = getAuth(db.app).currentUser
-      await setDoc(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), createdBy: me?.uid ?? '', createdByName: me?.displayName || me?.email || '', appNew: true, appDirty: true, appEditedAt: serverTimestamp() })
+      await setDoc(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), zone: 'offer', createdBy: me?.uid ?? '', createdByName: me?.displayName || me?.email || '', appNew: true, appDirty: true, appEditedAt: serverTimestamp() })
     },
     async updatePost(id, patch) {
       const edits: Record<string, unknown> = {}
