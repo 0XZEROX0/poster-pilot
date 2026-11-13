@@ -245,7 +245,6 @@ export const ar: Record<string, string> = {
   'selected': 'محدد',
   'Select all': 'تحديد الكل',
   'Database': 'قاعدة البيانات',
-  'Approved': 'معتمد',
   'Full screen': 'ملء الشاشة',
   'Stage': 'المرحلة',
   'Nothing matches.': 'لا توجد نتائج.',
