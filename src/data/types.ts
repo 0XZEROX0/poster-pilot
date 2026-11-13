@@ -9,7 +9,7 @@ export type PostItem = {
 }
 
 /** What the person decided about a finished poster (sheet: Feedback). */
-export type Feedback = '' | 'Done' | 'Redo' | 'ignore'
+export type Feedback = '' | 'Done' | 'Redo' | 'Redo next image' | 'ignore'
 
 /** One row of the Posts sheet. Dates and times are Cairo local strings, as the engine writes them. */
 export type Post = {

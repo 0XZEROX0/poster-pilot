@@ -67,3 +67,19 @@ describe('previewUrl', () => {
     expect(previewUrl('https://static-eg.com/a.png')).toBe('https://static-eg.com/a.png')
   })
 })
+
+describe('sheet status words', () => {
+  const base = { id: 'x', order: 1, items: [{ category: 'MB', name: 'Board', manualPhoto: '', nextPhoto: false }], company: '', priceBefore: '100', priceAfter: '', style: 'Static', details: '', posterUrl: 'https://drive.google.com/file/d/A/view', photoStatus: 'OK', feedback: '' as const, postDate: '', postTime: '', scheduledFor: '', caption: '', captionStyle: '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: 0 }
+  it('treats a row the engine is working on as building, not as a problem', () => {
+    expect(stageOf({ ...base, photoStatus: 'WORKING 2026-11-13T08:00:00.000Z' })).toBe('building')
+    expect(stageOf({ ...base, photoStatus: 'PHOTO FOUND' })).toBe('building')
+  })
+  it('treats a pending redo as building even when the old error is still shown', () => {
+    expect(stageOf({ ...base, photoStatus: 'AI ERROR - SEE RUN', feedback: 'Redo' })).toBe('building')
+    expect(stageOf({ ...base, feedback: 'Redo next image' })).toBe('building')
+  })
+  it('keeps real problems in Fix', () => {
+    expect(stageOf({ ...base, posterUrl: '', photoStatus: 'MISSING' })).toBe('fix')
+    expect(stageOf({ ...base, feedback: 'Done', fbStatus: 'Error: 400 - bad' })).toBe('fix')
+  })
+})

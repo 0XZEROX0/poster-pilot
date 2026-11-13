@@ -8,7 +8,7 @@ const FB_FINE = new Set(['', 'Scheduled', 'Published'])
 /** A problem the person has to act on, or null. */
 export function problemOf(p: Post): { kind: 'photo' | 'background' | 'ai' | 'facebook' | 'instagram'; text: string } | null {
   const s = p.photoStatus.trim()
-  if (s && s !== 'OK') {
+  if (s && s !== 'OK' && !isBusy(p)) {
     const up = s.toUpperCase()
     if (up.startsWith('MISSING')) return { kind: 'photo', text: s }
     if (up.startsWith('BACKGROUND')) return { kind: 'background', text: s }
@@ -20,10 +20,19 @@ export function problemOf(p: Post): { kind: 'photo' | 'background' | 'ai' | 'fac
   return null
 }
 
+/** The engine marks a row 'WORKING <time>' or 'PHOTO FOUND' while it is building the poster. */
+export const isBusy = (p: Pick<Post, 'photoStatus'>) => /^(WORKING|PHOTO FOUND)/i.test(p.photoStatus.trim())
+
+/** A redo was asked for and the engine has not picked it up yet ('Redo' or the sheet's 'Redo next image'). */
+export const isRedo = (p: Pick<Post, 'feedback'>) => /^redo/i.test(p.feedback)
+
+export const isBuilding = (p: Post) => isRedo(p) || isBusy(p) || (!problemOf(p) && (!p.posterUrl || !p.photoStatus))
+
 export function stageOf(p: Post): Stage {
   if (p.fbStatus.trim() === 'Published') return 'posted'
+  if (isRedo(p) || isBusy(p)) return 'building'
   if (problemOf(p)) return 'fix'
-  if (p.feedback === 'Redo' || !p.posterUrl || !p.photoStatus) return 'building'
+  if (!p.posterUrl || !p.photoStatus) return 'building'
   if (p.feedback === 'ignore') return 'skipped'
   if (p.feedback === 'Done') return 'scheduled'
   return 'review'
