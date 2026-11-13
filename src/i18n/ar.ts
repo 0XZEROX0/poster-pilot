@@ -137,4 +137,10 @@ export const ar: Record<string, string> = {
   'No photo was found for this item.': 'لم يتم العثور على صورة لهذا المنتج.',
   'This post is already on the schedule, so it cannot be deleted here.': 'هذا البوست مجدول بالفعل، لذلك لا يمكن حذفه من هنا.',
   'Its row in the sheet will be emptied.': 'سيتم تفريغ صفّه في الشيت.',
+  'left to review': 'متبقية للمراجعة',
+  'Next photo': 'الصورة التالية',
+  'Swipe up to approve, left to redo with the next photo, right to skip. Tap the poster to edit.': 'اسحب لأعلى للموافقة، لليسار لإعادة التصميم بالصورة التالية، لليمين للتخطي. اضغط على البوستر للتعديل.',
+  'Back in review': 'عاد إلى المراجعة',
+  Cards: 'كروت',
+  Swipe: 'سحب',
 }
