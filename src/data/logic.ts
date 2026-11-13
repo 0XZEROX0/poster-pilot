@@ -37,11 +37,24 @@ export const isRedo = (p: Pick<Post, 'feedback'>) => /^redo/i.test(p.feedback)
 /** The person ignored an error that left the post without a poster: nothing more will happen to it. */
 const isDeadEnd = (p: Post) => !p.posterUrl && Boolean(anyProblemOf(p)) && !problemOf(p)
 
-export const isBuilding = (p: Post) => isRedo(p) || isBusy(p) || (!anyProblemOf(p) && (!p.posterUrl || !p.photoStatus))
+/** How long a retry is given before the same poster error counts as "failed again". */
+export const RETRY_MS = 4 * 60 * 1000
+
+/**
+ * A redo the engine already answered with the same poster error (no photo, no background, build
+ * failed). The post still says Redo in the sheet, but waiting longer will not help: it needs a fix.
+ */
+export function redoFailed(p: Post, now = Date.now()): boolean {
+  const kind = anyProblemOf(p)?.kind
+  return isRedo(p) && !isBusy(p) && (kind === 'photo' || kind === 'background' || kind === 'ai') && now - (p.retriedAt ?? 0) > RETRY_MS
+}
+const isRedoing = (p: Post) => isRedo(p) && !redoFailed(p)
+
+export const isBuilding = (p: Post) => isRedoing(p) || isBusy(p) || (!anyProblemOf(p) && (!p.posterUrl || !p.photoStatus))
 
 export function stageOf(p: Post): Stage {
   if (p.fbStatus.trim() === 'Published') return 'posted'
-  if (isRedo(p) || isBusy(p)) return 'building'
+  if (isRedoing(p) || isBusy(p)) return 'building'
   if (problemOf(p)) return 'fix'
   if (isDeadEnd(p)) return 'skipped'
   if (!p.posterUrl || !p.photoStatus) return 'building'

@@ -43,6 +43,8 @@ export type Post = {
   createdAt: number
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
+  /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */
+  retriedAt?: number
 }
 
 export type Product = { category: string; name: string; price: string; company: string }

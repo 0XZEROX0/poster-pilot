@@ -1,4 +1,4 @@
-import { problemOf, stageOf, titleOf } from '../data/logic'
+import { problemOf, redoFailed, stageOf, titleOf } from '../data/logic'
 import { backend } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
@@ -31,6 +31,8 @@ function FixCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void
   const missing = p.items.filter((it) => it.photoMissing)
   // A publishing problem is fixed inside the post (a new time); a poster problem can simply be tried again.
   const publishing = problem.kind === 'facebook' || problem.kind === 'instagram'
+  // The engine already retried and hit the same wall, so another retry alone will not help.
+  const again = redoFailed(p)
   const retry = () => backend.updatePost(p.id, { feedback: 'Redo' }).then(() => showToast(t('Sent for redo')))
   // The exact error text is remembered, so the same error stays hidden and a new one shows up again.
   const ignore = () => backend.updatePost(p.id, { ignoredProblem: problem.text }).then(() => showToast(t('Error ignored')))
@@ -49,9 +51,15 @@ function FixCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void
         ) : (
           <p className="muted small problem-raw" dir="auto">{problem.text}</p>
         )}
+        {again && <p className="small">{t('It was tried again and failed the same way. Open it and paste a photo link, or try the next photo.')}</p>}
         <div className="actions">
           {publishing ? (
             <button className="btn btn-primary" onClick={() => onOpen(p.id)}><Icon name="clock" size={18} />{t('Change time')}</button>
+          ) : again ? (
+            <>
+              <button className="btn btn-primary" onClick={() => onOpen(p.id)}><Icon name="edit" size={18} />{t('Fix it')}</button>
+              <button className="btn" onClick={retry}><Icon name="redo" size={18} />{t('Retry')}</button>
+            </>
           ) : (
             <>
               <button className="btn btn-primary" onClick={retry}><Icon name="redo" size={18} />{t('Retry')}</button>

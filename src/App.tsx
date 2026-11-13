@@ -47,6 +47,12 @@ export default function App() {
     window.scrollTo(0, 0)
     document.querySelector('.desk-main')?.scrollTo(0, 0)
   }
+  // A minute tick, so things that depend on the time (a retry that ran out, a quiet engine) update on their own.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
   const close = useCallback(() => setOverlay(null), [])
   const open = (id: string) => setOverlay({ kind: 'post', id })
 

@@ -77,7 +77,7 @@ describe('sheet status words', () => {
     expect(stageOf({ ...base, photoStatus: 'PHOTO FOUND' })).toBe('building')
   })
   it('treats a pending redo as building even when the old error is still shown', () => {
-    expect(stageOf({ ...base, photoStatus: 'AI ERROR - SEE RUN', feedback: 'Redo' })).toBe('building')
+    expect(stageOf({ ...base, photoStatus: 'AI ERROR - SEE RUN', feedback: 'Redo', retriedAt: Date.now() })).toBe('building')
     expect(stageOf({ ...base, feedback: 'Redo next image' })).toBe('building')
   })
   it('keeps real problems in Fix', () => {
@@ -110,5 +110,17 @@ describe('search and duplicates', () => {
     expect(duplicatesOf(['Board B'], [a, b])).toEqual({ same: [a], partly: [b] })
     expect(duplicatesOf(['Chip C', 'Board B'], [a, b])).toEqual({ same: [b], partly: [a] })
     expect(duplicatesOf(['Other'], [a, b])).toEqual({ same: [], partly: [] })
+  })
+})
+
+describe('a redo that fails again', () => {
+  const stuck = post({ posterUrl: '', photoStatus: 'MISSING', feedback: 'Redo' })
+  it('goes back to Fix once the retry has had its time', () => {
+    expect(stageOf(stuck)).toBe('fix')
+    expect(stageOf({ ...stuck, retriedAt: Date.now() })).toBe('building')
+    expect(stageOf({ ...stuck, photoStatus: 'WORKING 2026-11-13T09:00:00Z' })).toBe('building')
+  })
+  it('leaves a redo of a good poster as building', () => {
+    expect(stageOf(post({ feedback: 'Redo' }))).toBe('building')
   })
 })

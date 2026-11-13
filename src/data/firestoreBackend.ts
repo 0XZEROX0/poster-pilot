@@ -64,6 +64,7 @@ export function createFirestoreBackend(db: Firestore): Backend {
         // Fields only the app uses stay out of the engine's to-do list, which saves a sync round.
         if (!APP_ONLY.has(key)) edits[`appEdits.${key}`] = value
       }
+      if (typeof patch.feedback === 'string' && /^redo/i.test(patch.feedback)) edits.retriedAt = Date.now()
       if (Object.keys(edits).some((k) => k.startsWith('appEdits.'))) Object.assign(edits, { appDirty: true, appEditedAt: serverTimestamp() })
       await updateDoc(doc(db, 'posts', id), edits)
     },

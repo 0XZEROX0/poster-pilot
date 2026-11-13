@@ -188,4 +188,6 @@ export const ar: Record<string, string> = {
   Removed: 'تم الحذف',
   'If you were given a system code, refresh to get the screen where you can enter it.': 'إذا كان معك كود النظام، حدّث الصفحة لتظهر شاشة إدخاله.',
   Refresh: 'تحديث',
+  'It was tried again and failed the same way. Open it and paste a photo link, or try the next photo.': 'تمت المحاولة مرة أخرى وفشلت بنفس السبب. افتحه والصق رابط صورة أو جرّب الصورة التالية.',
+  'Fix it': 'إصلاح',
 }
