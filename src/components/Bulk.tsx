@@ -44,7 +44,7 @@ export function Pick({ bulk, id, children, show = true }: { bulk: Bulk; id: stri
     <div className={`sel${picked ? ' sel-on' : ''}`}>
       {children}
       <button className="sel-mark" role="checkbox" aria-checked={picked} aria-label={t('Select')} onClick={() => bulk.toggle(id)}>
-        {picked && <Icon name="check" size={18} />}
+        {picked && <Icon name="check" size={14} />}
       </button>
     </div>
   )
