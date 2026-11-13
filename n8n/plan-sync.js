@@ -50,6 +50,9 @@ const col = name => head.indexOf(name);
 const NEED = ['Category 1', 'Category 2', 'Category 3', 'Item 1', 'Item 2', 'Item 3', 'Next photo 1', 'Next photo 2', 'Next photo 3', 'Manual photo 1', 'Manual photo 2', 'Manual photo 3', 'Company', 'Price before', 'Price after', 'Style', 'Details', 'Image link', 'Photo status', 'Feedback', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'FB post id'];
 for (const n of NEED) if (col(n) < 0) throw new Error('Posts sheet: the column "' + n + '" was not found. The sync stopped and changed nothing.');
 const USER_COLS = ['Category 1', 'Category 2', 'Category 3', 'Manual photo 1', 'Manual photo 2', 'Manual photo 3', 'Price after', 'Details', 'Photo status', 'Feedback', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'FB post id'];
+// The Offer approval column: a poster is made only once it says Approved. Without the column every post counts as approved.
+const OFFER = { '': '', 'approved': 'Approved', 'rejected': 'Rejected' };
+const OFFER_COL = col('Offer approval') >= 0;
 const FEEDBACK = { '': '', 'done': 'Done', 'redo': 'Redo', 'redo next image': 'Redo next image', 'ignore': 'Ignore', 'cancel': 'Cancel' };
 
 // The poster workflow paints the cell of an item whose photo it could not find red. Reading that
@@ -81,6 +84,7 @@ for (let i = 1; i < posts.length; i++) {
     postDate: g('Post date'), postTime: g('Post time'), scheduledFor: g('Scheduled for'), caption: text(line[col('Caption')]), captionStyle: g('Caption style'),
     fbStatus: g('FB status'), igStatus: g('IG status'), fbPostId: g('FB post id'),
   };
+  if (isPost && OFFER_COL) row.d.offer = OFFER[g('Offer approval').toLowerCase()] || '';
   rows.push(row);
   rowAt.set(row.r, row);
 }
@@ -128,6 +132,7 @@ const applyEdits = (row, e) => {
   const cur = name => clean(row.line[col(name)]);
   const put = (name, value) => { cellReq(row.r, name, value); n++; };
   if ('feedback' in e) { const v = FEEDBACK[clean(e.feedback).toLowerCase()]; if (v !== undefined && v !== cur('Feedback')) put('Feedback', str(v)); }
+  if ('offer' in e && OFFER_COL) { const v = OFFER[clean(e.offer).toLowerCase()]; if (v !== undefined && v !== cur('Offer approval')) put('Offer approval', str(v)); }
   if ('caption' in e && text(e.caption) !== text(row.line[col('Caption')])) put('Caption', str(text(e.caption)));
   if ('captionStyle' in e && clean(e.captionStyle) !== cur('Caption style')) put('Caption style', str(clean(e.captionStyle)));
   if ('details' in e && clean(e.details) !== cur('Details')) put('Details', str(clean(e.details)));
@@ -206,17 +211,21 @@ for (const d of docs.filter(x => x.f.appDirty === true)) {
   if (dateCell(clean(f.postDate))) cellReq(free.r, 'Post date', dateCell(clean(f.postDate)));
   if (timeCell(clean(f.postTime))) cellReq(free.r, 'Post time', timeCell(clean(f.postTime)));
   if (clean(f.captionStyle)) cellReq(free.r, 'Caption style', str(clean(f.captionStyle)));
+  // An offer approved in the app before its row existed is written as approved; otherwise the row waits.
+  if (OFFER_COL && clean(f.offer) === 'Approved') cellReq(free.r, 'Offer approval', str('Approved'));
   addTag(free.r, d.id);
   free.blank = false;
   placed.push(d.id);
   stats.appNew++;
-  settle(d, '');
+  // The post keeps saying where its offer stands until the sheet row is mirrored back.
+  if (OFFER_COL) push({ update: { name: d.name, fields: fieldsOf({ appDirty: false, offer: clean(f.offer) === 'Approved' ? 'Approved' : '' }) }, updateMask: { fieldPaths: FLAGS.concat(['offer']) }, currentDocument: { updateTime: d.updateTime } }, { kind: 'flags', id: d.id });
+  else settle(d, '');
 }
 
 postRows = postRows.filter(x => !x.gone);
 
 // ---------- sheet -> app ----------
-const MIRROR = ['order', 'items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'posterUrl', 'photoStatus', 'feedback', 'postDate', 'postTime', 'scheduledFor', 'caption', 'captionStyle', 'fbStatus', 'igStatus', 'fbPostId', 'syncHash'];
+const MIRROR = ['order', 'items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'posterUrl', 'photoStatus', 'feedback', 'postDate', 'postTime', 'scheduledFor', 'caption', 'captionStyle', 'fbStatus', 'igStatus', 'fbPostId', 'syncHash'].concat(OFFER_COL ? ['offer'] : []);
 const base = {};
 const old = sameSheet ? (sd.hash || {}) : {};
 for (const row of postRows) {
