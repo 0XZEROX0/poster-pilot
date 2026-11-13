@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCaption, hasOffer, nextFreeSlot, previewUrl, problemOf, stageOf, whenOf, duplicatesOf, matchesSearch } from '../src/data/logic'
+import { buildCaption, hasOffer, marketKey, marketOf, nextFreeSlot, previewUrl, problemOf, stageOf, whenOf, duplicatesOf, matchesSearch } from '../src/data/logic'
 import type { Post } from '../src/data/types'
 
 const post = (over: Partial<Post> = {}): Post => ({
@@ -147,5 +147,30 @@ describe('offers', () => {
   })
   it('never hides a published post', () => {
     expect(stageOf(post({ offer: '', fbStatus: 'Published' }))).toBe('posted')
+  })
+})
+
+describe('competitor prices', () => {
+  const hit = (price: number) => ({ shop: 'Shop', price, inStock: true, title: 'x', url: 'https://x' })
+  const offer = (priceAfter: string, prices: (number | null)[], over: Partial<Post> = {}) => {
+    const p = post({ items: prices.map((_, i) => ({ category: '', name: 'Item ' + i, manualPhoto: '', nextPhoto: false })), priceBefore: '50000', priceAfter, offer: '', ...over })
+    return { ...p, market: { checkedAt: 1000, key: marketKey(p), shops: ['Shop'], items: prices.map((n, i) => ({ name: 'Item ' + i, best: n === null ? null : hit(n), others: [], similar: [] })) }, ...over }
+  }
+  it('adds up a bundle and compares it with the offer', () => {
+    const v = marketOf(offer('19000', [10000, 10000]))
+    expect(v).toMatchObject({ state: 'done', total: 20000, ours: 19000, tone: 'good' })
+  })
+  it('is amber within 3% above and red beyond', () => {
+    expect(marketOf(offer('20500', [10000, 10000]))).toMatchObject({ tone: 'close' })
+    expect(marketOf(offer('21000', [10000, 10000]))).toMatchObject({ tone: 'high' })
+  })
+  it('gives no total when an item was not found', () => {
+    expect(marketOf(offer('19000', [10000, null]))).toMatchObject({ state: 'done', tone: 'partial', found: 1, count: 2 })
+  })
+  it('checks again when the price changes or someone asks', () => {
+    const p = offer('19000', [10000, 10000])
+    expect(marketOf({ ...p, priceAfter: '18000' }).state).toBe('checking')
+    expect(marketOf({ ...p, marketAsk: 2000 }).state).toBe('checking')
+    expect(marketOf({ ...p, market: undefined }).state).toBe('checking')
   })
 })

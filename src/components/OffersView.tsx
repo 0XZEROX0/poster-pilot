@@ -1,11 +1,60 @@
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { CardSize } from './CardSize'
 import { useState } from 'react'
-import { formatPrice, hasOffer, offerOf, priceOf, stageOf, titleOf } from '../data/logic'
+import { formatPrice, hasOffer, marketOf, offerOf, priceOf, stageOf, titleOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
-import type { Data, Post } from '../data/types'
+import type { Data, MarketHit, Post } from '../data/types'
 import { t } from '../i18n'
 import { Empty, Icon, showToast } from './ui'
+
+const egp = (n: number) => `${n.toLocaleString('en-US')} EGP`
+const stockOf = (h: MarketHit) => (h.inStock === false ? t('out of stock') : h.inStock === null ? t('stock unknown') : '')
+const ago = (ms: number) => new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+
+/** Competitor prices for an offer: the cheapest same product at each item, their total, and how this offer compares. */
+function MarketBox({ post: p }: { post: Post }) {
+  const [open, setOpen] = useState(false)
+  const view = marketOf(p)
+  const again = () => backend.updatePost(p.id, { marketAsk: Date.now() }).then(() => showToast(t('Checking competitor prices again')))
+  if (view.state === 'checking') return <div className="market"><p className="muted small">{t('Checking competitor prices…')}</p></div>
+  const m = p.market!
+  const diff = view.state === 'done' ? view.ours - view.total : 0
+  const pct = view.state === 'done' && view.total ? Math.round((Math.abs(diff) / view.total) * 1000) / 10 : 0
+  return (
+    <div className={`market market-${view.state === 'done' ? view.tone : 'partial'}`}>
+      <div className="market-head">
+        <b>{t('Competitor prices')}</b>
+        <button className="btn btn-ghost btn-small" onClick={again}><Icon name="redo" size={16} />{t('Check again')}</button>
+      </div>
+      {view.state === 'error' && <p className="small">{t('The check did not work this time.')} <span className="muted" dir="auto">{view.error}</span></p>}
+      {view.state === 'done' && view.tone !== 'partial' && (
+        <p className="market-verdict" dir="auto">
+          <span>{t('Competitors')}: <b dir="ltr">{egp(view.total)}</b> · {t('Yours')}: <b dir="ltr">{egp(view.ours)}</b></span>
+          <span>{diff <= 0 ? t('You are cheaper by') : t('You are more expensive by')} <b dir="ltr">{egp(Math.abs(diff))} ({pct}%)</b></span>
+          {view.tone === 'high' && <span className="market-warn"><Icon name="fix" size={16} />{t('Check this price before approving.')}</span>}
+        </p>
+      )}
+      {view.state === 'done' && view.tone === 'partial' && <p className="small">{t('Found {n} of {m} items, so there is no total.').replace('{n}', String(view.found)).replace('{m}', String(view.count))}</p>}
+      <ul className="market-items">
+        {m.items.map((it, i) => (
+          <li key={i}>
+            <span dir="auto" className="market-name">{it.name}</span>
+            {it.best ? (
+              <span><a href={it.best.url} target="_blank" rel="noreferrer" dir="ltr">{egp(it.best.price)}</a> {it.best.shop}{stockOf(it.best) && <span className="muted"> · {stockOf(it.best)}</span>}{it.best.note && <span className="muted" dir="auto"> · {it.best.note}</span>}</span>
+            ) : <span className="muted">{t('Not found at the shops')}</span>}
+            {open && [...it.others.map((h) => ({ h, similar: false })), ...it.similar.map((h) => ({ h, similar: true }))].map(({ h, similar }, j) => (
+              <span key={j} className="market-other small"><a href={h.url} target="_blank" rel="noreferrer" dir="ltr">{egp(h.price)}</a> {h.shop}{stockOf(h) && ` · ${stockOf(h)}`}{similar && ` · ${t('similar, not counted')}`} <span className="muted" dir="auto">{h.title}</span></span>
+            ))}
+          </li>
+        ))}
+      </ul>
+      <p className="muted small market-foot">
+        <span>{t('Checked')} {ago(m.checkedAt)} · {m.shops.join(', ')}</span>
+        {m.items.some((it) => it.others.length || it.similar.length) && <button className="link" onClick={() => setOpen(!open)}>{open ? t('Less') : t('All shops')}</button>}
+      </p>
+    </div>
+  )
+}
 
 /** One offer before any poster exists: what is in it, who made it, and the decision buttons. */
 function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void }) {
@@ -25,6 +74,7 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
           <span dir="ltr">{hasOffer(p) && <s>{formatPrice(p.priceBefore)}</s>} {formatPrice(priceOf(p))} EGP</span> <span className="muted">· {p.style}</span>
         </p>
         {p.details && <p className="muted small" dir="auto">{p.details}</p>}
+        {!rejected && <MarketBox post={p} />}
         <p className="muted small">{p.createdByName ? `${t('Made by')} ${p.createdByName}` : t('Added in the sheet')}</p>
         {rejected && <p className="alert"><b><Icon name="fix" size={18} />{t('Offer sent back')}{p.offerBy ? ` · ${p.offerBy}` : ''}</b>{p.offerNote && <span dir="auto">{p.offerNote}</span>}</p>}
         {note !== null ? (

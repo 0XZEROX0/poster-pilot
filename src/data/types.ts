@@ -55,7 +55,20 @@ export type Post = {
   ignoredProblem?: string
   /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */
   retriedAt?: number
+  /** Engine only: competitor prices for this offer. */
+  market?: Market
+  /** App only: when someone pressed Check again. */
+  marketAsk?: number
 }
+
+/** One competitor listing the engine found for an item. */
+export type MarketHit = { shop: string; price: number; inStock: boolean | null; title: string; url: string; note?: string }
+
+/** What the engine found for one item of an offer: the cheapest same product, other shops, and look-alikes that are never counted. */
+export type MarketItem = { name: string; best: MarketHit | null; others: MarketHit[]; similar: MarketHit[] }
+
+/** Competitor prices for an offer, written by the engine only. `key` is the items and price it was checked for. */
+export type Market = { checkedAt: number; key: string; items: MarketItem[]; shops: string[]; error?: string }
 
 export type Product = { category: string; name: string; price: string; company: string }
 

@@ -463,3 +463,20 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .lightbox img { max-width: 100vw; max-height: 100dvh; width: auto; height: auto; object-fit: contain; }
 .lightbox-close { position: absolute; top: calc(12px + env(safe-area-inset-top)); inset-inline-end: 12px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.16); color: #fff; }
 .tabs button { min-width: 0; font-size: 0.625rem; }
+
+/* Competitor prices on an offer card */
+.market { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2); }
+.market-good { background: var(--good-soft); border-color: transparent; }
+.market-close { background: var(--warn-soft); border-color: transparent; }
+.market-high { background: var(--bad-soft); border-color: transparent; }
+.market-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.market-verdict { display: flex; flex-direction: column; gap: 2px; font-size: 0.9rem; }
+.market-good .market-verdict b { color: var(--good); }
+.market-high .market-verdict b, .market-warn { color: var(--bad); }
+.market-warn { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.market-items { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 0.875rem; }
+.market-items li { display: flex; flex-direction: column; gap: 2px; }
+.market-name { font-weight: 600; overflow-wrap: anywhere; }
+.market-items a { color: var(--accent); font-weight: 600; }
+.market-other { padding-inline-start: 10px; overflow-wrap: anywhere; }
+.market-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }

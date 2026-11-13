@@ -88,6 +88,31 @@ export const hasOffer = (p: Pick<Post, 'priceBefore' | 'priceAfter'>) =>
 
 export const toNumber = (s: string) => Number(s.replace(/[^\d.]/g, '')) || 0
 
+/** The items and price a competitor check is for. The engine writes the same key, so a changed offer shows as checking again. */
+export const marketKey = (p: Pick<Post, 'items' | 'priceBefore' | 'priceAfter'>) =>
+  p.items.map((it) => it.name.trim().toLowerCase()).filter(Boolean).join('|') + '#' + toNumber(priceOf(p))
+
+/** Above the cheapest competitors by more than this share, an offer is marked red. */
+export const MARKET_CLOSE = 0.03
+
+export type MarketView =
+  | { state: 'checking' }
+  | { state: 'error'; error: string; checkedAt: number }
+  | { state: 'done'; checkedAt: number; ours: number; total: number; found: number; count: number; tone: 'good' | 'close' | 'high' | 'partial' }
+
+/** How an offer's price compares with the cheapest in-stock price for each item at the competitors. */
+export function marketOf(p: Post): MarketView {
+  const m = p.market
+  if (!m || m.key !== marketKey(p) || (p.marketAsk ?? 0) > m.checkedAt) return { state: 'checking' }
+  if (m.error) return { state: 'error', error: m.error, checkedAt: m.checkedAt }
+  const ours = toNumber(priceOf(p))
+  const found = m.items.filter((it) => it.best).length
+  const total = m.items.reduce((sum, it) => sum + (it.best?.price ?? 0), 0)
+  const count = m.items.length
+  const tone = found < count || !total ? 'partial' : ours <= total ? 'good' : (ours - total) / total <= MARKET_CLOSE ? 'close' : 'high'
+  return { state: 'done', checkedAt: m.checkedAt, ours, total, found, count, tone }
+}
+
 export const formatPrice = (s: string) => {
   const n = toNumber(s)
   return n ? n.toLocaleString('en-US') : s.trim()
