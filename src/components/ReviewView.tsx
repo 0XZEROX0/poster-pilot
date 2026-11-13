@@ -41,7 +41,7 @@ const savedMode = (): 'cards' | 'swipe' => {
 type Swipe = 'up' | 'left' | 'right'
 const SWIPES: Record<Swipe, { feedback: 'Done' | 'Redo next image' | 'ignore'; label: string; done: string; icon: string }> = {
   up: { feedback: 'Done', label: 'Approve', done: 'Approved', icon: 'check' },
-  left: { feedback: 'Redo next image', label: 'Next photo', done: 'Sent for redo', icon: 'redo' },
+  left: { feedback: 'Redo next image', label: 'Redo with next photo', done: 'Sent for redo', icon: 'redo' },
   right: { feedback: 'ignore', label: 'Skip', done: 'Skipped', icon: 'skip' },
 }
 /** How far a card has to travel, in pixels, before letting go counts as a decision. */
@@ -122,7 +122,7 @@ function SwipeDeck({ posts, onOpen }: { posts: Post[]; onOpen: (id: string) => v
         </article>
       </div>
       <div className="deck-actions">
-        <button className="btn" onClick={() => decide('left')}><Icon name="left" size={18} />{t('Next photo')}</button>
+        <button className="btn" onClick={() => decide('left')}><Icon name="left" size={18} />{t('Redo with next photo')}</button>
         <button className="btn btn-primary" onClick={() => decide('up')}><Icon name="check" size={18} />{t('Approve')}</button>
         <button className="btn" onClick={() => decide('right')}>{t('Skip')}<Icon name="right" size={18} /></button>
       </div>
