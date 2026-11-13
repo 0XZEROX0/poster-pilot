@@ -12,7 +12,7 @@ import { agoLabel, SettingsSheet } from './components/SettingsSheet'
 import { Icon, Toast } from './components/ui'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
-import { allowed, isOwner, myId, signIn, signOutNow, useSession } from './data/store'
+import { allowed, isOwner, myId, ownOffer, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, useLang } from './i18n'
 
@@ -95,7 +95,7 @@ export default function App() {
   const { data } = session
   const counts: Partial<Record<Tab, number>> = {
     // Offers waiting for this person: ones to approve, or their own that were sent back.
-    offers: data.posts.filter((p) => stageOf(p) === 'offer' && (offerOf(p) === 'waiting' ? allowed('offers.approve') && (isOwner() || p.createdBy !== myId()) : p.createdBy === myId() || isOwner())).length,
+    offers: data.posts.filter((p) => stageOf(p) === 'offer' && (offerOf(p) === 'waiting' ? allowed('offers.approve') && !ownOffer(p) : p.createdBy === myId() || isOwner())).length,
     review: data.posts.filter((p) => stageOf(p) === 'review').length,
     fix: data.posts.filter((p) => stageOf(p) === 'fix').length,
   }

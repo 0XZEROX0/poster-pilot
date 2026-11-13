@@ -149,3 +149,6 @@ export function restartDemo() {
   backend = createLocalBackend()
   listen()
 }
+
+/** A member cannot decide on an offer they made themselves. The owner and roles that manage people can. */
+export const ownOffer = (p: { createdBy?: string }) => p.createdBy === myId() && !isOwner() && !allowed('people')

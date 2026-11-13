@@ -164,11 +164,13 @@ for (const d of docs.filter(x => x.f.appDirty === true)) {
   if (row && !row.fresh) {
     skipMirror.add(d.id);
     if (d.f.appDeleted === true) {
-      // Deleting in the app empties the post's row, the way the sheet's Clear button does. Only a post
-      // that is neither published nor on Facebook's schedule can go, so nothing is left behind there.
+      // Deleting in the app empties the post's row, the way the sheet's Clear button does. A post
+      // that waits on Facebook's schedule cannot go, so nothing is left behind there.
       const cur = name => clean(row.line[col(name)]);
-      const live = /^(published|posted|scheduled)/i;
-      if (live.test(cur('FB status')) || live.test(cur('IG status')) || cur('FB post id') !== '') { settle(d, 'This post is already scheduled or published, so it was not deleted.'); notes.push('delete refused: ' + d.id); continue; }
+      // A published post may go: its row is emptied like the sheet's Clear button does, and it stays on Facebook and Instagram.
+      const out = /^(published|posted)/i, queued = /^scheduled/i;
+      const isOut = out.test(cur('FB status')) || out.test(cur('IG status')) || /^published/i.test(cur('Feedback'));
+      if (queued.test(cur('FB status')) || queued.test(cur('IG status')) || (!isOut && cur('FB post id') !== '')) { settle(d, 'This post is on the schedule, so it was not deleted. Cancel its schedule first.'); notes.push('delete refused: ' + d.id); continue; }
       if (/^(WORKING|PHOTO FOUND)/i.test(cur('Photo status'))) { notes.push('delete waits, poster being built: ' + d.id); continue; }
       const stop = head.findIndex(h => /^clear published/i.test(h));
       const end = stop > 0 ? stop : head.length;

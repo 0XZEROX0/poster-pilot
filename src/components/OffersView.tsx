@@ -2,7 +2,7 @@ import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { CardSize } from './CardSize'
 import { useState } from 'react'
 import { formatPrice, hasOffer, offerOf, priceOf, stageOf, titleOf } from '../data/logic'
-import { allowed, backend, isOwner, myId, myName } from '../data/store'
+import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { Empty, Icon, showToast } from './ui'
@@ -10,7 +10,7 @@ import { Empty, Icon, showToast } from './ui'
 /** One offer before any poster exists: what is in it, who made it, and the decision buttons. */
 function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void }) {
   const [note, setNote] = useState<string | null>(null)
-  const mine = p.createdBy === myId() && !isOwner()
+  const mine = ownOffer(p)
   const rejected = offerOf(p) === 'rejected'
   const mayDecide = allowed('offers.approve') && !mine
   const approve = () => backend.updatePost(p.id, { offer: 'Approved', offerBy: myName(), offerNote: '' }).then(() => showToast(t('Offer approved. The poster is being made.')))
@@ -39,7 +39,7 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
           <div className="actions">
             {!rejected && mayDecide && <button className="btn btn-primary" onClick={approve}><Icon name="check" size={18} />{t('Approve offer')}</button>}
             {!rejected && mayDecide && <button className="btn" onClick={() => setNote('')}>{t('Send back')}</button>}
-            {rejected && (mine || isOwner()) && <button className="btn btn-primary" onClick={again}><Icon name="redo" size={18} />{t('Send again')}</button>}
+            {rejected && (p.createdBy === myId() || isOwner()) && <button className="btn btn-primary" onClick={again}><Icon name="redo" size={18} />{t('Send again')}</button>}
             <button className="btn btn-ghost" onClick={() => onOpen(p.id)}><Icon name="edit" size={18} />{t('Edit')}</button>
           </div>
         )}
@@ -58,7 +58,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   if (!offers.length) return <Empty icon="offer" text={t('No offers are waiting. A new post shows up here until someone approves it.')} />
   const post = (id: string) => offers.find((p) => p.id === id)
   // Only a waiting offer that someone else made can be decided, the same as on its card.
-  const mine = (p: Post) => p.createdBy === myId() && !isOwner()
+  const mine = ownOffer
   const open = (id: string) => { const p = post(id); return p && offerOf(p) === 'waiting' && !mine(p) ? p : null }
   const actions: BulkAction[] = [
     ...(allowed('offers.approve') ? [

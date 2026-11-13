@@ -244,6 +244,8 @@ export const ar: Record<string, string> = {
   'Done selecting': 'إنهاء التحديد',
   'selected': 'محدد',
   'Select all': 'تحديد الكل',
+  'It stays on Facebook and Instagram.': 'سيبقى على فيسبوك وإنستجرام.',
+  'Delete from the app': 'حذف من التطبيق',
   'On the schedule': 'في الجدول',
   'Select none': 'إلغاء التحديد',
   'Selected posts': 'البوستات المحددة',

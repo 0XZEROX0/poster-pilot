@@ -62,7 +62,7 @@ service cloud.firestore {
         && (!keys.hasAny(['items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle']) || can('offers.create') || can('fix') || can('designs.approve'))
         // An offer is approved by someone other than the person who made it. The owner always may.
         && (!keys.hasAny(['offer', 'offerNote', 'offerBy'])
-          || (can('offers.approve') && (isOwner() || was.get('createdBy', '') != request.auth.uid))
+          || (can('offers.approve') && (isOwner() || isAdmin() || was.get('createdBy', '') != request.auth.uid))
           // The maker may send an offer that was sent back in again, and nothing else.
           || (can('offers.create') && was.get('createdBy', '') == request.auth.uid && was.get('offer', '') == 'Rejected'
             && now.get('offer', '') == '' && edits.get('offer', '') == '' && !keys.hasAny(['offerNote', 'offerBy'])))

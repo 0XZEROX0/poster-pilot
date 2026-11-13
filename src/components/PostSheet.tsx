@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { buildCaption, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
-import { allowed, backend, isOwner, myId, myName } from '../data/store'
+import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { problemText } from './FixView'
@@ -18,7 +18,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const problem = problemText(post)
   // Only a post that Facebook does not hold yet can be deleted from here.
   const onFacebook = /^scheduled/i.test(post.fbStatus) || post.fbPostId !== ''
-  const locked = /^scheduled/i.test(post.fbStatus) || post.fbPostId !== ''
+  const locked = !posted && (/^scheduled/i.test(post.fbStatus) || post.fbPostId !== '')
   const set = (patch: Partial<Post>) => setDraft((d) => ({ ...d, ...patch }))
   const setItem = (i: number, patch: Partial<Post['items'][number]>) => set({ items: draft.items.map((it, k) => (k === i ? { ...it, ...patch } : it)) })
 
@@ -59,7 +59,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
       {stage === 'offer' ? (
         <>
           {mayEdit && <button className="btn btn-primary" disabled={!dirty} onClick={() => save({}, 'Saved')}>{t('Save')}</button>}
-          {post.offer !== 'Rejected' && allowed('offers.approve') && (isOwner() || post.createdBy !== myId()) && (
+          {post.offer !== 'Rejected' && allowed('offers.approve') && !ownOffer(post) && (
             <button className="btn" onClick={() => save({ offer: 'Approved', offerBy: myName(), offerNote: '' }, 'Offer approved. The poster is being made.')}><Icon name="check" size={18} />{t('Approve offer')}</button>
           )}
           {post.offer === 'Rejected' && (isOwner() || post.createdBy === myId()) && (
@@ -156,13 +156,13 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             <textarea dir="auto" rows={9} readOnly={posted} value={draft.caption} onChange={(e) => set({ caption: e.target.value })} />
           </label>
           {!posted && <button className="link" onClick={() => set({ caption: buildCaption(draft, data.templates) })}>{t('Rebuild from template')}</button>}
-          {!posted && allowed('delete') && (
+          {allowed('delete') && (
             <div className="danger">
               {locked ? (
                 <span className="muted">{t('This post is already on the schedule, so it cannot be deleted here.')}</span>
               ) : confirmDelete ? (
                 <>
-                  <span>{t('Delete this post?')} {t('Its row in the sheet will be emptied.')}</span>
+                  <span>{t('Delete this post?')} {t('Its row in the sheet will be emptied.')}{posted ? ` ${t('It stays on Facebook and Instagram.')}` : ''}</span>
                   <button className="btn btn-danger" onClick={remove}>{t('Delete')}</button>
                   <button className="btn btn-ghost" onClick={() => setConfirmDelete(false)}>{t('Cancel')}</button>
                 </>
