@@ -7,7 +7,8 @@ const DB = 'projects/' + PROJECT + '/databases/(default)/documents';
 // Since 2026-11-14 the price list lives in the app (prices/{category}, edited on the Prices page); the sheet is
 // no longer read. The product list the rest of the engine uses (catalog/products) is made from it with the
 // sheet's tab names as categories and the "alone" price, exactly as the sheet columns gave them before.
-const TAB_OF = { mb: 'MB', cpu: 'CPU', vga: 'VGA', ssd: 'SSD', ram: 'RAM', cooler: 'Cooler', fans: 'Case Fans', psu: 'PSU', monitor: 'Monitor', case: 'Case', acc: 'Acc', laptop: 'Laptop', accfan: 'ACC FAN', paste: 'Thermalpaste' };
+// The accessory categories split out of Accessories on 2026-11-14 still count as 'Acc', so posts keep matching.
+const TAB_OF = { mb: 'MB', cpu: 'CPU', vga: 'VGA', ssd: 'SSD', ram: 'RAM', cooler: 'Cooler', fans: 'Case Fans', psu: 'PSU', monitor: 'Monitor', case: 'Case', acc: 'Acc', keyboard: 'Acc', mouse: 'Acc', pad: 'Acc', gamepad: 'Acc', stand: 'Acc', speaker: 'Acc', headset: 'Acc', laptop: 'Laptop', accfan: 'ACC FAN', paste: 'Thermalpaste' };
 const ORDER = Object.keys(TAB_OF);
 const cats = (($('Read price list').first().json.documents) || []).map(docOf).filter(d => d.id !== '_meta');
 cats.sort((a, b) => (ORDER.indexOf(a.id) + 1 || 99) - (ORDER.indexOf(b.id) + 1 || 99));

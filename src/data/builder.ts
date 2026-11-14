@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase/auth'
-import { addDoc, collection, deleteDoc, doc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { firestore } from './firebase'
 import type { PriceCategory, PriceItem } from './prices'
 
@@ -18,15 +18,18 @@ export const SLOTS: Slot[] = [
   { key: 'cooler', label: 'Cooler', cats: ['cooler'] },
   { key: 'fans', label: 'Case fans', cats: ['fans', 'accfan'] },
   { key: 'monitor', label: 'Monitor', cats: ['monitor'] },
-  { key: 'keyboard', label: 'Keyboard', cats: ['acc'] },
-  { key: 'mouse', label: 'Mouse', cats: ['acc'] },
+  { key: 'keyboard', label: 'Keyboard', cats: ['keyboard'] },
+  { key: 'mouse', label: 'Mouse', cats: ['mouse'] },
+  { key: 'pad', label: 'Mouse pad', cats: ['pad'] },
+  { key: 'speaker', label: 'Speakers', cats: ['speaker'] },
+  { key: 'headset', label: 'Headset', cats: ['headset'] },
   { key: 'extra', label: 'Extra', cats: [] },
   { key: 'paste', label: 'Thermalpaste', cats: ['paste'] },
 ]
-export const slotOf = (key: string) => SLOTS.find((s) => s.key === key) ?? SLOTS[SLOTS.length - 2]
+export const slotOf = (key: string) => SLOTS.find((s) => s.key === key) ?? SLOTS.find((s) => s.key === 'extra')!
 
-/** The rows a new build starts with: one of each, like the sheet. Case fans only when asked for. */
-export const START_SLOTS = SLOTS.filter((s) => s.key !== 'fans').map((s) => s.key)
+/** The rows a new build starts with: one of each, like the sheet. Case fans, mouse pad, speakers and headset only when asked for. */
+export const START_SLOTS = SLOTS.filter((s) => !['fans', 'pad', 'speaker', 'headset'].includes(s.key)).map((s) => s.key)
 
 /**
  * One row of a build. The product is remembered by category and id, with a copy of its name and
@@ -113,10 +116,11 @@ export const SHOP = {
 
 // ---------- Saved quotes ----------
 
-export type SavedQuote = Build & { id: string; at: number; byName: string; total: number }
+export type SavedQuote = Build & { id: string; at: number; by: string; byName: string; total: number }
 
 export interface QuoteBackend {
-  list(max: number): Promise<SavedQuote[]>
+  /** Newest first. `everyone` lists all people's quotes (needs 'See all saved quotes'); otherwise only one's own. */
+  list(max: number, everyone: boolean): Promise<SavedQuote[]>
   save(b: Build, total: number): Promise<string>
   remove(id: string): Promise<void>
 }
@@ -137,6 +141,7 @@ const asQuote = (id: string, d: Record<string, unknown>): SavedQuote => ({
   extra: Number(d.extra) || 0,
   buildDiscount: d.buildDiscount !== false,
   at: millis(d.at),
+  by: String(d.by ?? ''),
   byName: String(d.byName ?? ''),
   total: Number(d.total) || 0,
 })
@@ -144,9 +149,15 @@ const asQuote = (id: string, d: Record<string, unknown>): SavedQuote => ({
 function firestoreQuotes(): QuoteBackend {
   const db = firestore!
   return {
-    async list(max) {
-      const snap = await getDocs(query(collection(db, 'quotes'), orderBy('at', 'desc'), limit(max)))
-      return snap.docs.map((d) => asQuote(d.id, d.data()))
+    async list(max, everyone) {
+      if (everyone) {
+        const snap = await getDocs(query(collection(db, 'quotes'), orderBy('at', 'desc'), limit(max)))
+        return snap.docs.map((d) => asQuote(d.id, d.data()))
+      }
+      // One's own quotes: few, so they are sorted here (sorting in the query would need an extra index).
+      const uid = getAuth(db.app).currentUser?.uid ?? ''
+      const snap = await getDocs(query(collection(db, 'quotes'), where('by', '==', uid)))
+      return snap.docs.map((d) => asQuote(d.id, d.data())).sort((a, b) => b.at - a.at).slice(0, max)
     },
     async save(b, total) {
       const me = getAuth(db.app).currentUser
@@ -187,7 +198,7 @@ function localQuotes(): QuoteBackend {
     async save(b, total) {
       const id = b.id ?? `q${Date.now()}`
       const list = load().filter((q) => q.id !== id)
-      store([{ ...asQuote(id, clean(b)), id, at: Date.now(), byName: 'You', total }, ...list])
+      store([{ ...asQuote(id, clean(b)), id, at: Date.now(), by: 'demo-you', byName: 'You', total }, ...list])
       return id
     },
     async remove(id) {

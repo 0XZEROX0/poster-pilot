@@ -251,7 +251,9 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
   const specFields = SPEC_FIELDS[cat] ?? []
   // Suggestions for specs and companies come from what the list already uses.
   const known = (key: string) => [...new Set(cats.flatMap((c) => c.items.map((i) => i.specs?.[key] ?? '')).filter(Boolean))].sort()
-  const companies = [...new Set((cats.find((c) => c.id === cat)?.items ?? []).map((i) => i.company).filter(Boolean))].sort()
+  // Companies of this category first, then the ones used elsewhere in the list.
+  const companies = [...new Set((cats.find((c) => c.id === cat)?.items ?? []).map((i) => i.company.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const otherCompanies = [...new Set(cats.flatMap((c) => c.items.map((i) => i.company.trim())).filter((c) => c && !companies.includes(c)))].sort((a, b) => a.localeCompare(b))
 
   const save = async () => {
     const nums = [inb, alone, warranty].map(parseMoney)
@@ -308,15 +310,11 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
           <label><span>{t('Alone')}</span><input inputMode="numeric" value={alone} readOnly={ro} onChange={(e) => setAlone(e.target.value)} /></label>
           <label><span>{t('Warranty (years)')}</span><input inputMode="numeric" value={warranty} readOnly={ro} onChange={(e) => setWarranty(e.target.value)} /></label>
         </div>
-        <label><span>{t('Company')}</span><input dir="auto" list="pp-companies" value={company} readOnly={ro} onChange={(e) => setCompany(e.target.value)} /></label>
-        <datalist id="pp-companies">{companies.map((c) => <option key={c} value={c} />)}</datalist>
+        <ChoiceField label={t('Company')} value={company} options={companies} more={otherCompanies} moreLabel={t('Other companies')} readOnly={ro} onChange={setCompany} />
         {specFields.length > 0 && (
           <div className="form-row two">
             {specFields.map((k) => (
-              <label key={k}><span>{t(SPEC_LABEL[k])}</span>
-                <input list={`pp-spec-${k}`} value={specs[k] ?? ''} readOnly={ro} onChange={(e) => setSpecs({ ...specs, [k]: e.target.value })} />
-                <datalist id={`pp-spec-${k}`}>{known(k).map((v) => <option key={v} value={v} />)}</datalist>
-              </label>
+              <ChoiceField key={k} label={t(SPEC_LABEL[k])} value={specs[k] ?? ''} options={known(k)} readOnly={ro} onChange={(v) => setSpecs({ ...specs, [k]: v })} />
             ))}
           </div>
         )}
@@ -333,6 +331,36 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
         </section>
       )}
     </Sheet>
+  )
+}
+
+/**
+ * A dropdown of the values the price list already uses (so "AM5" is never typed as "am 5"), with
+ * "Add new…" to type one that is not there yet. It is in the list once a product is saved with it.
+ */
+function ChoiceField({ label, value, options, more = [], moreLabel, readOnly, onChange }: { label: string; value: string; options: string[]; more?: string[]; moreLabel?: string; readOnly?: boolean; onChange: (v: string) => void }) {
+  const known = options.includes(value) || more.includes(value)
+  const [typing, setTyping] = useState(false)
+  const NEW = '\u0000new'
+  if (typing || (value && !known)) {
+    return (
+      <label><span>{label}</span>
+        <span className="choice-new">
+          <input dir="auto" value={value} readOnly={readOnly} autoFocus={typing} placeholder={t('Add new…')} onChange={(e) => onChange(e.target.value)} />
+          {!readOnly && (options.length > 0 || more.length > 0) && <button type="button" className="link" onClick={() => { setTyping(false); if (!known) onChange('') }}>{t('Back to the list')}</button>}
+        </span>
+      </label>
+    )
+  }
+  return (
+    <label><span>{label}</span>
+      <select value={value} disabled={readOnly} onChange={(e) => (e.target.value === NEW ? (setTyping(true), onChange('')) : onChange(e.target.value))}>
+        <option value="">—</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        {more.length > 0 && <optgroup label={moreLabel}>{more.map((o) => <option key={o} value={o}>{o}</option>)}</optgroup>}
+        {!readOnly && <option value={NEW}>{t('Add new…')}</option>}
+      </select>
+    </label>
   )
 }
 

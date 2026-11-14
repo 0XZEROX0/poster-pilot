@@ -674,3 +674,8 @@ button.stock:hover { filter: brightness(1.15); }
   .quote-print .q-link { color: #1155cc; text-decoration: underline; }
   .quote-print .q-foot { font-size: 13pt; }
 }
+.saved-by { font-size: 0.75rem; font-weight: 700; color: var(--accent); }
+.choice-new { display: flex; align-items: center; gap: 8px; }
+.choice-new input { flex: 1; min-width: 0; font-size: 1rem; }
+.choice-new .link { white-space: nowrap; }
+.clear-confirm { display: inline-flex; gap: 6px; }
