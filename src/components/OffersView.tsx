@@ -102,7 +102,7 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
 
 type Order = 'list' | 'new' | 'old' | 'high' | 'low'
 const ORDERS: { id: Order; label: string }[] = [
-  { id: 'list', label: 'Sheet order' }, { id: 'new', label: 'Newest first' }, { id: 'old', label: 'Oldest first' },
+  { id: 'list', label: 'List order' }, { id: 'new', label: 'Newest first' }, { id: 'old', label: 'Oldest first' },
   { id: 'high', label: 'Price: high to low' }, { id: 'low', label: 'Price: low to high' },
 ]
 const ORDER_KEY = 'posterpilot.offerOrder'
@@ -145,7 +145,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
     }
   }
   const found = all.filter((p) => matchesOffer(p, query))
-  // A price search in the sheet order shows the closest price first.
+  // A price search in the list order shows the closest price first.
   const want = priceQuery(query)
   const offers = want !== null && order === 'list'
     ? found.slice().sort((a, b) => Math.abs(toNumber(priceOf(a)) - want) - Math.abs(toNumber(priceOf(b)) - want))

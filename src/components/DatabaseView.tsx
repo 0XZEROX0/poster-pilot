@@ -52,7 +52,7 @@ export function DatabaseView({ data, onOpen }: { data: Data; onOpen: (id: string
         <CardSize />
       </div>
       {gone}
-      {actions.length > 0 && <p className="hint">{t('Deleting removes the post from the app, empties its row in the sheet and moves its poster to the Google Drive bin. Facebook and Instagram are not touched.')}</p>}
+      {actions.length > 0 && <p className="hint">{t('Deleting removes the post from the app and moves its poster to the Google Drive bin. Facebook and Instagram are not touched.')}</p>}
       {shown.length === 0 ? <Empty icon="search" text={t('Nothing matches.')} /> : (
         <div className="cards cards-sm">{shown.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><PostCard post={p} onOpen={onOpen} /></Pick>)}</div>
       )}
