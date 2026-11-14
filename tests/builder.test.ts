@@ -31,3 +31,14 @@ describe('misfit', () => {
     expect(misfit('cpu', P('x'), [{ cat: 'mb', item: mb }])).toBe('')
   })
 })
+
+describe('complete', () => {
+  it('puts back one row of every standard kind, in order, keeping extra rows', async () => {
+    const { complete, START_SLOTS } = await import('../src/data/builder')
+    const out = complete([L({ slot: 'ssd', name: 'a' }), L({ slot: 'ssd', name: 'b' }), L({ slot: 'cpu', name: 'c' })])
+    expect(out.filter((l) => l.slot === 'ssd').map((l) => l.name)).toEqual(['a', 'b'])
+    expect(out.length).toBe(START_SLOTS.length + 1)
+    expect(out[0].slot).toBe('mb')
+    expect(out[1]).toMatchObject({ slot: 'cpu', name: 'c' })
+  })
+})

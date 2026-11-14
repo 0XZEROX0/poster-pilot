@@ -38,6 +38,12 @@ export type Build = { id?: string; customer: string; sales: string; lines: Line[
 
 export const lineId = () => Math.random().toString(36).slice(2, 10)
 export const emptyLine = (slot: string): Line => ({ id: lineId(), slot, name: '', qty: 1, warranty: null, alone: null, in: null })
+/** Puts back an empty row for every kind a build starts with that has none, in the sheet's order. */
+export function complete(lines: Line[]): Line[] {
+  const rank = (slot: string) => SLOTS.findIndex((s) => s.key === slot)
+  const missing = START_SLOTS.filter((k) => !lines.some((l) => l.slot === k)).map(emptyLine)
+  return [...lines, ...missing].map((l, i) => ({ l, i })).sort((a, b) => rank(a.l.slot) - rank(b.l.slot) || a.i - b.i).map((x) => x.l)
+}
 export const newBuild = (sales: string): Build => ({ customer: '', sales, lines: START_SLOTS.map(emptyLine), extra: 0, buildDiscount: true })
 
 /** The product a line points at, as it is in the price list now. */
