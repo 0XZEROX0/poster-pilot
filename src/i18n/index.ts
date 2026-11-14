@@ -40,4 +40,7 @@ export const useLang = () => useSyncExternalStore((l) => (listeners.add(l), () =
 /** The text in the current language. English is the key. */
 export const t = (english: string) => (lang === 'ar' ? (ar[english] ?? english) : english)
 
+/** Like t, with %name filled in from `vars`. */
+export const tn = (english: string, vars: Record<string, string | number>) => t(english).replace(/%([a-z]+)/g, (m, k: string) => (k in vars ? String(vars[k]) : m))
+
 export const locale = () => (lang === 'ar' ? 'ar-EG' : 'en-GB')

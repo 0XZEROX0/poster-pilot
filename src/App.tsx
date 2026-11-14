@@ -6,6 +6,7 @@ import { JoinScreen } from './components/JoinScreen'
 import { NewPostSheet } from './components/NewPostSheet'
 import { OffersView } from './components/OffersView'
 import { PostedView } from './components/PostedView'
+import { PricesView } from './components/PricesView'
 import { PostSheet } from './components/PostSheet'
 import { ReviewView } from './components/ReviewView'
 import { agoLabel, SettingsSheet } from './components/SettingsSheet'
@@ -22,6 +23,7 @@ const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix
 
 const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'prices', label: 'Prices', icon: 'prices' },
   { id: 'offers', label: 'Offers', icon: 'offer' },
   { id: 'review', label: 'Review', icon: 'review' },
   { id: 'fix', label: 'Fix', icon: 'fix' },
@@ -41,7 +43,7 @@ export default function App() {
   useLang()
   const session = useSession()
   const [wanted, setTab] = useState<Tab>(tabFromHash)
-  const TABS = ALL_TABS.filter((x) => x.id === 'home' || seesPage(x.id)).filter((x) => (x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
+  const TABS = ALL_TABS.filter((x) => x.id === 'home' || x.id === 'prices' || seesPage(x.id)).filter((x) => (x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -117,6 +119,8 @@ export default function App() {
     <div className="splash">{t('Loading…')}</div>
   ) : tab === 'home' ? (
     <HomeView data={data} go={go} onOpen={open} desktop={desktop} />
+  ) : tab === 'prices' ? (
+    <PricesView />
   ) : tab === 'offers' ? (
     <OffersView data={data} onOpen={open} />
   ) : tab === 'review' ? (
