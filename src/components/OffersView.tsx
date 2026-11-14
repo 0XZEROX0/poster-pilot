@@ -1,11 +1,11 @@
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { CardSize } from './CardSize'
 import { useState } from 'react'
-import { formatPrice, hasOffer, marketOf, offerOf, priceOf, stageOf, titleOf } from '../data/logic'
+import { formatPrice, hasOffer, marketOf, matchesSearch, offerOf, priceOf, stageOf, titleOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, MarketHit, Post } from '../data/types'
 import { t } from '../i18n'
-import { Empty, Icon, showToast } from './ui'
+import { Empty, Icon, SearchBox, showToast } from './ui'
 
 const egp = (n: number) => `${n.toLocaleString('en-US')} EGP`
 const stockOf = (h: MarketHit) => (h.inStock === false ? t('out of stock') : h.inStock === null ? t('stock unknown') : '')
@@ -102,11 +102,14 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
 
 /** Offers waiting for approval, and the ones that were sent back to their maker. */
 export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) => void }) {
-  const offers = data.posts.filter((p) => stageOf(p) === 'offer')
+  const [query, setQuery] = useState('')
+  const all = data.posts.filter((p) => stageOf(p) === 'offer')
+  // Search by item name (also category, brand and style), like the other pages.
+  const offers = all.filter((p) => matchesSearch(p, query))
   const waiting = offers.filter((p) => offerOf(p) === 'waiting')
   const back = offers.filter((p) => offerOf(p) === 'rejected')
   const bulk = useBulk(offers.map((p) => p.id))
-  if (!offers.length) return <Empty icon="offer" text={t('No offers are waiting. A new post shows up here until someone approves it.')} />
+  if (!all.length) return <Empty icon="offer" text={t('No offers are waiting. A new post shows up here until someone approves it.')} />
   const post = (id: string) => offers.find((p) => p.id === id)
   // Only a waiting offer that someone else made can be decided, the same as on its card.
   const mine = ownOffer
@@ -124,6 +127,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   return (
     <div className="view">
       <div className="review-bar tools">
+        <SearchBox value={query} onChange={setQuery} />
         {actions.length > 0 && <BulkToggle bulk={bulk} />}
         <CardSize />
       </div>
@@ -139,6 +143,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
           {cards(back)}
         </section>
       )}
+      {offers.length === 0 && <Empty icon="search" text={t('Nothing matches.')} />}
       <BulkBar bulk={bulk} actions={actions} />
     </div>
   )
