@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCaption, hasOffer, marketKey, marketOf, nextFreeSlot, previewUrl, problemOf, stageOf, whenOf, duplicatesOf, matchesSearch, matchesOffer, priceQuery } from '../src/data/logic'
+import { buildCaption, hasOffer, marketKey, marketOf, nextFreeSlot, previewUrl, problemOf, stageOf, whenOf, duplicatesOf, matchesSearch, matchesOffer, priceQuery, choicesFor } from '../src/data/logic'
 import type { Post } from '../src/data/types'
 
 const post = (over: Partial<Post> = {}): Post => ({
@@ -200,5 +200,19 @@ describe('offer search by price', () => {
     expect(matchesOffer(p, '20000')).toBe(false)
     expect(matchesOffer(p, 'prime b650')).toBe(true)
     expect(matchesOffer(post({ items: [{ category: 'GPU', name: 'RTX 5060', manualPhoto: '', nextPhoto: false }], priceAfter: '30,000' }), '5060')).toBe(true)
+  })
+})
+
+describe('choicesFor', () => {
+  const photos = [{ src: 'https://s/a.png', thumb: 'https://s/a-300.png' }]
+  const choices = (at: number, name = 'asus prime b650m-a ii csm') => ({ checkedAt: at, asked: at - 1000, items: [{ name, product: 'ASUS PRIME B650M-A II', page: '', photos }] })
+  it('gives the website photos found for the same item', () => {
+    expect(choicesFor(post({ photoChoices: choices(1_000_000) }), 0, 1_000_000 + 60_000)?.photos).toEqual(photos)
+  })
+  it('ignores photos found for another name, for a missing item, or more than 6 hours ago', () => {
+    expect(choicesFor(post({ photoChoices: choices(1_000_000, 'Other board') }), 0, 1_000_000)).toBeNull()
+    expect(choicesFor(post({ photoChoices: choices(1_000_000) }), 1, 1_000_000)).toBeNull()
+    expect(choicesFor(post({ photoChoices: choices(1_000_000) }), 0, 1_000_000 + 7 * 3600_000)).toBeNull()
+    expect(choicesFor(post(), 0)).toBeNull()
   })
 })

@@ -59,7 +59,28 @@ export type Post = {
   market?: Market
   /** App only: when someone pressed Check again. */
   marketAsk?: number
+  /** App only: when someone asked for the website photos of the items. The engine removes it when it has answered. */
+  photoAsk?: number
+  /** Engine only: every photo the website has for each item, for the photo picker. */
+  photoChoices?: PhotoChoices
 }
+
+/** One photo of a product on the website: the full photo and a small one for the picker. */
+export type WebPhoto = { src: string; thumb: string }
+
+/** What the engine found on the website for one item: the product it matched and all its photos. Empty when there is none. */
+export type PhotoChoiceItem = {
+  name: string
+  product: string
+  page: string
+  photos: WebPhoto[]
+  /** When the website has no product that is this exact item: the closest products, so a photo can still be chosen by eye. */
+  near?: { product: string; page: string; photos: WebPhoto[] }[]
+  error?: string
+}
+
+/** The website photos of a post's items, in the same order as its items. `asked` is the photoAsk it answers. */
+export type PhotoChoices = { checkedAt: number; asked: number; items: PhotoChoiceItem[] }
 
 /** One competitor listing the engine found for an item. */
 export type MarketHit = { shop: string; price: number; inStock: boolean | null; title: string; url: string; note?: string }

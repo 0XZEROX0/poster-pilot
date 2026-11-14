@@ -97,6 +97,8 @@ export function describe(before: Post | undefined, patch: Partial<Post>): Omit<L
   if (moved) return { act: date && time ? 'schedule.set' : 'schedule.cleared', ...whenNote, ...extra }
   if (patch.ignoredProblem && patch.ignoredProblem !== before?.ignoredProblem) return { act: 'problem.ignored', note: short(patch.ignoredProblem, 300) }
   if (patch.marketAsk) return { act: 'prices.recheck' }
+  // Looking at the website photos changes nothing yet; the photo that is then chosen is logged as an edit.
+  if (patch.photoAsk) return null
   if (changes.length) return { act: 'edited', changes }
   return null
 }

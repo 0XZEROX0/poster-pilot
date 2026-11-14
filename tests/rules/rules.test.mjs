@@ -137,6 +137,7 @@ await no('role with an unknown page', setDoc(doc(boss, 'roles/pagey'), { name: '
   await no('viewer approves an offer', updateDoc(doc(vw, 'posts/z1'), { offer: 'Approved', 'appEdits.offer': 'Approved' }))
   await no('viewer sends an offer back', updateDoc(doc(vw, 'posts/z1'), { offer: 'Rejected', offerNote: 'x' }))
   await no('viewer changes any other field', updateDoc(doc(vw, 'posts/z1'), { marketAsk: 1 }))
+  await no('viewer asks for the website photos', updateDoc(doc(vw, 'posts/z1'), { photoAsk: 1 }))
   await no('viewer creates an offer', setDoc(doc(vw, 'posts/z8'), { items: [], createdBy: 'u-view' }))
   await ok('owner lists every post', getDocs(collection(boss, 'posts')))
 }
@@ -158,6 +159,8 @@ await no('maker approves a design', updateDoc(doc(maker, 'posts/p2'), { feedback
 await no('maker approves through the sheet copy only', updateDoc(doc(maker, 'posts/p2'), { 'appEdits.feedback': 'Done', appDirty: true }))
 await no('maker hides Done behind a Redo', updateDoc(doc(maker, 'posts/p2'), { feedback: 'Redo', 'appEdits.feedback': 'Done' }))
 await ok('maker asks for a redo', updateDoc(doc(maker, 'posts/p2'), { feedback: 'Redo', 'appEdits.feedback': 'Redo', retriedAt: 1 }))
+await ok('maker asks for the website photos', updateDoc(doc(maker, 'posts/p2'), { photoAsk: 5 }))
+await no('maker writes website photos themselves', updateDoc(doc(maker, 'posts/p2'), { photoChoices: { checkedAt: 1, asked: 1, items: [] } }))
 await no('maker approves own offer', updateDoc(doc(maker, 'posts/p2'), { offer: 'Approved' }))
 await no('maker schedules', updateDoc(doc(maker, 'posts/p2'), { postDate: '2026-12-02', 'appEdits.postDate': '2026-12-02' }))
 await no('maker schedules through the sheet copy only', updateDoc(doc(maker, 'posts/p2'), { 'appEdits.postTime': '18:00' }))

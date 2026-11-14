@@ -83,6 +83,8 @@ service cloud.firestore {
         && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', '')) && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''))))
         && (!keys.hasAny(['appDeleted']) || can('delete'))
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
+        // Asking for the website photos of the items, for the photo picker.
+        && (!keys.hasAny(['photoAsk']) || can('offers.create') || can('fix') || can('designs.approve'))
         && (!keys.hasAny(['items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle']) || can('offers.create') || can('fix') || can('designs.approve'))
         // An offer is approved by someone other than the person who made it. The owner always may.
         && (!keys.hasAny(['offer', 'offerNote', 'offerBy'])
@@ -91,7 +93,7 @@ service cloud.firestore {
           || (can('offers.create') && was.get('createdBy', '') == request.auth.uid && was.get('offer', '') == 'Rejected'
             && now.get('offer', '') == '' && edits.get('offer', '') == '' && !keys.hasAny(['offerNote', 'offerBy'])))
         // Competitor prices, where a post stands, and what Facebook and the poster maker report are written by the engine only.
-        && !keys.hasAny(['createdBy', 'createdByName', 'market', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew']);
+        && !keys.hasAny(['createdBy', 'createdByName', 'market', 'photoChoices', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may
     // walk in once without a request. Admins can only shorten it.
@@ -212,7 +214,7 @@ service cloud.firestore {
         && request.resource.data.get('postDate', '') == '' && request.resource.data.get('postTime', '') == ''
         && request.resource.data.get('fbStatus', '') == '' && request.resource.data.get('igStatus', '') == '' && request.resource.data.get('fbPostId', '') == ''
         && request.resource.data.get('scheduledFor', '') == '' && request.resource.data.get('posterUrl', '') == ''
-        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market', 'appDeleted', 'ignoredProblem']);
+        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market', 'photoChoices', 'appDeleted', 'ignoredProblem']);
       allow update: if canAct() && postChangeOk();
     }
     // The history of every post. The app adds a line with each change, in the same step, under the

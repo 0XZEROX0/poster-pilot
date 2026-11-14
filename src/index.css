@@ -751,3 +751,15 @@ button.stock:hover { filter: brightness(1.15); }
   .set-tabs button { flex: 1 1 auto; padding: 0 8px; font-size: 0.85rem; }
   .set-tabs button .icon { display: none; }
 }
+
+/* Website photo picker (post editor): every photo the website has for an item. */
+.photo-picker { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.photo-picker .hint a { color: inherit; text-decoration: underline; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; width: 100%; }
+.photo-pick { position: relative; aspect-ratio: 1; padding: 4px; border: 2px solid var(--border); border-radius: 12px; background: #fff; cursor: pointer; overflow: hidden; }
+.photo-pick img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.photo-pick.current { border-color: var(--text-2); }
+.photo-pick.chosen { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.photo-tag { position: absolute; inset-inline-start: 4px; bottom: 4px; font-size: 0.6875rem; padding: 1px 6px; border-radius: 6px; background: var(--text); color: var(--surface); }
+.photo-near { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.photo-actions { display: flex; gap: 8px; flex-wrap: wrap; }

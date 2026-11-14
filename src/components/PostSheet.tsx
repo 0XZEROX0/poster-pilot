@@ -5,6 +5,7 @@ import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { problemText } from './FixView'
 import { PostHistory } from './History'
+import { PhotoPicker } from './PhotoPicker'
 import { Poster } from './Poster'
 import { StageChip } from './PostRow'
 import { Sheet } from './Sheet'
@@ -14,6 +15,7 @@ import { Icon, showToast } from './ui'
 export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onClose: () => void }) {
   const [draft, setDraft] = useState(post)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [busy, setBusy] = useState(false)
   const stage = stageOf(post)
   const posted = stage === 'posted'
   const problem = problemText(post)
@@ -42,6 +44,17 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     await backend.removePost(post.id)
     showToast(t('Deleted'))
     onClose()
+  }
+  /** The website photo chosen in the picker becomes the item's photo link, and the poster is made again with it. */
+  async function choosePhoto(i: number, src: string) {
+    setBusy(true)
+    const items = draft.items.map((it, k) => (k === i ? { ...it, manualPhoto: src, nextPhoto: false } : it))
+    try {
+      if (stage === 'offer') await save({ items }, 'Photo saved. The poster will use it.')
+      else await save({ items, feedback: 'Redo' }, 'The poster is being made again with this photo')
+    } finally {
+      setBusy(false)
+    }
   }
   const useNextSlot = () => {
     const slot = nextFreeSlot(data.posts.filter((p) => p.id !== post.id))
@@ -122,6 +135,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
                 <input type="checkbox" checked={it.nextPhoto} onChange={(e) => setItem(i, { nextPhoto: e.target.checked })} />
                 <span>{t('Try the next photo')}</span>
               </label>
+              {mayEdit && <PhotoPicker post={post} index={i} current={photoInUse(post, i)} busy={busy} onPick={(src) => choosePhoto(i, src)} />}
             </fieldset>
           ))}
           {!posted && (
@@ -177,4 +191,12 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
       </div>
     </Sheet>
   )
+}
+
+/** The photo link the poster used for item `i`: the person's own link, else the one the engine wrote (one line per item). */
+function photoInUse(post: Post, i: number) {
+  const own = post.items[i]?.manualPhoto
+  if (own) return own
+  const lines = String((post as Post & { ex?: { productImage?: string } }).ex?.productImage ?? '').split('\n')
+  return (lines[i] ?? '').trim()
 }

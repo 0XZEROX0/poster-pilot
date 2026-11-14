@@ -1,4 +1,4 @@
-import type { CaptionTemplate, Post } from './types'
+import type { CaptionTemplate, PhotoChoiceItem, Post } from './types'
 
 /** Where a post is in its life. Each post is in exactly one stage. */
 export type Stage = 'offer' | 'building' | 'fix' | 'review' | 'scheduled' | 'posted' | 'skipped'
@@ -258,4 +258,17 @@ export function matchesOffer(p: Post, query: string): boolean {
   if (matchesSearch(p, query)) return true
   const want = priceQuery(query)
   return want !== null && Math.abs(toNumber(priceOf(p)) - want) <= PRICE_RANGE
+}
+
+/** Website photos older than this are looked up again when the photo picker opens. */
+const PHOTOS_FRESH = 6 * 3600 * 1000
+
+/** The website photos the engine found for item `index`, when they are for the same item name and recent enough. */
+export function choicesFor(post: Post, index: number, now = Date.now()): PhotoChoiceItem | null {
+  const c = post.photoChoices
+  const it = c?.items?.[index]
+  const name = post.items[index]?.name ?? ''
+  if (!c || !it || it.name.trim().toLowerCase() !== name.trim().toLowerCase()) return null
+  if (now - c.checkedAt > PHOTOS_FRESH) return null
+  return it
 }

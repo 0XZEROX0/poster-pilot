@@ -1,5 +1,5 @@
 import type { Backend } from './backend'
-import { DEMO_POSTER, demoData } from './demo'
+import { DEMO_POSTER, demoData, demoPhotoChoices } from './demo'
 import { describe, describeDelete, describeNew } from './history'
 import { buildCaption } from './logic'
 import type { Data, LogEntry, Post } from './types'
@@ -108,7 +108,11 @@ export function createLocalBackend(): Backend {
       }
       if (patch.feedback === 'Redo') Object.assign(next, { photoStatus: '', posterUrl: '' })
       patchPost(id, next)
-      engine(id)
+      if (patch.photoAsk) setTimeout(() => {
+        const p = data.posts.find((x) => x.id === id)
+        if (p) patchPost(id, { photoAsk: undefined, photoChoices: demoPhotoChoices(p, patch.photoAsk ?? 0) })
+      }, 1500)
+      else engine(id)
     },
     async removePost(id) {
       note(id, describeDelete(data.posts.find((p) => p.id === id)))
