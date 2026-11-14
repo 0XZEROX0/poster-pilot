@@ -167,6 +167,13 @@ describe('competitor prices', () => {
   it('gives no total when an item was not found', () => {
     expect(marketOf(offer('19000', [10000, null]))).toMatchObject({ state: 'done', tone: 'partial', found: 1, count: 2 })
   })
+  it('never counts an out-of-stock price, so an old price cannot turn the offer red', () => {
+    const p = offer('24999', [6499, 16250])
+    p.market!.items[1].best!.inStock = false
+    expect(marketOf(p)).toMatchObject({ state: 'done', tone: 'partial', found: 1, count: 2 })
+    p.market!.items[1].best!.inStock = null
+    expect(marketOf(p)).toMatchObject({ tone: 'high', total: 22749 })
+  })
   it('checks again when the price changes or someone asks', () => {
     const p = offer('19000', [10000, 10000])
     expect(marketOf({ ...p, priceAfter: '18000' }).state).toBe('checking')

@@ -106,8 +106,10 @@ export function marketOf(p: Post): MarketView {
   if (!m || m.key !== marketKey(p) || (p.marketAsk ?? 0) > m.checkedAt) return { state: 'checking' }
   if (m.error) return { state: 'error', error: m.error, checkedAt: m.checkedAt }
   const ours = toNumber(priceOf(p))
-  const found = m.items.filter((it) => it.best).length
-  const total = m.items.reduce((sum, it) => sum + (it.best?.price ?? 0), 0)
+  // Only prices you can buy count: an out-of-stock price may be old, so it never makes the total (or the warning).
+  const priced = m.items.map((it) => (it.best && it.best.inStock !== false ? it.best : null))
+  const found = priced.filter(Boolean).length
+  const total = priced.reduce((sum, h) => sum + (h?.price ?? 0), 0)
   const count = m.items.length
   const tone = found < count || !total ? 'partial' : ours <= total ? 'good' : (ours - total) / total <= MARKET_CLOSE ? 'close' : 'high'
   return { state: 'done', checkedAt: m.checkedAt, ours, total, found, count, tone }
