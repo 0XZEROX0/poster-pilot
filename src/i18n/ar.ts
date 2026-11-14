@@ -328,4 +328,10 @@ export const ar: Record<string, string> = {
   'Removed from the sheet': 'أُزيل من الشيت',
   'Items': 'المنتجات',
   'Photos': 'الصور',
+  'Sort': 'ترتيب',
+  'Sheet order': 'ترتيب الشيت',
+  'Newest first': 'الأحدث أولًا',
+  'Oldest first': 'الأقدم أولًا',
+  'Price: high to low': 'السعر: من الأعلى للأقل',
+  'Price: low to high': 'السعر: من الأقل للأعلى',
 }

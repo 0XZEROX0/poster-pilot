@@ -502,3 +502,9 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .log-change s { opacity: 0.7; }
 .gone-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .gone-row { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
+
+/* Offers: the offer price stands out, the old price is small beside it. Sorting control. */
+.offer-price { font-size: 0.875rem; }
+.offer-price b { font-size: 1.375rem; font-weight: 800; color: var(--text); letter-spacing: -0.01em; }
+.offer-price s { color: var(--muted); }
+.sort-pick { min-height: 40px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); max-width: 190px; }
