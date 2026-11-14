@@ -10,6 +10,16 @@ const PAGE = 120
 
 const fail = (e: unknown) => showToast((e as { code?: string }).code === 'permission-denied' ? t('Your role does not allow this.') : t('Could not save. Check the connection.'))
 
+const VIEW_KEY = 'posterpilot.prices.view'
+type ViewMode = 'list' | 'grid'
+const savedView = (): ViewMode => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'grid' ? 'grid' : 'list'
+  } catch {
+    return 'list'
+  }
+}
+
 /** The price list: find a product, change a price where it is shown, and see who changed what. */
 export function PricesView() {
   const { loaded, cats, error } = usePrices()
@@ -17,6 +27,7 @@ export function PricesView() {
   const [cat, setCat] = useState('')
   const [search, setSearch] = useState('')
   const [hidden, setHidden] = useState(false)
+  const [view, setView] = useState<ViewMode>(savedView)
   // "Show all" counts for the list it was pressed on; another category or search starts short again.
   const [allFor, setAllFor] = useState<string | null>(null)
   const all = allFor === `${cat}|${search}`
@@ -34,36 +45,73 @@ export function PricesView() {
   if (error) return <p className="banner banner-bad" dir="ltr">{error}</p>
   if (!cats.length) return <div className="view"><Empty icon="prices" text={t('The price list has not been moved into the app yet.')} /></div>
 
+  const pickView = (next: ViewMode) => {
+    setView(next)
+    try {
+      localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // No storage: the choice lasts for this visit.
+    }
+  }
   const shown = all ? rows : rows.slice(0, PAGE)
+  // A heading where the category (on "All") or the group (AIR, Liquid…) changes.
+  const heads = shown.map(({ cat: c, item }, i) => {
+    const prev = shown[i - 1]
+    const catHead = !current && prev?.cat.id !== c.id ? c.name : ''
+    const groupHead = item.group && (catHead || item.group !== prev?.item.group) ? item.group : ''
+    return { catHead, groupHead }
+  })
   const hiddenCount = (current ? [current] : cats).reduce((n, c) => n + c.items.filter((i) => i.hidden).length, 0)
+  const total = cats.reduce((n, c) => n + c.items.length, 0)
   return (
     <div className="view prices">
-      <div className="filters" role="group" aria-label={t('Category')}>
-        <button className={cat === '' ? 'filter on' : 'filter'} aria-pressed={cat === ''} onClick={() => setCat('')}>{t('All')} <i>{cats.reduce((n, c) => n + c.items.length, 0)}</i></button>
-        {cats.map((c) => (
-          <button key={c.id} className={cat === c.id ? 'filter on' : 'filter'} aria-pressed={cat === c.id} onClick={() => setCat(c.id)}>{c.name} <i>{c.items.length}</i></button>
-        ))}
-      </div>
-      <div className="review-bar tools">
-        <SearchBox value={search} onChange={setSearch} placeholder={t('Search name, company, socket…')} />
-        <button className="link" onClick={() => setChanges(true)}><Icon name="clock" size={16} />{t('Changes')}</button>
-        {canEdit && current && <button className="link" onClick={() => setBulk(true)}><Icon name="edit" size={16} />{t('Change all by %')}</button>}
-        {canEdit && <button className="btn btn-primary" onClick={() => setOpen({ cat: current?.id ?? cats[0].id, item: null })}><Icon name="plus" size={18} />{t('Product')}</button>}
-      </div>
-      {hiddenCount > 0 && (
-        <label className="check-line"><input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> {t('Show hidden products')} ({hiddenCount})</label>
-      )}
-      {rows.length === 0 ? <Empty icon="search" text={t('Nothing matches.')} /> : (
-        <div className="list price-list">
-          <div className="price-row price-head" aria-hidden="true">
-            <span>{t('Product')}</span><span>{t('In build')}</span><span>{t('Alone')}</span>
-          </div>
-          {shown.map(({ cat: c, item }, i) => (
-            <PriceRow key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} showCat={!current} group={item.group && item.group !== shown[i - 1]?.item.group ? item.group : ''} onOpen={() => setOpen({ cat: c.id, item })} />
+      <div className="prices-layout">
+        <nav className="cat-rail" aria-label={t('Category')} onWheel={(e) => {
+          // A mouse wheel moves the row of categories sideways when they do not fit.
+          const el = e.currentTarget
+          if (el.scrollWidth > el.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY
+        }}>
+          <button className={cat === '' ? 'cat on' : 'cat'} aria-pressed={cat === ''} onClick={() => setCat('')}><span>{t('All')}</span><i>{total}</i></button>
+          {cats.map((c) => (
+            <button key={c.id} className={cat === c.id ? 'cat on' : 'cat'} aria-pressed={cat === c.id} onClick={() => setCat(c.id)}><span>{c.name}</span><i>{c.items.length}</i></button>
           ))}
+        </nav>
+        <div className="prices-main">
+          <div className="review-bar tools">
+            <SearchBox value={search} onChange={setSearch} placeholder={t('Search name, company, socket…')} />
+            <div className="seg" role="group" aria-label={t('View')}>
+              <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} title={t('List')} onClick={() => pickView('list')}><Icon name="rows" size={18} /></button>
+              <button className={view === 'grid' ? 'on' : ''} aria-pressed={view === 'grid'} title={t('Cards')} onClick={() => pickView('grid')}><Icon name="cards" size={18} /></button>
+            </div>
+            <button className="link" onClick={() => setChanges(true)}><Icon name="clock" size={16} />{t('Changes')}</button>
+            {canEdit && current && <button className="link" onClick={() => setBulk(true)}><Icon name="edit" size={16} />{t('Change all by %')}</button>}
+            {canEdit && <button className="btn btn-primary" onClick={() => setOpen({ cat: current?.id ?? cats[0].id, item: null })}><Icon name="plus" size={18} />{t('Product')}</button>}
+          </div>
+          {hiddenCount > 0 && (
+            <label className="check-line"><input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> {t('Show hidden products')} ({hiddenCount})</label>
+          )}
+          {rows.length === 0 ? <Empty icon="search" text={t('Nothing matches.')} /> : view === 'list' ? (
+            <div className="ptable" role="table">
+              <div className="ptable-row ptable-head" role="row">
+                <span role="columnheader">{t('Product')}</span>
+                <span role="columnheader" className="ptable-specs">{t('Specs')}</span>
+                <span role="columnheader" className="ptable-num">{t('In build')}</span>
+                <span role="columnheader" className="ptable-num">{t('Alone')}</span>
+              </div>
+              {shown.map(({ cat: c, item }, i) => (
+                <ListRow key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} {...heads[i]} onOpen={() => setOpen({ cat: c.id, item })} />
+              ))}
+            </div>
+          ) : (
+            <div className="pgrid">
+              {shown.map(({ cat: c, item }, i) => (
+                <PriceCard key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} {...heads[i]} onOpen={() => setOpen({ cat: c.id, item })} />
+              ))}
+            </div>
+          )}
+          {!all && rows.length > PAGE && <button className="btn" onClick={() => setAllFor(`${cat}|${search}`)}>{t('Show all')} ({rows.length})</button>}
         </div>
-      )}
-      {!all && rows.length > PAGE && <button className="btn" onClick={() => setAllFor(`${cat}|${search}`)}>{t('Show all')} ({rows.length})</button>}
+      </div>
       {open && <ProductSheet cats={cats} cat={open.cat} item={open.item} canEdit={canEdit} onClose={() => setOpen(null)} />}
       {changes && <ChangesSheet cats={cats} onClose={() => setChanges(false)} />}
       {bulk && current && <BulkSheet cat={current} onClose={() => setBulk(false)} />}
@@ -71,25 +119,57 @@ export function PricesView() {
   )
 }
 
-function PriceRow({ cat, item, canEdit, showCat, group, onOpen }: { cat: PriceCategory; item: PriceItem; canEdit: boolean; showCat: boolean; group: string; onOpen: () => void }) {
-  const save = (field: 'in' | 'alone', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
+type RowProps = { cat: PriceCategory; item: PriceItem; canEdit: boolean; catHead: string; groupHead: string; onOpen: () => void }
+
+const specsOf = (item: PriceItem) => Object.values(item.specs ?? {}).filter(Boolean)
+const saver = (cat: PriceCategory, item: PriceItem) => (field: 'in' | 'alone', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
+
+/** One line of the table: name and company, specs, then the two prices you can type into. */
+function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
+  const save = saver(cat, item)
   return (
     <>
-      {group && <div className="price-group">{group}</div>}
-      <div className={`price-row${item.hidden ? ' price-hidden' : ''}`}>
-        <button className="price-name" onClick={onOpen}>
+      {catHead && <div className="ptable-cat" role="row"><span role="cell">{catHead}</span></div>}
+      {groupHead && <div className="ptable-group" role="row"><span role="cell">{groupHead}</span></div>}
+      <div className={`ptable-row${item.hidden ? ' price-hidden' : ''}`} role="row">
+        <button className="ptable-name" role="cell" onClick={onOpen}>
           <span className="row-title" dir="auto">{item.name || t('(no name)')}</span>
-          <span className="row-sub">
-            {showCat && <Chip>{cat.name}</Chip>}
-            {item.company && <span className="muted" dir="auto">{item.company}</span>}
-            {Object.values(item.specs ?? {}).filter(Boolean).map((s) => <Chip key={s} tone="info">{s}</Chip>)}
-            {item.warranty ? <span className="muted">{tn('%n y', { n: item.warranty })}</span> : null}
+          <span className="ptable-meta">
+            {item.company && <span dir="auto">{item.company}</span>}
+            {item.warranty ? <span>{tn('%n y', { n: item.warranty })}</span> : null}
             {item.hidden && <Chip tone="warn">{t('Hidden')}</Chip>}
           </span>
         </button>
+        <span className="ptable-specs" role="cell">{specsOf(item).map((s) => <Chip key={s} tone="info">{s}</Chip>)}</span>
         <PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} />
         <PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} />
       </div>
+    </>
+  )
+}
+
+/** The same product as a card: tap the top to open it, type into either price at the bottom. */
+function PriceCard({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
+  const save = saver(cat, item)
+  return (
+    <>
+      {catHead && <h3 className="pgrid-head">{catHead}</h3>}
+      {groupHead && <h4 className="pgrid-group">{groupHead}</h4>}
+      <article className={`pcard${item.hidden ? ' price-hidden' : ''}`}>
+        <button className="pcard-top" onClick={onOpen}>
+          <span className="pcard-company" dir="auto">{item.company || cat.name}</span>
+          <span className="row-title" dir="auto">{item.name || t('(no name)')}</span>
+          <span className="pcard-tags">
+            {specsOf(item).map((s) => <Chip key={s} tone="info">{s}</Chip>)}
+            {item.warranty ? <Chip>{tn('%n y', { n: item.warranty })}</Chip> : null}
+            {item.hidden && <Chip tone="warn">{t('Hidden')}</Chip>}
+          </span>
+        </button>
+        <div className="pcard-prices">
+          <label><span>{t('In build')}</span><PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} /></label>
+          <label><span>{t('Alone')}</span><PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} /></label>
+        </div>
+      </article>
     </>
   )
 }

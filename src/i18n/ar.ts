@@ -379,4 +379,5 @@ export const ar: Record<string, string> = {
   'Change prices, add, hide and delete products in the price list.': 'تغيير الأسعار وإضافة وإخفاء وحذف المنتجات في قائمة الأسعار.',
   'Warranty': 'الضمان',
   'Specs': 'المواصفات',
+  'List': 'قائمة',
 }
