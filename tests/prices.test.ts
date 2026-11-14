@@ -36,3 +36,12 @@ describe('prices', () => {
     expect(c.items[0].alone).toBeNull()
   })
 })
+
+describe('stock', () => {
+  it('logs in and out of stock in words', () => {
+    const item = { id: 'a', name: 'X', in: 1, alone: 1, warranty: null, company: '' }
+    expect(diff(item, { out: true })).toEqual([{ f: 'out', from: 'In stock', to: 'Out of stock' }])
+    expect(diff({ ...item, out: true }, { out: undefined })).toEqual([{ f: 'out', from: 'Out of stock', to: 'In stock' }])
+    expect(diff(item, { out: undefined })).toEqual([])
+  })
+})

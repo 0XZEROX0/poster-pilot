@@ -26,8 +26,10 @@ export type PriceItem = {
   group?: string
   /** What the builder checks: socket (CPU, MB), memory (MB, RAM: DDR4/DDR5), size (SSD). */
   specs?: Record<string, string>
-  /** Not shown in the builder or the pickers, for example while out of stock. */
+  /** Not shown in the builder or the pickers. */
   hidden?: boolean
+  /** Out of stock. Information for now; the builder, offers and a website can use it later. Absent means in stock. */
+  out?: boolean
   /** Last change: when, and by whom. */
   at?: number
   byName?: string
@@ -45,7 +47,7 @@ export type ItemPatch = Partial<Omit<PriceItem, 'id' | 'at' | 'byName'>>
 export const SPEC_FIELDS: Record<string, string[]> = { cpu: ['socket'], mb: ['socket', 'memory'], ram: ['memory'], ssd: ['size'] }
 export const SPEC_LABEL: Record<string, string> = { socket: 'Socket', memory: 'Memory', size: 'Size' }
 
-const FIELD_LABEL: Record<string, string> = { in: 'In build', alone: 'Alone', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', specs: 'Specs' }
+const FIELD_LABEL: Record<string, string> = { in: 'In build', alone: 'Alone', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', out: 'Stock', specs: 'Specs' }
 export const fieldLabel = (f: string) => FIELD_LABEL[f] ?? SPEC_LABEL[f.replace(/^specs\./, '')] ?? f
 
 /** "5,500", or a dash when there is no price. Western digits in both languages, like the price list. */
@@ -81,6 +83,10 @@ export function diff(before: PriceItem | null, patch: ItemPatch): FieldChange[] 
       continue
     }
     const was = before ? (before as Record<string, unknown>)[k] : undefined
+    if (k === 'out') {
+      if (Boolean(was) !== Boolean(v)) out.push({ f: k, from: was ? 'Out of stock' : 'In stock', to: v ? 'Out of stock' : 'In stock' })
+      continue
+    }
     if (show(was) !== show(v)) out.push({ f: k, from: show(was), to: show(v) })
   }
   return out
@@ -113,7 +119,7 @@ export function categoryOf(id: string, d: DocumentData): PriceCategory {
   const raw = (d.items ?? {}) as Record<string, DocumentData>
   const items = Object.entries(raw)
     .filter(([, v]) => v && typeof v === 'object')
-    .map(([pid, v]) => ({ n: typeof v.n === 'number' ? v.n : Number.MAX_SAFE_INTEGER, at: millis(v.at), item: { id: pid, name: String(v.name ?? ''), in: num(v.in), alone: num(v.alone), warranty: num(v.warranty), company: String(v.company ?? ''), group: v.group ? String(v.group) : undefined, specs: v.specs ?? undefined, hidden: v.hidden === true || undefined, at: millis(v.at) || undefined, byName: v.byName || undefined } as PriceItem }))
+    .map(([pid, v]) => ({ n: typeof v.n === 'number' ? v.n : Number.MAX_SAFE_INTEGER, at: millis(v.at), item: { id: pid, name: String(v.name ?? ''), in: num(v.in), alone: num(v.alone), warranty: num(v.warranty), company: String(v.company ?? ''), group: v.group ? String(v.group) : undefined, specs: v.specs ?? undefined, hidden: v.hidden === true || undefined, out: v.out === true || undefined, at: millis(v.at) || undefined, byName: v.byName || undefined } as PriceItem }))
     .sort((a, b) => a.n - b.n || a.at - b.at || a.item.name.localeCompare(b.item.name))
     .map((x) => x.item)
   return { id, name: String(d.name ?? id), order: typeof d.order === 'number' ? d.order : 99, items }
