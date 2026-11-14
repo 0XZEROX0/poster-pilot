@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { chosen, complete, emptyLine, fresh, grants, live, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
+import { chosen, complete, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { matches, money, parseMoney, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
 import { allowed, isOwner, myId, myName } from '../data/store'
 import { locale, t, tn } from '../i18n'
@@ -42,15 +42,48 @@ export function BuilderView() {
     lastGrant.current = g?.amount ?? 0
     setGrant(g)
   }), [])
-  const given = grant?.amount ?? 0
+
+  // Editing someone else's open quote (from Live quotes): the builder shows their quote, and each change goes to their screen.
+  const [editing, setEditing] = useState<{ uid: string; name: string } | null>(null)
+  const editingRef = useRef(editing)
+  useEffect(() => { editingRef.current = editing }, [editing])
+  const mine = useRef<Build | null>(null)
+  const [theirGrant, setTheirGrant] = useState(0)
+  const sent = useRef<string[]>([])
+  const seen = useRef('')
+  const given = editing ? theirGrant : grant?.amount ?? 0
+
+  // Changes someone made to this person's quote come in here.
+  useEffect(() => edits.watchMine((e) => {
+    void edits.clearMine()
+    if (e.at && Date.now() - e.at > LIVE_IDLE_MS) return
+    const apply = (b: Build): Build => ({ ...b, customer: e.customer, lines: complete(e.lines), extra: e.extra, buildDiscount: e.buildDiscount })
+    if (editingRef.current) mine.current = mine.current && apply(mine.current)
+    else setBuild(apply)
+    showToast(tn('%name changed your quote', { name: e.byName || t('Someone') }))
+  }), [])
+
+  // While editing, the other person's own changes come in too.
+  useEffect(() => {
+    if (!editing) return
+    return live.watchOne(editing.uid, (d) => {
+      if (!d) return
+      setTheirGrant(d.grant)
+      const s = shape(d, d.lines)
+      if (s === seen.current || sent.current.includes(s)) return
+      seen.current = s
+      setBuild((b) => ({ ...b, customer: d.customer, lines: complete(d.lines), extra: d.extra, buildDiscount: d.buildDiscount }))
+    })
+  }, [editing])
 
   useEffect(() => {
+    if (editing) return
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(build))
     } catch {
       // No storage: the build lasts while the page is open.
     }
-  }, [build])
+  }, [build, editing])
 
   // Lines always show today's names and prices from the price list.
   const lines = useMemo(() => build.lines.map((l) => fresh(cats, l)), [build.lines, cats])
@@ -59,14 +92,27 @@ export function BuilderView() {
 
   // Share the build a moment after each change, so it can be watched live (one write per pause).
   const shared = JSON.stringify([build.customer, build.sales, build.extra, given, build.buildDiscount, lines.filter((l) => l.name).map((l) => [l.slot, l.name, l.qty, l.alone, l.in, l.warranty])])
+  const now = shape(build, lines)
   useEffect(() => {
-    if (!loaded || shared === lastShared.current) return
+    if (!loaded) return
+    if (editing) {
+      if (now === seen.current || sent.current.includes(now)) return
+      const id = setTimeout(() => {
+        sent.current = [...sent.current.slice(-9), now]
+        edits.send(editing.uid, { ...build, lines }).catch((e) => {
+          sent.current = sent.current.filter((s) => s !== now)
+          showToast((e as { code?: string }).code === 'permission-denied' ? t('Your role does not allow this.') : t('Could not save. Check the connection.'))
+        })
+      }, 800)
+      return () => clearTimeout(id)
+    }
+    if (shared === lastShared.current) return
     const id = setTimeout(() => {
       lastShared.current = shared
-      live.publish({ ...build, extra: build.extra + given, lines }, sum.total).catch(() => { lastShared.current = '' })
+      live.publish({ ...build, lines }, sum.total, given).catch(() => { lastShared.current = '' })
     }, 1500)
     return () => clearTimeout(id)
-  }, [shared, loaded, build, lines, sum.total, given])
+  }, [shared, now, editing, loaded, build, lines, sum.total, given])
   const filled = lines.filter((l) => l.name)
 
   if (!loaded) return <div className="splash">{t('Loading…')}</div>
@@ -124,6 +170,23 @@ export function BuilderView() {
     window.print()
     document.title = title
   }
+  const startEditing = (one: LiveBuild) => {
+    mine.current = build
+    seen.current = shape(one, one.lines)
+    sent.current = []
+    setBuild({ customer: one.customer, sales: one.sales, lines: complete(one.lines), extra: one.extra, buildDiscount: one.buildDiscount })
+    setTheirGrant(one.grant)
+    setEditing({ uid: one.uid, name: one.byName || one.sales || t('Someone') })
+    setWatching(false)
+    setSure(false)
+  }
+  const stopEditing = () => {
+    if (editing && now !== seen.current && !sent.current.includes(now)) void edits.send(editing.uid, { ...build, lines }).catch(() => {})
+    setBuild(mine.current ?? loadDraft())
+    mine.current = null
+    setEditing(null)
+    setTheirGrant(0)
+  }
   const pickingLine = lines.find((l) => l.id === picking)
   const unused = SLOTS.filter((s) => !build.lines.some((l) => l.slot === s.key))
 
@@ -132,9 +195,15 @@ export function BuilderView() {
       <div className="review-bar tools">
         <div className="builder-who">
           <label><span>{t('Customer')}</span><input dir="auto" value={build.customer} placeholder={t('Optional')} onChange={(e) => patch({ customer: e.target.value })} /></label>
-          <label><span>{t('Sales man')}</span><input dir="auto" value={build.sales} onChange={(e) => patch({ sales: e.target.value })} /></label>
+          <label><span>{t('Sales man')}</span><input dir="auto" value={build.sales} disabled={!!editing} onChange={(e) => patch({ sales: e.target.value })} /></label>
         </div>
-        {(allowed('quotes.all') || allowed('quotes.discount')) && <button className="link" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
+        {editing ? (
+          <>
+            <p className="edit-banner"><span className="live-dot" aria-hidden="true" />{tn("You're editing %name's quote. They see each change.", { name: editing.name })}</p>
+            <button className="btn btn-primary" onClick={stopEditing}>{t('Done editing')}</button>
+          </>
+        ) : <>
+        {(allowed('quotes.all') || allowed('quotes.discount') || allowed('quotes.edit')) && <button className="link" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
         <button className="link" onClick={() => setSaved(true)}><Icon name="clock" size={16} />{t('Saved quotes')}</button>
         {sure ? (
           <span className="clear-confirm">
@@ -144,6 +213,7 @@ export function BuilderView() {
         ) : (
           <button className="btn btn-ghost" disabled={!filled.length && !build.customer && !build.extra && !build.id} onClick={() => setSure(true)}><Icon name="trash" size={18} />{t('Clear quotation')}</button>
         )}
+        </>}
       </div>
 
       <div className="bl">
@@ -200,17 +270,17 @@ export function BuilderView() {
         <div><span>{t('Price')}</span><b>{money(sum.subtotal)}</b></div>
         <label className="check"><input type="checkbox" checked={build.buildDiscount} onChange={(e) => patch({ buildDiscount: e.target.checked })} /> {t('Build discount')} <b>{money(sum.saved)}</b></label>
         <label className="bl-extra"><span>{t('Extra discount')}</span><input inputMode="numeric" value={build.extra ? String(build.extra) : ''} placeholder="0" onChange={(e) => { const v = parseMoney(e.target.value); if (v !== undefined) patch({ extra: v ?? 0 }) }} /></label>
-        {grant && <div className="bl-grant"><span>{tn('Extra discount from %name', { name: grant.byName || t('Someone') })}</span><b>{money(grant.amount)}</b></div>}
+        {given > 0 && <div className="bl-grant"><span>{!editing && grant ? tn('Extra discount from %name', { name: grant.byName || t('Someone') }) : t('Extra discount given')}</span><b>{money(given)}</b></div>}
         <div><span>{t('Discount')}</span><b>{money(sum.discount)}</b></div>
         <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)}</b></div>
         <div className="actions">
-          <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>
+          {!editing && <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>}
           <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print quotation')}</button>
         </div>
       </div>
 
       {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { setLine(pickingLine.id, (l) => pick(l, cat, item)); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
-      {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false); void grants.clearMine() }} onClose={() => setWatching(false)} />}
+      {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra + b.grant, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false); void grants.clearMine() }} onEdit={startEditing} onClose={() => setWatching(false)} />}
       {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false); void grants.clearMine() }} onClose={() => setSaved(false)} />}
       {createPortal(<QuotePrint build={build} lines={filled} sum={sum} />, document.body)}
     </div>
@@ -329,7 +399,7 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
 }
 
 /** The quote each person is building right now, updating as they work. */
-function LiveSheet({ onCopy, onClose }: { onCopy: (b: LiveBuild) => void; onClose: () => void }) {
+function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void; onEdit: (b: LiveBuild) => void; onClose: () => void }) {
   const [list, setList] = useState<LiveBuild[] | null>(null)
   const [error, setError] = useState('')
   const [open, setOpen] = useState('')
@@ -347,9 +417,9 @@ function LiveSheet({ onCopy, onClose }: { onCopy: (b: LiveBuild) => void; onClos
   }
   const one = others.find((b) => b.uid === open)
   if (one) {
-    const sum = totals(one.lines, one.extra, one.buildDiscount)
+    const sum = totals(one.lines, one.extra + one.grant, one.buildDiscount)
     return (
-      <Sheet title={one.byName || one.sales || t('Someone')} onClose={onClose} footer={<><button className="btn btn-ghost" onClick={() => setOpen('')}>{t('Back')}</button><button className="btn" onClick={() => onCopy(one)}>{t('Copy into my builder')}</button></>}>
+      <Sheet title={one.byName || one.sales || t('Someone')} onClose={onClose} footer={<><button className="btn btn-ghost" onClick={() => setOpen('')}>{t('Back')}</button><button className="btn" onClick={() => onCopy(one)}>{t('Copy into my builder')}</button>{allowed('quotes.edit') && <button className="btn btn-primary" onClick={() => onEdit(one)}>{t('Edit this quote')}</button>}</>}>
         <p className="live-head"><span className={now - one.at < LIVE_IDLE_MS ? 'live-dot' : 'live-dot idle'} aria-hidden="true" />{t('Updated')} {ago(one.at)}{one.customer ? ` · ${one.customer}` : ''}</p>
         {one.lines.length === 0 ? <Empty icon="builder" text={t('Nothing picked yet.')} /> : (
           <ul className="changes live-lines">

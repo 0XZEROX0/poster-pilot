@@ -60,9 +60,14 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       const fail = (e: Error) => onError(e.message)
       const mine = zones()
       // A limited role asks only for its own kinds of posts; the rules refuse anything wider.
-      const source = mine === null ? collection(db, 'posts') : query(collection(db, 'posts'), where('zone', 'in', mine.length ? mine : ['-']))
+      // A role with no post pages at all (for example only Prices and Builder) reads no posts.
+      const source = mine === null ? collection(db, 'posts') : mine.length ? query(collection(db, 'posts'), where('zone', 'in', mine)) : null
+      if (!source) {
+        got.posts = true
+        push({ posts: [] })
+      }
       const stops = [
-        onSnapshot(source, (snap) => {
+        !source ? () => {} : onSnapshot(source, (snap) => {
           got.posts = true
           const posts = snap.docs
             .map((d) => ({ ...blankPost, ...d.data(), id: d.id }) as Post & { appDeleted?: boolean })

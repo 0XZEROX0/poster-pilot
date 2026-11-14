@@ -691,3 +691,4 @@ button.stock:hover { filter: brightness(1.15); }
 .give-discount { margin-top: 14px; display: grid; gap: 8px; }
 .give-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .give-row .bl-extra { flex: 1 1 160px; }
+.edit-banner { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent, #1155cc) 12%, transparent); font-weight: 600; flex: 1 1 260px; }
