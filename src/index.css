@@ -685,3 +685,9 @@ button.stock:hover { filter: brightness(1.15); }
 .live-line { display: flex; justify-content: space-between; gap: 12px; }
 .live-line b { font-variant-numeric: tabular-nums; direction: ltr; white-space: nowrap; }
 .live-sum { width: 100%; margin-top: 12px; box-shadow: none; padding: 12px 0 0; }
+
+/* Extra discount given from Live quotes */
+.bl-grant { color: var(--good, #1a7f37); }
+.give-discount { margin-top: 14px; display: grid; gap: 8px; }
+.give-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.give-row .bl-extra { flex: 1 1 160px; }

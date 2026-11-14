@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { chosen, complete, emptyLine, fresh, live, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
+import { chosen, complete, emptyLine, fresh, grants, live, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { matches, money, parseMoney, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
 import { allowed, isOwner, myId, myName } from '../data/store'
 import { locale, t, tn } from '../i18n'
@@ -34,6 +34,15 @@ export function BuilderView() {
   const [sure, setSure] = useState(false)
   const [watching, setWatching] = useState(false)
   const lastShared = useRef('')
+  // An extra discount someone gave on this quote from Live quotes. It counts until the quote is saved or cleared.
+  const [grant, setGrant] = useState<Grant | null>(null)
+  const lastGrant = useRef(0)
+  useEffect(() => grants.watch(myId(), (g) => {
+    if (g && g.amount !== lastGrant.current) showToast(tn('%name gave an extra discount of %amount', { name: g.byName || t('Someone'), amount: money(g.amount) }))
+    lastGrant.current = g?.amount ?? 0
+    setGrant(g)
+  }), [])
+  const given = grant?.amount ?? 0
 
   useEffect(() => {
     try {
@@ -46,18 +55,18 @@ export function BuilderView() {
   // Lines always show today's names and prices from the price list.
   const lines = useMemo(() => build.lines.map((l) => fresh(cats, l)), [build.lines, cats])
   const parts = useMemo(() => chosen(cats, lines), [cats, lines])
-  const sum = totals(lines, build.extra, build.buildDiscount)
+  const sum = totals(lines, build.extra + given, build.buildDiscount)
 
   // Share the build a moment after each change, so it can be watched live (one write per pause).
-  const shared = JSON.stringify([build.customer, build.sales, build.extra, build.buildDiscount, lines.filter((l) => l.name).map((l) => [l.slot, l.name, l.qty, l.alone, l.in, l.warranty])])
+  const shared = JSON.stringify([build.customer, build.sales, build.extra, given, build.buildDiscount, lines.filter((l) => l.name).map((l) => [l.slot, l.name, l.qty, l.alone, l.in, l.warranty])])
   useEffect(() => {
     if (!loaded || shared === lastShared.current) return
     const id = setTimeout(() => {
       lastShared.current = shared
-      live.publish({ ...build, lines }, sum.total).catch(() => { lastShared.current = '' })
+      live.publish({ ...build, extra: build.extra + given, lines }, sum.total).catch(() => { lastShared.current = '' })
     }, 1500)
     return () => clearTimeout(id)
-  }, [shared, loaded, build, lines, sum.total])
+  }, [shared, loaded, build, lines, sum.total, given])
   const filled = lines.filter((l) => l.name)
 
   if (!loaded) return <div className="splash">{t('Loading…')}</div>
@@ -88,13 +97,19 @@ export function BuilderView() {
   const start = () => {
     setBuild(newBuild(myName() || build.sales))
     setSure(false)
+    void grants.clearMine()
   }
   const save = async () => {
     if (!filled.length) return showToast(t('Pick at least one product first.'))
     setBusy(true)
     try {
-      const id = await quotes.save({ ...build, lines }, sum.total)
-      patch({ id })
+      // A discount given from Live quotes becomes part of the saved quote's extra discount.
+      const id = await quotes.save({ ...build, extra: build.extra + given, lines }, sum.total)
+      patch(given ? { id, extra: build.extra + given } : { id })
+      if (given) {
+        lastGrant.current = 0
+        void grants.clearMine()
+      }
       showToast(t('Saved'))
     } catch (e) {
       showToast((e as { code?: string }).code === 'permission-denied' ? t('Your role does not allow this.') : t('Could not save. Check the connection.'))
@@ -119,7 +134,7 @@ export function BuilderView() {
           <label><span>{t('Customer')}</span><input dir="auto" value={build.customer} placeholder={t('Optional')} onChange={(e) => patch({ customer: e.target.value })} /></label>
           <label><span>{t('Sales man')}</span><input dir="auto" value={build.sales} onChange={(e) => patch({ sales: e.target.value })} /></label>
         </div>
-        {allowed('quotes.all') && <button className="link" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
+        {(allowed('quotes.all') || allowed('quotes.discount')) && <button className="link" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
         <button className="link" onClick={() => setSaved(true)}><Icon name="clock" size={16} />{t('Saved quotes')}</button>
         {sure ? (
           <span className="clear-confirm">
@@ -185,6 +200,7 @@ export function BuilderView() {
         <div><span>{t('Price')}</span><b>{money(sum.subtotal)}</b></div>
         <label className="check"><input type="checkbox" checked={build.buildDiscount} onChange={(e) => patch({ buildDiscount: e.target.checked })} /> {t('Build discount')} <b>{money(sum.saved)}</b></label>
         <label className="bl-extra"><span>{t('Extra discount')}</span><input inputMode="numeric" value={build.extra ? String(build.extra) : ''} placeholder="0" onChange={(e) => { const v = parseMoney(e.target.value); if (v !== undefined) patch({ extra: v ?? 0 }) }} /></label>
+        {grant && <div className="bl-grant"><span>{tn('Extra discount from %name', { name: grant.byName || t('Someone') })}</span><b>{money(grant.amount)}</b></div>}
         <div><span>{t('Discount')}</span><b>{money(sum.discount)}</b></div>
         <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)}</b></div>
         <div className="actions">
@@ -194,8 +210,8 @@ export function BuilderView() {
       </div>
 
       {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { setLine(pickingLine.id, (l) => pick(l, cat, item)); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
-      {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false) }} onClose={() => setWatching(false)} />}
-      {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false) }} onClose={() => setSaved(false)} />}
+      {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false); void grants.clearMine() }} onClose={() => setWatching(false)} />}
+      {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false); void grants.clearMine() }} onClose={() => setSaved(false)} />}
       {createPortal(<QuotePrint build={build} lines={filled} sum={sum} />, document.body)}
     </div>
   )
@@ -350,6 +366,7 @@ function LiveSheet({ onCopy, onClose }: { onCopy: (b: LiveBuild) => void; onClos
           <div><span>{t('Discount')}</span><b>{money(sum.discount)}</b></div>
           <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)}</b></div>
         </div>
+        <GiveDiscount uid={one.uid} />
       </Sheet>
     )
   }
@@ -369,6 +386,43 @@ function LiveSheet({ onCopy, onClose }: { onCopy: (b: LiveBuild) => void; onClos
         </ul>
       )}
     </Sheet>
+  )
+}
+
+/** Shows the extra discount given on someone's open quote, and lets people with 'Give extra discount' set it. */
+function GiveDiscount({ uid }: { uid: string }) {
+  const [grant, setGrant] = useState<Grant | null | undefined>(undefined)
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => grants.watch(uid, (g) => {
+    setGrant(g)
+    setValue(g ? String(g.amount) : '')
+  }), [uid])
+  const can = allowed('quotes.discount')
+  if (grant === undefined || (!can && !grant)) return null
+  const give = async (amount: number) => {
+    setBusy(true)
+    try {
+      await grants.give(uid, amount)
+      showToast(amount > 0 ? t('Discount sent. It shows in their quote now.') : t('Discount removed.'))
+    } catch (e) {
+      showToast((e as { code?: string }).code === 'permission-denied' ? t('Your role does not allow this.') : t('Could not save. Check the connection.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const amount = parseMoney(value) ?? 0
+  return (
+    <div className="give-discount">
+      {grant && <p className="muted">{tn('Extra discount from %name', { name: grant.byName || t('Someone') })}: <b>{money(grant.amount)}</b> ({t('already in the total')})</p>}
+      {can && (
+        <div className="give-row">
+          <label className="bl-extra"><span>{t('Extra discount from you')}</span><input inputMode="numeric" value={value} placeholder="0" onChange={(e) => setValue(e.target.value)} /></label>
+          <button className="btn btn-primary" disabled={busy || amount === (grant?.amount ?? 0)} onClick={() => give(amount)}>{grant ? t('Change discount') : t('Give discount')}</button>
+          {grant && <button className="btn btn-ghost" disabled={busy} onClick={() => give(0)}>{t('Remove')}</button>}
+        </div>
+      )}
+    </div>
   )
 }
 
