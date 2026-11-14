@@ -4,7 +4,7 @@ import type { Backend } from './backend'
 import { auth, firebaseConfigured, firestore } from './firebase'
 import { createFirestoreBackend } from './firestoreBackend'
 import { createLocalBackend } from './localBackend'
-import { askToJoin, cancelRequest, findAccess, watchMembership, zonesFor, type Access, type Page, type Perm } from './team'
+import { askToJoin, cancelRequest, findAccess, POST_PAGES, watchMembership, zonesFor, type Access, type Page, type Perm } from './team'
 import { emptyData, type Data } from './types'
 import { showToast } from '../components/ui'
 import { t } from '../i18n'
@@ -157,3 +157,8 @@ export const ownOffer = (p: { createdBy?: string }) => p.createdBy === myId() &&
 
 /** Whether the person's role shows this page. The owner, the demo and the old access list see every page. */
 export const seesPage = (page: string) => state.mode === 'demo' || state.access === 'legacy' || state.role === 'owner' || state.pages.includes(page as Page)
+
+/** Whether the person's role works with posts at all (a role with only Prices and Builder does not). */
+export const postWork = () => POST_PAGES.some((p) => seesPage(p))
+/** Whether the person may change the caption templates: people who make or check posts. */
+export const editsTemplates = () => allowed('offers.create') || allowed('designs.approve') || allowed('fix')

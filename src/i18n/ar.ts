@@ -1,6 +1,9 @@
 /** Arabic for every text in the app, keyed by the English text. A missing key shows the English. */
 export const ar: Record<string, string> = {
-  PosterPilot: 'بوستر بايلوت',
+  'Static OS': 'Static OS',
+  'Shop': 'المحل',
+  'Posters': 'البوسترات',
+  'Prices, PC builds and quotations, offers and posters, in one place.': 'الأسعار وتجميعات الكمبيوتر وعروض الأسعار والعروض والبوسترات في مكان واحد.',
   Home: 'الرئيسية',
   Dashboard: 'لوحة التحكم',
   'Next 7 days': 'الأيام السبعة القادمة',
@@ -74,7 +77,6 @@ export const ar: Record<string, string> = {
   Account: 'الحساب',
   'Sign out': 'تسجيل الخروج',
   'Sign in with Google': 'تسجيل الدخول بجوجل',
-  'Review, fix and schedule your posters.': 'راجع وأصلح وجدول بوستراتك.',
   'Demo mode': 'وضع تجريبي',
   'Sample data in this browser. Nothing is posted.': 'بيانات تجريبية على هذا المتصفح. لا يتم نشر أي شيء.',
   'Reset the demo': 'إعادة ضبط التجربة',
@@ -444,7 +446,7 @@ export const ar: Record<string, string> = {
   'Keyboard': 'الكيبورد',
   'Mouse': 'الماوس',
   'Extra': 'إضافي',
-  'Thermalpaste': 'المعجون الحراري',
+  'Thermal paste': 'المعجون الحراري',
   'CPU': 'المعالج',
   'RAM': 'الرامات',
   'Made by %s': 'بواسطة %s',
