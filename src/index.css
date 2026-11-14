@@ -531,7 +531,7 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 
 /* Prices as a table */
 .ptable { display: flex; flex-direction: column; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); overflow: clip; }
-.ptable-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 170px) 110px 110px; align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid var(--border); }
+.ptable-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 170px) 120px 110px 110px; align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid var(--border); }
 .ptable-row:hover { background: var(--surface-2); }
 .ptable-head { position: sticky; top: 0; z-index: 1; border-top: 0; background: var(--surface); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding-block: 10px; }
 .ptable-head:hover { background: var(--surface); }
@@ -544,8 +544,11 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .ptable-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.75rem; color: var(--muted); }
 .ptable-specs { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 @media (max-width: 640px) {
-  .ptable-row { grid-template-columns: minmax(0, 1fr) 84px 84px; gap: 6px; padding-inline: 10px; }
+  .ptable-row { grid-template-columns: minmax(0, 1fr) 30px 80px 80px; gap: 4px; padding-inline: 10px; }
   .ptable-specs { display: none; }
+  .ptable-head .ptable-stock { visibility: hidden; }
+  .ptable-stock .stock > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .ptable-stock .stock { padding: 0; width: 30px; justify-content: center; }
 }
 
 /* A price: plain text that turns into a box when you click it */
@@ -554,6 +557,18 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .price-input:hover { border-color: var(--border); background: var(--surface); }
 .price-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
 .price-hidden .row-title { color: var(--muted); }
+
+/* In stock / out of stock */
+.stock { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+.stock i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.stock-in { background: var(--good-soft); color: var(--good); }
+.stock-out { background: var(--bad-soft); color: var(--bad); }
+button.stock:hover { filter: brightness(1.15); }
+.pcard { position: relative; }
+.pcard-stock { position: absolute; top: 8px; inset-inline-end: 8px; }
+.pcard-stock .stock { min-height: 26px; padding: 0 8px; font-size: 0.6875rem; }
+.pcard-company { padding-inline-end: 104px; min-height: 18px; }
+.pcard-out .pcard-prices { opacity: 0.55; }
 
 /* Prices as cards */
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }

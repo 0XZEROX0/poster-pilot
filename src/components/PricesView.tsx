@@ -27,6 +27,7 @@ export function PricesView() {
   const [cat, setCat] = useState('')
   const [search, setSearch] = useState('')
   const [hidden, setHidden] = useState(false)
+  const [stock, setStock] = useState<'' | 'in' | 'out'>('')
   const [view, setView] = useState<ViewMode>(savedView)
   // "Show all" counts for the list it was pressed on; another category or search starts short again.
   const [allFor, setAllFor] = useState<string | null>(null)
@@ -37,9 +38,9 @@ export function PricesView() {
   const current = cats.find((c) => c.id === cat)
   const rows = useMemo(() => {
     const out: { cat: PriceCategory; item: PriceItem }[] = []
-    for (const c of current ? [current] : cats) for (const item of c.items) if ((hidden || !item.hidden) && matches(item, search)) out.push({ cat: c, item })
+    for (const c of current ? [current] : cats) for (const item of c.items) if ((hidden || !item.hidden) && (!stock || (stock === 'out') === Boolean(item.out)) && matches(item, search)) out.push({ cat: c, item })
     return out
-  }, [cats, current, search, hidden])
+  }, [cats, current, search, hidden, stock])
 
   if (!loaded) return <div className="splash">{t('Loading…')}</div>
   if (error) return <p className="banner banner-bad" dir="ltr">{error}</p>
@@ -79,6 +80,11 @@ export function PricesView() {
         <div className="prices-main">
           <div className="review-bar tools">
             <SearchBox value={search} onChange={setSearch} placeholder={t('Search name, company, socket…')} />
+            <select className="sort-pick" value={stock} aria-label={t('Stock')} onChange={(e) => setStock(e.target.value as typeof stock)}>
+              <option value="">{t('All stock')}</option>
+              <option value="in">{t('In stock')}</option>
+              <option value="out">{t('Out of stock')}</option>
+            </select>
             <div className="seg" role="group" aria-label={t('View')}>
               <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} title={t('List')} onClick={() => pickView('list')}><Icon name="rows" size={18} /></button>
               <button className={view === 'grid' ? 'on' : ''} aria-pressed={view === 'grid'} title={t('Cards')} onClick={() => pickView('grid')}><Icon name="cards" size={18} /></button>
@@ -95,6 +101,7 @@ export function PricesView() {
               <div className="ptable-row ptable-head" role="row">
                 <span role="columnheader">{t('Product')}</span>
                 <span role="columnheader" className="ptable-specs">{t('Specs')}</span>
+                <span role="columnheader" className="ptable-stock">{t('Stock')}</span>
                 <span role="columnheader" className="ptable-num">{t('In build')}</span>
                 <span role="columnheader" className="ptable-num">{t('Alone')}</span>
               </div>
@@ -141,6 +148,7 @@ function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
           </span>
         </button>
         <span className="ptable-specs" role="cell">{specsOf(item).map((s) => <Chip key={s} tone="info">{s}</Chip>)}</span>
+        <span className="ptable-stock" role="cell"><StockToggle cat={cat} item={item} canEdit={canEdit} /></span>
         <PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} />
         <PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} />
       </div>
@@ -155,7 +163,8 @@ function PriceCard({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps)
     <>
       {catHead && <h3 className="pgrid-head">{catHead}</h3>}
       {groupHead && <h4 className="pgrid-group">{groupHead}</h4>}
-      <article className={`pcard${item.hidden ? ' price-hidden' : ''}`}>
+      <article className={`pcard${item.hidden ? ' price-hidden' : ''}${item.out ? ' pcard-out' : ''}`}>
+        <span className="pcard-stock"><StockToggle cat={cat} item={item} canEdit={canEdit} /></span>
         <button className="pcard-top" onClick={onOpen}>
           <span className="pcard-company" dir="auto">{item.company || cat.name}</span>
           <span className="row-title" dir="auto">{item.name || t('(no name)')}</span>
@@ -171,6 +180,23 @@ function PriceCard({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps)
         </div>
       </article>
     </>
+  )
+}
+
+/** In stock or out of stock: one click switches it, and it is saved and logged like a price. */
+function StockToggle({ cat, item, canEdit }: { cat: PriceCategory; item: PriceItem; canEdit: boolean }) {
+  const label = item.out ? t('Out of stock') : t('In stock')
+  const cls = `stock ${item.out ? 'stock-out' : 'stock-in'}`
+  if (!canEdit) return <span className={cls} title={label}><i aria-hidden="true" /><span>{label}</span></span>
+  return (
+    <button
+      className={cls}
+      title={item.out ? t('Click to mark in stock') : t('Click to mark out of stock')}
+      aria-pressed={!item.out}
+      onClick={() => prices.save(cat.id, item.id, { out: item.out ? undefined : true }, item).catch(fail)}
+    >
+      <i aria-hidden="true" /><span>{label}</span>
+    </button>
   )
 }
 
@@ -215,6 +241,7 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
   const [group, setGroup] = useState(item?.group ?? '')
   const [specs, setSpecs] = useState<Record<string, string>>(item?.specs ?? {})
   const [hiddenOn, setHidden] = useState(item?.hidden ?? false)
+  const [outOn, setOut] = useState(item?.out ?? false)
   const [busy, setBusy] = useState(false)
   const [sure, setSure] = useState(false)
   const [log, setLog] = useState<PriceChange[] | null>(null)
@@ -230,7 +257,7 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
     const nums = [inb, alone, warranty].map(parseMoney)
     if (nums.some((n) => n === undefined)) return showToast(t('Not a number.'))
     if (!name.trim()) return showToast(t('Give the product a name.'))
-    const patch: ItemPatch = { name: name.trim(), company: company.trim(), in: nums[0]!, alone: nums[1]!, warranty: nums[2]!, group: group.trim() || undefined, hidden: hiddenOn || undefined }
+    const patch: ItemPatch = { name: name.trim(), company: company.trim(), in: nums[0]!, alone: nums[1]!, warranty: nums[2]!, group: group.trim() || undefined, hidden: hiddenOn || undefined, out: outOn || undefined }
     const cleanSpecs = Object.fromEntries(specFields.map((k) => [k, (specs[k] ?? '').trim()]))
     if (specFields.length) patch.specs = cleanSpecs
     setBusy(true)
@@ -294,7 +321,8 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
           </div>
         )}
         <label><span>{t('Group')}</span><input dir="auto" value={group} readOnly={ro} placeholder={t('Optional, for example AIR or Liquid')} onChange={(e) => setGroup(e.target.value)} /></label>
-        <label className="check"><input type="checkbox" checked={hiddenOn} disabled={ro} onChange={(e) => setHidden(e.target.checked)} /> {t('Hidden (not offered in builds, for example out of stock)')}</label>
+        <label className="check"><input type="checkbox" checked={outOn} disabled={ro} onChange={(e) => setOut(e.target.checked)} /> {t('Out of stock')}</label>
+        <label className="check"><input type="checkbox" checked={hiddenOn} disabled={ro} onChange={(e) => setHidden(e.target.checked)} /> {t('Hidden (not offered in builds)')}</label>
         {sure && <p className="hint bad">{t('Deleting removes the product from the price list. Builds and posts that already use it keep their copy.')}</p>}
       </div>
       {item && (
@@ -322,7 +350,7 @@ function ChangeList({ log, cats }: { log: PriceChange[]; cats?: PriceCategory[] 
           </div>
           {cats && <div dir="auto">{l.name}</div>}
           {l.act !== 'remove' && l.act !== 'add' && (
-            <div className="muted">{l.changes.map((c) => `${t(fieldLabel(c.f))}: ${c.from || '—'} → ${c.to || '—'}`).join(' · ')}</div>
+            <div className="muted">{l.changes.map((c) => { const v = (x: string) => (c.f === 'out' ? t(x) : x) || '—'; return `${t(fieldLabel(c.f))}: ${v(c.from)} → ${v(c.to)}` }).join(' · ')}</div>
           )}
         </li>
       ))}
