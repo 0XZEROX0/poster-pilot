@@ -13,6 +13,8 @@ group('history entries for app changes', () => {
     expect(describe(post({ offer: '' }), { offer: 'Approved', offerBy: 'A', offerNote: '' })?.act).toBe('offer.approved')
     expect(describe(post({ offer: '' }), { offer: 'Rejected', offerNote: 'too cheap' })).toEqual({ act: 'offer.rejected', note: 'too cheap' })
     expect(describe(post({ offer: 'Rejected' }), { offer: '' })?.act).toBe('offer.resubmitted')
+    // Opening the website photos is not a change; the chosen photo is logged as an edit of the items.
+    expect(describe(post(), { photoAsk: 123 })).toBeNull()
   })
   it('names design and schedule decisions', () => {
     expect(describe(post(), { feedback: 'Done' })?.act).toBe('design.approved')

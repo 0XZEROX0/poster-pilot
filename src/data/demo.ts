@@ -1,5 +1,5 @@
 import { addDays, buildCaption, cairoNow, marketKey } from './logic'
-import type { CaptionTemplate, Data, MarketItem, Post, PostItem, Product } from './types'
+import type { CaptionTemplate, Data, MarketItem, PhotoChoices, Post, PostItem, Product } from './types'
 
 // Sample data for demo mode (no Firebase configured). The products, prices and caption templates are
 // a small copy of the real Posts sheet; the states are spread out so every screen has something to show.
@@ -61,6 +61,18 @@ const item = (category: string, name: string): PostItem => ({ category, name, ma
 
 /** Marks a poster link as a drawn sample: the app shows a placeholder poster for it. */
 export const DEMO_POSTER = 'demo:poster'
+
+/** Pretend website photos for the photo picker: a few plain shapes per item, none for an item with "no photo" in its name. */
+export function demoPhotoChoices(p: Post, asked: number): PhotoChoices {
+  const shape = (hue: number, n: number) => 'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="#fff"/><rect x="${20 + n * 6}" y="${30 - n * 4}" width="${80 - n * 12}" height="${60 + n * 8}" rx="10" fill="hsl(${hue} 60% ${45 + n * 8}%)"/></svg>`)
+  return {
+    checkedAt: Date.now(), asked,
+    items: p.items.map((it, i) => /no photo/i.test(it.name)
+      ? { name: it.name, product: '', page: '', photos: [] }
+      : { name: it.name, product: it.name, page: '', photos: Array.from({ length: 4 - (i % 2) }, (_, n) => { const src = shape(i * 90 + 210, n); return { src, thumb: src } }) }),
+  }
+}
 
 export function demoPosts(): Post[] {
   const today = cairoNow().date
