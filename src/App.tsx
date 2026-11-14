@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { PlannerView } from './components/PlannerView'
 import { FixView } from './components/FixView'
 import { HomeView, type Tab } from './components/HomeView'
@@ -15,7 +15,7 @@ import { Icon, Toast } from './components/ui'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
 import { DatabaseView } from './components/DatabaseView'
-import { allowed, isOwner, myId, ownOffer, seesPage, signIn, signOutNow, useSession } from './data/store'
+import { allowed, isOwner, myId, ownOffer, postWork, seesPage, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, useLang } from './i18n'
 
@@ -37,6 +37,9 @@ const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
 type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'settings' } | null
 
 const tabFromHash = (): Tab => ALL_TABS.find((x) => `#/${x.id}` === location.hash)?.id ?? 'home'
+
+/** Sidebar headings: the shop tools, then everything about posters. */
+const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' ? 'Shop' : 'Posters')
 
 /** The engine is "quiet" when it has not written its sign of life for this long. */
 const QUIET_MS = 30 * 60 * 1000
@@ -75,9 +78,9 @@ export default function App() {
   if (session.mode === 'cloud' && !session.user) {
     return (
       <div className="splash">
-        <Logo size={72} />
-        <h1>{t('PosterPilot')}</h1>
-        <p>{t('Review, fix and schedule your posters.')}</p>
+        <img className="splash-logo" src={`${import.meta.env.BASE_URL}static-logo.png`} alt="Static" />
+        <h1>{t('Static OS')}</h1>
+        <p>{t('Prices, PC builds and quotations, offers and posters, in one place.')}</p>
         <button className="btn btn-primary" onClick={signIn}>{t('Sign in with Google')}</button>
         {session.error && <p className="bad">{session.error}</p>}
       </div>
@@ -107,9 +110,9 @@ export default function App() {
   }
   const openPost = overlay?.kind === 'post' ? data.posts.find((p) => p.id === overlay.id) : undefined
   const health = data.health
-  const quiet = session.mode === 'cloud' && data.loaded && (!health || Date.now() - health.lastSync > QUIET_MS)
+  const quiet = session.mode === 'cloud' && data.loaded && postWork() && (!health || Date.now() - health.lastSync > QUIET_MS)
 
-  const title = t(tab === 'home' ? (desktop ? 'Dashboard' : 'PosterPilot') : TABS.find((x) => x.id === tab)!.label)
+  const title = t(tab === 'home' ? (desktop ? 'Dashboard' : 'Static OS') : TABS.find((x) => x.id === tab)!.label)
   const banners = (
     <>
       {session.mode === 'demo' && <p className="banner"><b>{t('Demo mode')}.</b> {t('Sample data in this browser. Nothing is posted.')}</p>}
@@ -153,20 +156,23 @@ export default function App() {
     return (
       <div className="desk">
         <aside className="sidebar">
-          <div className="brand"><Logo size={34} />{t('PosterPilot')}</div>
-          {canAdd && <button className="btn btn-primary side-add" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New post')}</button>}
+          <div className="brand"><Logo size={34} /><span>Static <b>OS</b></span></div>
+          {canAdd && postWork() && <button className="btn btn-primary side-add" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New post')}</button>}
           <nav className="side-nav">
-            {TABS.map((x) => (
-              <button key={x.id} className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>
+            {TABS.map((x, i) => (
+              <Fragment key={x.id}>
+              {groupOf(x.id) && groupOf(x.id) !== groupOf(TABS[i - 1]?.id ?? 'home') && <p className="side-section">{t(groupOf(x.id))}</p>}
+              <button className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>
                 <Icon name={x.icon} size={20} />
                 <span>{t(x.id === 'home' ? 'Dashboard' : x.label)}</span>
                 {counts[x.id] ? <i className={x.id === 'fix' ? 'count count-bad' : 'count'}>{counts[x.id]}</i> : null}
               </button>
+              </Fragment>
             ))}
             <button onClick={() => setOverlay({ kind: 'settings' })}><Icon name="settings" size={20} /><span>{t('Settings')}</span></button>
           </nav>
           <div className="side-foot">
-            {session.mode === 'cloud' && (
+            {session.mode === 'cloud' && postWork() && (
               <p className="side-engine"><span className={`health${quiet ? ' health-bad' : ''}`} />{t('Engine')}: {health ? agoLabel(health.lastSync) : '—'}</p>
             )}
             <div className="side-user">
@@ -193,12 +199,12 @@ export default function App() {
       <header className="top">
         <Logo size={30} />
         <h1>{title}</h1>
-        {session.mode === 'cloud' && <span className={`health${quiet ? ' health-bad' : ''}`} title={health ? agoLabel(health.lastSync) : ''} />}
+        {session.mode === 'cloud' && postWork() && <span className={`health${quiet ? ' health-bad' : ''}`} title={health ? agoLabel(health.lastSync) : ''} />}
         <button className="icon-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')}><Icon name="settings" /></button>
       </header>
       {banners}
       <main>{page}</main>
-      {canAdd && <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New post')}><Icon name="plus" size={26} /></button>}
+      {canAdd && (tab === 'home' || tab === 'offers') && <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New post')}><Icon name="plus" size={26} /></button>}
       <nav className="tabs">
         {TABS.map((x) => (
           <button key={x.id} className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>
@@ -216,12 +222,5 @@ export default function App() {
 }
 
 function Logo({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <rect width="64" height="64" rx="15" fill="#0f1b33" />
-      <rect x="15" y="12" width="34" height="40" rx="5" fill="none" stroke="#3b82f6" strokeWidth="4" />
-      <path d="M22 41l8-10 6 7 4-5 4 8z" fill="#3b82f6" />
-      <circle cx="40" cy="23" r="4.5" fill="#f97316" />
-    </svg>
-  )
+  return <img className="logo-mark" src={`${import.meta.env.BASE_URL}static-mark.png`} width={Math.round(size * 0.84)} height={size} alt="" aria-hidden="true" />
 }

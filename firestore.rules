@@ -90,8 +90,8 @@ service cloud.firestore {
           // The maker may send an offer that was sent back in again, and nothing else.
           || (can('offers.create') && was.get('createdBy', '') == request.auth.uid && was.get('offer', '') == 'Rejected'
             && now.get('offer', '') == '' && edits.get('offer', '') == '' && !keys.hasAny(['offerNote', 'offerBy'])))
-        // Competitor prices are written by the engine only.
-        && !keys.hasAny(['createdBy', 'createdByName', 'market']);
+        // Competitor prices, where a post stands, and what Facebook and the poster maker report are written by the engine only.
+        && !keys.hasAny(['createdBy', 'createdByName', 'market', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may
     // walk in once without a request. Admins can only shorten it.
@@ -204,9 +204,15 @@ service cloud.firestore {
     }
     match /posts/{id} {
       allow read: if isMember() && mayReadPost();
+      // A new post always starts as an offer waiting for approval: nothing approved, scheduled or posted.
       allow create: if can('offers.create')
         && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid
-        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market']);
+        && request.resource.data.get('zone', 'offer') == 'offer'
+        && request.resource.data.get('feedback', '') == ''
+        && request.resource.data.get('postDate', '') == '' && request.resource.data.get('postTime', '') == ''
+        && request.resource.data.get('fbStatus', '') == '' && request.resource.data.get('igStatus', '') == '' && request.resource.data.get('fbPostId', '') == ''
+        && request.resource.data.get('scheduledFor', '') == '' && request.resource.data.get('posterUrl', '') == ''
+        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market', 'appDeleted', 'ignoredProblem']);
       allow update: if canAct() && postChangeOk();
     }
     // The history of every post. The app adds a line with each change, in the same step, under the
@@ -308,8 +314,13 @@ service cloud.firestore {
         && request.resource.data.at == request.time;
       allow delete: if isMember() && (uid == request.auth.uid || can('quotes.discount'));
     }
+    // Products and styles come from the engine. People who make or check posts may change the caption templates.
     match /catalog/{id} {
-      allow read, write: if isMember();
+      allow read: if isMember();
+      allow create, update: if id == 'templates'
+        && (can('offers.create') || can('designs.approve') || can('fix'))
+        && request.resource.data.keys().hasOnly(['items', 'appEditedAt'])
+        && request.resource.data.items is list && request.resource.data.items.size() <= 50;
     }
     match /status/{id} {
       allow read: if isMember();

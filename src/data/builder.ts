@@ -24,7 +24,7 @@ export const SLOTS: Slot[] = [
   { key: 'speaker', label: 'Speakers', cats: ['speaker'] },
   { key: 'headset', label: 'Headset', cats: ['headset'] },
   { key: 'extra', label: 'Extra', cats: [] },
-  { key: 'paste', label: 'Thermalpaste', cats: ['paste'] },
+  { key: 'paste', label: 'Thermal paste', cats: ['paste'] },
 ]
 export const slotOf = (key: string) => SLOTS.find((s) => s.key === key) ?? SLOTS.find((s) => s.key === 'extra')!
 

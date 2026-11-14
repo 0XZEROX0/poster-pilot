@@ -4,7 +4,7 @@ import fs from 'fs'
 const env = await initializeTestEnvironment({ projectId: 'demo-pp', firestore: { rules: fs.readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: 8085 } })
 const as = (uid, email, verified = true) => env.authenticatedContext(uid, { email, email_verified: verified }).firestore()
 let n = 0, bad = 0
-const ok = async (name, p) => { n++; try { await assertSucceeds(p) } catch (e) { bad++; console.log('SHOULD PASS:', name, String(e.message).slice(0, 120)) } }
+const ok = async (name, p) => { n++; try { await assertSucceeds(p) } catch (e) { bad++; console.log('SHOULD PASS:', name, String(e.message).slice(0, 400)) } }
 const no = async (name, p) => { n++; try { await assertFails(p) } catch (e) { bad++; console.log('SHOULD FAIL:', name) } }
 const CODE = 'STATIC-AAAA-BBBB-CCCC', CODE2 = 'STATIC-DDDD-EEEE-FFFF', CODE3 = 'STATIC-GGGG-HHHH-JJJJ'
 await env.withSecurityRulesDisabled(async (c) => {
@@ -200,6 +200,23 @@ await ok('owner narrows the member role', setDoc(doc(boss, 'roles/member'), { na
 await no('owner deletes a built-in role', deleteDoc(doc(boss, 'roles/member')))
 await ok('owner deletes a custom role', deleteDoc(doc(boss, 'roles/reviewer')))
 await no('person whose role was deleted can no longer approve', updateDoc(doc(rev, 'posts/p1'), { feedback: 'ignore' }))
+// engine-only fields, new posts and caption templates
+await env.withSecurityRulesDisabled(async (c) => { const db = c.firestore(); await setDoc(doc(db, 'roles/poster'), { name: 'Poster', perms: ['offers.create'] }); await setDoc(doc(db, 'members/u-pm'), m('pm@x.com', 'poster')) })
+const pm = P('u-pm')
+await no('member moves a post to another zone', updateDoc(doc(pm, 'posts/p2'), { zone: 'approved' }))
+await no('member writes a Facebook status', updateDoc(doc(boss, 'posts/p2'), { fbStatus: 'Published' }))
+await no('member sets the poster link', updateDoc(doc(pm, 'posts/p2'), { posterUrl: 'https://evil' }))
+const NP = (over = {}) => ({ items: [], feedback: '', postDate: '', postTime: '', fbStatus: '', igStatus: '', fbPostId: '', scheduledFor: '', posterUrl: '', zone: 'offer', createdBy: 'u-pm', ...over })
+await getDoc(doc(pm, 'roles/poster')).catch(() => {}) // the emulator needs one read after seeding
+await ok('member adds a new offer', setDoc(doc(pm, 'posts/new1'), NP()))
+await no('new post already approved as a design', setDoc(doc(pm, 'posts/n2'), NP({ feedback: 'Done' })))
+await no('new post already scheduled', setDoc(doc(pm, 'posts/n3'), NP({ postDate: '2026-12-01', postTime: '17:00' })))
+await no('new post in the approved zone', setDoc(doc(pm, 'posts/n4'), NP({ zone: 'approved' })))
+await no('new post already deleted', setDoc(doc(pm, 'posts/n5'), NP({ appDeleted: true })))
+await ok('member saves caption templates', setDoc(doc(pm, 'catalog/templates'), { items: [{ name: 'default', text: 'x' }], appEditedAt: serverTimestamp() }))
+await no('member overwrites the product list', setDoc(doc(pm, 'catalog/products'), { items: [] }))
+await no('templates with extra fields', setDoc(doc(pm, 'catalog/templates'), { items: [], evil: 1 }))
+await no('member without post work saves templates', setDoc(doc(hr, 'catalog/templates'), { items: [] }))
 // history
 const L = (db, over = {}) => ({ postId: 'p2', by: 'u-sch', byName: 'S', act: 'schedule.set', note: 'x', at: serverTimestamp(), ...over })
 await ok('member writes a history line in its own name', setDoc(doc(sch, 'log/l1'), L(sch)))

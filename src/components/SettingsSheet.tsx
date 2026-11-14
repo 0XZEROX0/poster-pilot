@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { resetDemo } from '../data/localBackend'
-import { allowed, backend, restartDemo, signOutNow, type Session } from '../data/store'
+import { allowed, backend, editsTemplates, postWork, restartDemo, signOutNow, type Session } from '../data/store'
 import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
 import { MembersSection } from './MembersSection'
@@ -49,17 +49,17 @@ export function SettingsSheet({ session, onClose }: { session: Session; onClose:
           )}
         </section>
         {session.mode === 'cloud' && session.access === 'in' && allowed('people') && <MembersSection session={session} />}
-        {session.mode === 'cloud' && (
+        {session.mode === 'cloud' && postWork() && (
           <section className="set">
             <h3>{t('Engine')}</h3>
             <p className="hint">{health ? `${t('Last sync')}: ${agoLabel(health.lastSync)}` : t('No signal from the engine yet.')}</p>
           </section>
         )}
-        <section className="set">
+        {postWork() && <section className="set">
           <h3>{t('Posting rules')}</h3>
           <p className="hint">{t('An approved post is scheduled only once it has a date and a time. Set them in the post or drag it onto a time in the Planner. Nothing is scheduled automatically.')}</p>
-        </section>
-        <section className="set">
+        </section>}
+        {editsTemplates() && <section className="set">
           <h3>{t('Caption templates')}</h3>
           <p className="hint">{t('Placeholders: {name} {price} {before} {category} {company} {details}. A line whose value is empty is left out.')}</p>
           {templates.map((x, i) => (
@@ -70,7 +70,7 @@ export function SettingsSheet({ session, onClose }: { session: Session; onClose:
             </fieldset>
           ))}
           <button className="btn" onClick={() => setTemplates([...templates, { name: '', text: '🔵 {name}\n🟠 {price} EGP' }])}><Icon name="plus" size={18} />{t('Add a template')}</button>
-        </section>
+        </section>}
       </div>
     </Sheet>
   )
