@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCaption, hasOffer, marketKey, marketOf, nextFreeSlot, previewUrl, problemOf, stageOf, whenOf, duplicatesOf, matchesSearch } from '../src/data/logic'
+import { buildCaption, hasOffer, marketKey, marketOf, nextFreeSlot, previewUrl, problemOf, stageOf, whenOf, duplicatesOf, matchesSearch, matchesOffer, priceQuery } from '../src/data/logic'
 import type { Post } from '../src/data/types'
 
 const post = (over: Partial<Post> = {}): Post => ({
@@ -179,5 +179,26 @@ describe('competitor prices', () => {
     expect(marketOf({ ...p, priceAfter: '18000' }).state).toBe('checking')
     expect(marketOf({ ...p, marketAsk: 2000 }).state).toBe('checking')
     expect(marketOf({ ...p, market: undefined }).state).toBe('checking')
+  })
+})
+
+describe('offer search by price', () => {
+  it('reads typed prices', () => {
+    expect(priceQuery('22,000')).toBe(22000)
+    expect(priceQuery('22000 EGP')).toBe(22000)
+    expect(priceQuery('21.5')).toBe(21500)
+    expect(priceQuery('21.5k')).toBe(21500)
+    expect(priceQuery('22')).toBe(22000)
+    expect(priceQuery('rtx 5060')).toBeNull()
+  })
+  it('finds offers within 500 EGP, and items as before', () => {
+    const p = post({ priceAfter: '21,999' })
+    expect(matchesOffer(p, '22,000')).toBe(true)
+    expect(matchesOffer(p, '21.5')).toBe(true)
+    expect(matchesOffer(p, '22.4')).toBe(true)
+    expect(matchesOffer(p, '22.6')).toBe(false)
+    expect(matchesOffer(p, '20000')).toBe(false)
+    expect(matchesOffer(p, 'prime b650')).toBe(true)
+    expect(matchesOffer(post({ items: [{ category: 'GPU', name: 'RTX 5060', manualPhoto: '', nextPhoto: false }], priceAfter: '30,000' }), '5060')).toBe(true)
   })
 })
