@@ -63,7 +63,7 @@ export function DeletedHistory({ onClose }: { onClose: () => void }) {
   const gone = [...new Map(sortLog(list ?? []).reverse().map((e) => [e.postId, e])).values()].sort((a, b) => b.at - a.at)
   return (
     <Sheet title={t('Deleted posts')} onClose={onClose}>
-      <p className="hint">{t('Posts deleted in the app or removed from the sheet. Their history is kept.')} {t('(Cairo time)')}</p>
+      <p className="hint">{t('Posts that were deleted. Their history is kept.')} {t('(Cairo time)')}</p>
       {error && <p className="small alert">{error}</p>}
       {list === null && !error && <p className="muted small">{t('Loading…')}</p>}
       {list !== null && !gone.length && <p className="muted small">{t('Nothing deleted since the history started.')}</p>}

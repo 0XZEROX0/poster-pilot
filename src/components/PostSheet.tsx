@@ -164,7 +164,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
                 <span className="muted">{t('This post is already on the schedule, so it cannot be deleted here.')}</span>
               ) : confirmDelete ? (
                 <>
-                  <span>{t('Delete this post?')} {t('Its row in the sheet will be emptied.')}{posted ? ` ${t('It stays on Facebook and Instagram.')}` : ''}</span>
+                  <span>{t('Delete this post?')}{posted ? ` ${t('It stays on Facebook and Instagram.')}` : ''}</span>
                   <button className="btn btn-danger" onClick={remove}>{t('Delete')}</button>
                   <button className="btn btn-ghost" onClick={() => setConfirmDelete(false)}>{t('Cancel')}</button>
                 </>
