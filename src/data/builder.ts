@@ -244,3 +244,41 @@ export const live = {
     )
   },
 }
+
+// ---------- Extra discount given on someone's live quote ----------
+
+/** A discount someone with 'Give extra discount' put on another person's open quote: grants/{that person's uid}. */
+export type Grant = { amount: number; byName: string; at: number }
+
+export const grants = {
+  watch(uid: string, onData: (g: Grant | null) => void): () => void {
+    if (!firestore || !uid) {
+      onData(null)
+      return () => {}
+    }
+    return onSnapshot(
+      doc(firestore, 'grants', uid),
+      (snap) => {
+        const d = snap.data()
+        onData(snap.exists() && d && Number(d.amount) > 0 ? { amount: Number(d.amount), byName: String(d.byName ?? ''), at: millis(d.at) } : null)
+      },
+      () => onData(null),
+    )
+  },
+  async give(uid: string, amount: number): Promise<void> {
+    if (!firestore) return
+    const me = getAuth(firestore.app).currentUser
+    if (!me) return
+    if (amount <= 0) {
+      await deleteDoc(doc(firestore, 'grants', uid))
+      return
+    }
+    await setDoc(doc(firestore, 'grants', uid), { amount, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() })
+  },
+  /** Ends the discount given on one's own quote, for example when starting a new quote. */
+  async clearMine(): Promise<void> {
+    if (!firestore) return
+    const me = getAuth(firestore.app).currentUser
+    if (me) await deleteDoc(doc(firestore, 'grants', me.uid)).catch(() => {})
+  },
+}

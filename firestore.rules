@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -272,7 +272,7 @@ service cloud.firestore {
     }
     // The build each person has open (drafts/{their uid}), shared as they work so it can be watched live.
     match /drafts/{uid} {
-      allow read: if isMember() && (uid == request.auth.uid || can('quotes.all'));
+      allow read: if isMember() && (uid == request.auth.uid || can('quotes.all') || can('quotes.discount'));
       allow create, update: if isMember() && uid == request.auth.uid
         && request.resource.data.keys().hasOnly(['customer', 'sales', 'lines', 'extra', 'buildDiscount', 'total', 'at', 'byName'])
         && request.resource.data.customer is string && request.resource.data.customer.size() <= 120
@@ -282,6 +282,17 @@ service cloud.firestore {
         && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
         && request.resource.data.at == request.time;
       allow delete: if isMember() && uid == request.auth.uid;
+    }
+    // An extra discount someone with 'Give extra discount' puts on another person's open quote.
+    match /grants/{uid} {
+      allow read: if isMember() && (uid == request.auth.uid || can('quotes.all') || can('quotes.discount'));
+      allow create, update: if can('quotes.discount')
+        && request.resource.data.keys().hasOnly(['amount', 'by', 'byName', 'at'])
+        && request.resource.data.amount is number && request.resource.data.amount > 0 && request.resource.data.amount <= 1000000
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.at == request.time;
+      allow delete: if isMember() && (uid == request.auth.uid || can('quotes.discount'));
     }
     match /catalog/{id} {
       allow read, write: if isMember();
