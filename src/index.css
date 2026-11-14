@@ -594,3 +594,83 @@ button.stock:hover { filter: brightness(1.15); }
 .changes li + li { border-top: 1px solid var(--border); }
 .price-history { margin-top: 20px; }
 .price-history h3 { font-size: 0.9375rem; margin-bottom: 4px; }
+
+/* ---------- Builder ---------- */
+.builder-who { display: flex; flex-wrap: wrap; gap: 10px; flex: 1 1 320px; }
+.builder-who label { display: flex; flex-direction: column; gap: 4px; flex: 1 1 150px; font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.builder-who input, .bl-extra input { min-height: 40px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.9375rem; }
+.builder-who input:focus, .bl-extra input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.bl { display: flex; flex-direction: column; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); overflow: clip; }
+.bl-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 104px 64px 92px 100px 72px; align-items: center; gap: 8px; padding: 4px 10px; border-top: 1px solid var(--border); }
+.bl-head { border-top: 0; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding-block: 10px; }
+.bl .num { text-align: end; font-variant-numeric: tabular-nums; direction: ltr; }
+.bl-type { font-weight: 700; font-size: 0.875rem; }
+.bl-product { display: flex; flex-direction: column; gap: 4px; min-width: 0; text-align: start; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); min-height: 40px; justify-content: center; }
+.bl-product:hover { outline: 1px solid var(--accent); }
+.bl-product .row-title { white-space: normal; font-weight: 600; }
+.bl-notes { display: flex; flex-wrap: wrap; gap: 4px; }
+.bl-empty .bl-type { color: var(--muted); font-weight: 600; }
+.bl-empty .bl-qty { visibility: hidden; }
+.bl-bad .bl-product { outline: 1px solid var(--bad); }
+.bl-qty { display: inline-flex; align-items: center; justify-content: center; gap: 2px; }
+.bl-qty b { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.bl-qty .icon-btn, .bl-acts .icon-btn { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+.bl-total { font-weight: 700; }
+.bl-acts { display: inline-flex; justify-content: flex-end; gap: 2px; }
+.add-row { align-self: flex-start; max-width: 240px; }
+.bl-sum { align-self: flex-end; width: min(100%, 420px); display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); }
+.bl-sum > div, .bl-sum > label { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.9375rem; }
+.bl-sum b { font-variant-numeric: tabular-nums; direction: ltr; }
+.bl-sum .check b { margin-inline-start: auto; }
+.bl-extra input { width: 130px; text-align: end; direction: ltr; }
+.bl-grand { padding-top: 10px; border-top: 1px solid var(--border); font-size: 1.125rem !important; }
+.bl-grand b { font-size: 1.5rem; font-weight: 800; }
+.bl-sum .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .bl-head { display: none; }
+  .bl-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'type acts' 'product product' 'qty total'; gap: 6px; padding: 10px; }
+  .bl-type { grid-area: type; }
+  .bl-acts { grid-area: acts; }
+  .bl-product { grid-area: product; }
+  .bl-qty { grid-area: qty; justify-content: flex-start; }
+  .bl-total { grid-area: total; }
+  .bl-war, .bl-price { display: none; }
+  .bl-empty .bl-qty, .bl-empty .bl-total { display: none; }
+}
+.pick-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.pick-tools .search { flex: 1 1 220px; max-width: none; }
+.pick-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pick-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); text-align: start; }
+.pick-item:hover { outline: 1px solid var(--accent); }
+.pick-item.on { outline: 2px solid var(--accent); }
+.pick-bad { opacity: 0.6; }
+.pick-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pick-main .row-title { white-space: normal; font-weight: 600; }
+.pick-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 0.75rem; }
+.pick-price { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; direction: ltr; white-space: nowrap; }
+.saved-quote { flex-direction: row !important; align-items: center; gap: 10px !important; }
+.saved-open { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: start; }
+.saved-total { font-variant-numeric: tabular-nums; direction: ltr; }
+
+/* The printed quotation: hidden on screen, the only thing on the paper. */
+.quote-print { display: none; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body > *:not(.quote-print) { display: none !important; }
+  html, body { background: #fff !important; }
+  .quote-print { display: block; color: #000; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .quote-print table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12pt; }
+  .quote-print td, .quote-print th { border: 1px solid #000; padding: 4px 6px; vertical-align: middle; font-weight: 700; }
+  .quote-print .q-type { width: 17%; }
+  .quote-print .q-n { width: 9%; }
+  .quote-print .q-n2 { width: 13%; }
+  .quote-print .q-c { text-align: center; }
+  .quote-print .q-top td { height: 56px; }
+  .quote-print .q-top img { display: block; width: 100%; max-height: 48px; object-fit: contain; }
+  .quote-print .q-title { text-align: center; font-weight: 700; font-size: 13pt; line-height: 1.3; }
+  .quote-print .q-customer { font-weight: 400; font-size: 11pt; }
+  .quote-print .q-head th, .quote-print .q-sum th { background: #1155cc; color: #f1c232; font-weight: 700; text-align: center; }
+  .quote-print .q-sum td { font-weight: 700; }
+  .quote-print .q-link { color: #1155cc; text-decoration: underline; }
+  .quote-print .q-foot { font-size: 13pt; }
+}

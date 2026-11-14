@@ -26,15 +26,17 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
 /** 'owner', or the id of a role in `roles`. */
 export type Role = string
 /** The pages a role can be shown or not. Home and Settings are always there. */
-export const PAGES = ['offers', 'review', 'fix', 'calendar', 'posted', 'database'] as const
+export const PAGES = ['prices', 'builder', 'offers', 'review', 'fix', 'calendar', 'posted', 'database'] as const
 export type Page = (typeof PAGES)[number]
-export const PAGE_LABEL: Record<Page, string> = { offers: 'Offers', review: 'Review', fix: 'Fix', calendar: 'Planner', posted: 'Posted', database: 'Database' }
+/** The pages that show posts. Which of them a role sees decides which posts it may read. */
+export const POST_PAGES: Page[] = ['offers', 'review', 'fix', 'calendar', 'posted', 'database']
+export const PAGE_LABEL: Record<Page, string> = { prices: 'Prices', builder: 'Builder', offers: 'Offers', review: 'Review', fix: 'Fix', calendar: 'Planner', posted: 'Posted', database: 'Database' }
 /**
  * The kinds of posts a set of pages may read. Every post carries a `zone` the engine keeps up to date
  * (offer, design, fix, approved, posted). The database rules hold the same table. Null means everything.
  */
 export function zonesFor(pages: Page[]): string[] | null {
-  if (PAGES.every((p) => pages.includes(p))) return null
+  if (POST_PAGES.every((p) => pages.includes(p))) return null
   const has = (...list: Page[]) => list.some((p) => pages.includes(p))
   return [has('offers') && 'offer', has('review', 'database') && 'design', has('review', 'fix', 'database') && 'fix', has('calendar', 'database') && 'approved', has('calendar', 'posted', 'database') && 'posted'].filter((z): z is string => Boolean(z))
 }
