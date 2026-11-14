@@ -31,7 +31,7 @@ service cloud.firestore {
       return role == 'owner' ? allPerms()
         : exists(rolePath(role)) ? get(rolePath(role)).data.perms
         : role == 'admin' ? allPerms()
-        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete']
+        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit']
         : [];
     }
     // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
