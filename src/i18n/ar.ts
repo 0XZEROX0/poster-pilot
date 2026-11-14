@@ -442,4 +442,13 @@ export const ar: Record<string, string> = {
   'Other companies': 'شركات أخرى',
   'Clear quotation': 'امسح عرض السعر',
   'Yes, clear it': 'نعم، امسحه',
+  'Live quotes': 'عروض الأسعار المباشرة',
+  '%n min ago': 'منذ %n دقيقة',
+  'Copy into my builder': 'انسخه في تجميعتي',
+  'Updated': 'آخر تحديث',
+  'Nothing picked yet.': 'لم يتم اختيار شيء بعد.',
+  'Nobody else is building a quote right now.': 'لا أحد آخر يعمل على عرض سعر الآن.',
+  'Back': 'رجوع',
+  'See everyone\'s quotes': 'رؤية عروض أسعار الجميع',
+  'Watch the quote each person is building, live, and see everyone\'s saved quotes with who made them. Without it, people see only their own.': 'متابعة عرض السعر الذي يعمل عليه كل شخص مباشرة، ورؤية عروض الأسعار المحفوظة للجميع ومن عملها. بدونها يرى كل شخص عروضه فقط.',
 }

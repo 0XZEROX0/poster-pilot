@@ -22,7 +22,7 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   delete: ['Delete posts', 'Delete posts that are not on the schedule.'],
   people: ['Manage people', 'See the system code, accept and remove people.'],
   'prices.edit': ['Edit prices', 'Change prices, add, hide and delete products in the price list.'],
-  'quotes.all': ['See all saved quotes', 'See the quotes everyone saved in the Builder, with who made each one. Without it, people see only their own.'],
+  'quotes.all': ["See everyone's quotes", "Watch the quote each person is building, live, and see everyone's saved quotes with who made them. Without it, people see only their own."],
 }
 /** 'owner', or the id of a role in `roles`. */
 export type Role = string
