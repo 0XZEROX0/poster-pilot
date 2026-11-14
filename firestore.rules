@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -225,6 +225,30 @@ service cloud.firestore {
         && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 1000))
         && (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() <= 300))
         && (!('changes' in request.resource.data) || (request.resource.data.changes is list && request.resource.data.changes.size() <= 12));
+      allow update, delete: if false;
+    }
+    // The price list: one document per category (items keyed by product id) and prices/_meta, whose
+    // version goes up with every change. Everyone inside reads it; changing it needs 'Edit prices'.
+    // Every change comes with a line in priceLog, which nobody can change or remove afterwards.
+    match /prices/{cat} {
+      allow read: if isMember();
+      allow create, update: if can('prices.edit') && (cat == '_meta'
+        ? request.resource.data.keys().hasOnly(['version', 'at']) && request.resource.data.version is int
+        : request.resource.data.keys().hasOnly(['name', 'order', 'items', 'importedAt']) && request.resource.data.items is map);
+      allow delete: if false;
+    }
+    match /priceLog/{id} {
+      allow read: if isMember();
+      allow create: if can('prices.edit')
+        && request.resource.data.keys().hasOnly(['cat', 'pid', 'name', 'act', 'changes', 'at', 'by', 'byName'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.cat is string && request.resource.data.cat.size() <= 40
+        && request.resource.data.pid is string && request.resource.data.pid.size() <= 40
+        && request.resource.data.name is string && request.resource.data.name.size() <= 400
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.act in ['edit', 'add', 'remove', 'bulk']
+        && request.resource.data.changes is list && request.resource.data.changes.size() <= 12;
       allow update, delete: if false;
     }
     match /catalog/{id} {

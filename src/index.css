@@ -508,3 +508,31 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .offer-price b { font-size: 1.375rem; font-weight: 800; color: var(--text); letter-spacing: -0.01em; }
 .offer-price s { color: var(--muted); }
 .sort-pick { min-height: 40px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); max-width: 190px; }
+
+/* Prices: a compact table that is also the edit form. */
+.price-list { display: flex; flex-direction: column; }
+.price-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px 96px; align-items: center; gap: 8px; padding: 6px 10px; }
+.price-row + .price-row, .price-group + .price-row { border-top: 1px solid var(--border); }
+.price-head { font-size: 0.75rem; font-weight: 600; color: var(--muted); padding-block: 8px; }
+.price-head span:not(:first-child) { text-align: end; }
+.price-group { padding: 10px 12px 4px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; color: var(--accent); text-transform: uppercase; border-top: 1px solid var(--border); }
+.price-name { display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: start; padding: 4px 0; }
+.price-name:hover .row-title { color: var(--accent); }
+.price-name .row-sub { gap: 6px; font-size: 0.75rem; }
+.price-cell { text-align: end; font-variant-numeric: tabular-nums; font-weight: 600; direction: ltr; }
+.price-input { width: 100%; min-height: 40px; padding: 6px 8px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); }
+.price-input:hover { border-color: var(--border); }
+.price-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
+.price-hidden .row-title { color: var(--muted); }
+.check-line { display: inline-flex; align-items: center; gap: 8px; font-size: 0.875rem; color: var(--text-2); }
+.three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.changes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.changes li { padding: 10px 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.875rem; }
+.changes li + li { border-top: 1px solid var(--border); }
+.price-history { margin-top: 20px; }
+.price-history h3 { font-size: 0.9375rem; margin-bottom: 4px; }
+@media (max-width: 520px) {
+  .price-row { grid-template-columns: minmax(0, 1fr) 76px 76px; gap: 6px; padding-inline: 8px; }
+  .price-input { padding-inline: 6px; font-size: 0.875rem; }
+}
+.prices .tools .search { flex: 1 1 220px; }
