@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { chosen, complete, emptyLine, fresh, misfit, newBuild, pick, quotes, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
+import { chosen, complete, emptyLine, fresh, live, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { matches, money, parseMoney, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
 import { allowed, isOwner, myId, myName } from '../data/store'
 import { locale, t, tn } from '../i18n'
@@ -32,6 +32,8 @@ export function BuilderView() {
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
   const [sure, setSure] = useState(false)
+  const [watching, setWatching] = useState(false)
+  const lastShared = useRef('')
 
   useEffect(() => {
     try {
@@ -45,6 +47,17 @@ export function BuilderView() {
   const lines = useMemo(() => build.lines.map((l) => fresh(cats, l)), [build.lines, cats])
   const parts = useMemo(() => chosen(cats, lines), [cats, lines])
   const sum = totals(lines, build.extra, build.buildDiscount)
+
+  // Share the build a moment after each change, so it can be watched live (one write per pause).
+  const shared = JSON.stringify([build.customer, build.sales, build.extra, build.buildDiscount, lines.filter((l) => l.name).map((l) => [l.slot, l.name, l.qty, l.alone, l.in, l.warranty])])
+  useEffect(() => {
+    if (!loaded || shared === lastShared.current) return
+    const id = setTimeout(() => {
+      lastShared.current = shared
+      live.publish({ ...build, lines }, sum.total).catch(() => { lastShared.current = '' })
+    }, 1500)
+    return () => clearTimeout(id)
+  }, [shared, loaded, build, lines, sum.total])
   const filled = lines.filter((l) => l.name)
 
   if (!loaded) return <div className="splash">{t('Loading…')}</div>
@@ -106,6 +119,7 @@ export function BuilderView() {
           <label><span>{t('Customer')}</span><input dir="auto" value={build.customer} placeholder={t('Optional')} onChange={(e) => patch({ customer: e.target.value })} /></label>
           <label><span>{t('Sales man')}</span><input dir="auto" value={build.sales} onChange={(e) => patch({ sales: e.target.value })} /></label>
         </div>
+        {allowed('quotes.all') && <button className="link" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
         <button className="link" onClick={() => setSaved(true)}><Icon name="clock" size={16} />{t('Saved quotes')}</button>
         {sure ? (
           <span className="clear-confirm">
@@ -180,6 +194,7 @@ export function BuilderView() {
       </div>
 
       {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { setLine(pickingLine.id, (l) => pick(l, cat, item)); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
+      {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false) }} onClose={() => setWatching(false)} />}
       {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false) }} onClose={() => setSaved(false)} />}
       {createPortal(<QuotePrint build={build} lines={filled} sum={sum} />, document.body)}
     </div>
@@ -293,6 +308,66 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
         </ul>
       )}
       {list && list.length === max && <button className="btn" onClick={() => setMax(max + 30)}>{t('Show more')}</button>}
+    </Sheet>
+  )
+}
+
+/** The quote each person is building right now, updating as they work. */
+function LiveSheet({ onCopy, onClose }: { onCopy: (b: LiveBuild) => void; onClose: () => void }) {
+  const [list, setList] = useState<LiveBuild[] | null>(null)
+  const [error, setError] = useState('')
+  const [open, setOpen] = useState('')
+  useEffect(() => live.watch(setList, setError), [])
+  // A minute tick, so "2 min ago" and idle marks stay right.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  const others = (list ?? []).filter((b) => b.uid !== myId())
+  const ago = (at: number) => {
+    const m = Math.max(0, Math.round((now - at) / 60_000))
+    return m < 1 ? t('just now') : m < 60 ? tn('%n min ago', { n: m }) : new Date(at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+  }
+  const one = others.find((b) => b.uid === open)
+  if (one) {
+    const sum = totals(one.lines, one.extra, one.buildDiscount)
+    return (
+      <Sheet title={one.byName || one.sales || t('Someone')} onClose={onClose} footer={<><button className="btn btn-ghost" onClick={() => setOpen('')}>{t('Back')}</button><button className="btn" onClick={() => onCopy(one)}>{t('Copy into my builder')}</button></>}>
+        <p className="live-head"><span className={now - one.at < LIVE_IDLE_MS ? 'live-dot' : 'live-dot idle'} aria-hidden="true" />{t('Updated')} {ago(one.at)}{one.customer ? ` · ${one.customer}` : ''}</p>
+        {one.lines.length === 0 ? <Empty icon="builder" text={t('Nothing picked yet.')} /> : (
+          <ul className="changes live-lines">
+            {one.lines.map((l, i) => (
+              <li key={i}>
+                <div className="row-sub"><b>{t(slotOf(l.slot).label)}</b>{l.qty > 1 && <Chip>×{l.qty}</Chip>}</div>
+                <div className="live-line"><span dir="auto">{l.name}</span><b>{money((l.alone ?? l.in ?? 0) * l.qty)}</b></div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="bl-sum live-sum">
+          <div><span>{t('Price')}</span><b>{money(sum.subtotal)}</b></div>
+          <div><span>{t('Discount')}</span><b>{money(sum.discount)}</b></div>
+          <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)}</b></div>
+        </div>
+      </Sheet>
+    )
+  }
+  return (
+    <Sheet title={t('Live quotes')} onClose={onClose}>
+      {error ? <p className="banner banner-bad" dir="ltr">{error}</p> : list === null ? <p className="muted">{t('Loading…')}</p> : others.length === 0 ? <Empty icon="builder" text={t('Nobody else is building a quote right now.')} /> : (
+        <ul className="changes">
+          {others.map((b) => (
+            <li key={b.uid} className="saved-quote">
+              <button className="saved-open" onClick={() => setOpen(b.uid)}>
+                <span className="row-title"><span className={now - b.at < LIVE_IDLE_MS ? 'live-dot' : 'live-dot idle'} aria-hidden="true" />{b.byName || b.sales || t('Someone')}</span>
+                <span className="muted">{b.customer ? `${b.customer} · ` : ''}{tn('%n parts', { n: b.lines.length })} · {ago(b.at)}</span>
+              </button>
+              <b className="saved-total">{money(b.total)}</b>
+            </li>
+          ))}
+        </ul>
+      )}
     </Sheet>
   )
 }

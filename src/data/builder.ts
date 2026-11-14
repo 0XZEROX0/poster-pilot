@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase/auth'
-import { addDoc, collection, deleteDoc, doc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
 import { firestore } from './firebase'
 import type { PriceCategory, PriceItem } from './prices'
 
@@ -208,3 +208,39 @@ function localQuotes(): QuoteBackend {
 }
 
 export const quotes: QuoteBackend = firestore ? firestoreQuotes() : localQuotes()
+
+// ---------- Live builds ----------
+
+/**
+ * The build each person has open right now, kept in drafts/{uid} a moment after every change, so that
+ * someone with 'See all saved quotes' can watch it being made. One small write per pause in typing.
+ */
+export type LiveBuild = { uid: string; customer: string; sales: string; byName: string; lines: Line[]; extra: number; buildDiscount: boolean; total: number; at: number }
+
+export const LIVE_IDLE_MS = 30 * 60_000
+
+export const live = {
+  /** Shares this person's build. Does nothing in the demo. */
+  async publish(b: Build, total: number): Promise<void> {
+    if (!firestore) return
+    const me = getAuth(firestore.app).currentUser
+    if (!me) return
+    const body = clean(b)
+    await setDoc(doc(firestore, 'drafts', me.uid), { customer: body.customer, sales: body.sales, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, total, at: serverTimestamp(), byName: me.displayName || me.email || '' })
+  },
+  /** Everyone's open builds, newest first, live. */
+  watch(onData: (list: LiveBuild[]) => void, onError: (message: string) => void): () => void {
+    if (!firestore) {
+      onData([])
+      return () => {}
+    }
+    return onSnapshot(
+      query(collection(firestore, 'drafts'), orderBy('at', 'desc'), limit(50)),
+      (snap) => onData(snap.docs.map((d) => {
+        const q = asQuote(d.id, d.data())
+        return { uid: d.id, customer: q.customer, sales: q.sales, byName: q.byName, lines: q.lines, extra: q.extra, buildDiscount: q.buildDiscount, total: q.total, at: q.at || Date.now() }
+      })),
+      (e) => onError(e.message),
+    )
+  },
+}

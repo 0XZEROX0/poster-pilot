@@ -679,3 +679,9 @@ button.stock:hover { filter: brightness(1.15); }
 .choice-new input { flex: 1; min-width: 0; font-size: 1rem; }
 .choice-new .link { white-space: nowrap; }
 .clear-confirm { display: inline-flex; gap: 6px; }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-inline-end: 6px; box-shadow: 0 0 0 3px var(--good-soft); vertical-align: middle; }
+.live-dot.idle { background: var(--muted); box-shadow: none; }
+.live-head { display: flex; align-items: center; color: var(--text-2); font-size: 0.875rem; margin-bottom: 8px; }
+.live-line { display: flex; justify-content: space-between; gap: 12px; }
+.live-line b { font-variant-numeric: tabular-nums; direction: ltr; white-space: nowrap; }
+.live-sum { width: 100%; margin-top: 12px; box-shadow: none; padding: 12px 0 0; }

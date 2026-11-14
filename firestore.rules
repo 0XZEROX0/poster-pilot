@@ -270,6 +270,19 @@ service cloud.firestore {
         && request.resource.data.by == resource.data.by && request.resource.data.byName == resource.data.byName;
       allow delete: if isMember() && (resource.data.by == request.auth.uid || isOwner());
     }
+    // The build each person has open (drafts/{their uid}), shared as they work so it can be watched live.
+    match /drafts/{uid} {
+      allow read: if isMember() && (uid == request.auth.uid || can('quotes.all'));
+      allow create, update: if isMember() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['customer', 'sales', 'lines', 'extra', 'buildDiscount', 'total', 'at', 'byName'])
+        && request.resource.data.customer is string && request.resource.data.customer.size() <= 120
+        && request.resource.data.sales is string && request.resource.data.sales.size() <= 120
+        && request.resource.data.lines is list && request.resource.data.lines.size() <= 40
+        && request.resource.data.extra is number && request.resource.data.total is number && request.resource.data.buildDiscount is bool
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.at == request.time;
+      allow delete: if isMember() && uid == request.auth.uid;
+    }
     match /catalog/{id} {
       allow read, write: if isMember();
     }
