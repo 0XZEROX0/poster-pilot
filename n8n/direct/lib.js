@@ -209,9 +209,9 @@ function pricesFrom(items, products) {
   if (!list.length) return { priceBefore: '', company: '' };
   let sum = 0, bad = false; const companies = [];
   for (const it of list) {
-    const p = products.find(x => x.category === clean(it.category) && x.name === clean(it.name)) || products.find(x => x.name === clean(it.name));
-    if (!p || !isNum(p.price)) { bad = true; continue; }
-    sum += toNum(p.price);
+    const p = products.find(x => x.category === clean(it.category) && clean(x.name).toLowerCase() === clean(it.name).toLowerCase()); // like the sheet: same category, any case
+    if (!p || (clean(p.price) !== '' && !isNum(p.price))) { bad = true; continue; }
+    sum += clean(p.price) === '' ? 0 : toNum(p.price);
     if (clean(p.company) && !companies.includes(clean(p.company))) companies.push(clean(p.company));
   }
   return { priceBefore: bad ? 'Check item' : sum.toLocaleString('en-US'), company: companies.join(' + ') };

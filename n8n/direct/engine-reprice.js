@@ -8,6 +8,9 @@ for (const j of $('Read open posts').all().map(i => i.json)) {
   const d = docOf(j.document);
   if (d.f.appNew === true || d.f.appDeleted === true) continue;
   const p = pricesFrom(d.f.items, products);
+  // The sheet could not price an item whose name in the price list has extra spaces ('Check item'); the engine can.
+  // A post that already has its poster keeps 'Check item', so it is not sent back for a redo just because of that.
+  if (clean(d.f.priceBefore) === 'Check item' && /\/d\//.test(str(d.f.posterUrl)) && p.priceBefore !== 'Check item') { p.priceBefore = 'Check item'; }
   if (p.priceBefore === clean(d.f.priceBefore) && p.company === clean(d.f.company)) continue;
   writes.push({ update: { name: d.name, fields: fieldsOf(p) }, updateMask: { fieldPaths: ['priceBefore', 'company'] }, currentDocument: { updateTime: d.updateTime } });
 }
