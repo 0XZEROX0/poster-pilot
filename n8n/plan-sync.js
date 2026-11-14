@@ -132,6 +132,88 @@ const timeCell = s => { const m = /^(\d{1,2}):(\d{2})$/.exec(s); return m && +m[
 const priceCell = s => /\d/.test(s) ? { numberValue: num(s) } : str(s);
 const pad = s => { const m = /^(\d{1,2}):(\d{2})$/.exec(s); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : s; };
 
+// ---------- history ----------
+// Every post has a history in the app (log/{id}). The app writes what people do there. Here the
+// engine adds what happened in the sheet (by 'sheet') and in the poster and scheduling workflows
+// (by 'system'), found by comparing each row with how it looked on the last run (static data `seen`).
+const prevSeen = (sameSheet && sd.seen && typeof sd.seen === 'object') ? sd.seen : null; // null: first run, only remember
+const nextSeen = {};
+const runAt = new Date().toISOString();
+const logId = () => { const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; let s = ''; for (let i = 0; i < 20; i++) s += abc[Math.floor(Math.random() * abc.length)]; return s; };
+let logged = 0;
+const addLog = (postId, by, act, extra) => {
+  const fields = fieldsOf({ postId, by, byName: '', act, ...(extra || {}) });
+  fields.at = { timestampValue: runAt };
+  push({ update: { name: path('log', logId()), fields }, currentDocument: { exists: false } }, { kind: 'log', id: postId });
+  logged++;
+};
+const titleOfItems = items => items.map(it => it.name).filter(Boolean).join(' + ').slice(0, 280);
+// What is remembered of a row: only what the history needs, kept short.
+const snap = d => ({
+  o: d.offer || '', f: d.feedback, ps: d.photoStatus, u: d.posterUrl ? hash(d.posterUrl) : '', fb: d.fbStatus, ig: d.igStatus,
+  d: d.postDate, t: pad(d.postTime), s: d.scheduledFor, pa: d.priceAfter, st: d.style, de: d.details.slice(0, 140), cs: d.captionStyle,
+  it: titleOfItems(d.items), mp: d.items.map(it => it.manualPhoto).join('|'), c: d.caption.trim() ? hash(d.caption) : '',
+});
+// An app change that this run writes into the row: remembered as already known, so it is not logged twice.
+const withEdits = (sn, e, d) => {
+  const n = { ...sn };
+  if ('feedback' in e) { const v = FEEDBACK[clean(e.feedback).toLowerCase()]; if (v !== undefined) n.f = v.toLowerCase() === 'ignore' ? 'ignore' : v; }
+  if ('offer' in e) { const v = OFFER[clean(e.offer).toLowerCase()]; if (v !== undefined) n.o = v; }
+  if ('postDate' in e) n.d = clean(e.postDate);
+  if ('postTime' in e) n.t = pad(clean(e.postTime));
+  if ('priceAfter' in e) n.pa = clean(e.priceAfter);
+  if ('style' in e) n.st = clean(e.style) || 'Static';
+  if ('details' in e) n.de = clean(e.details).slice(0, 140);
+  if ('captionStyle' in e) n.cs = clean(e.captionStyle);
+  if ('caption' in e) n.c = text(e.caption).trim() ? hash(text(e.caption)) : '';
+  if (Array.isArray(e.items)) n.mp = d.items.map(it => { const x = e.items.find(y => y && clean(y.name) === it.name); return x ? clean(x.manualPhoto) : it.manualPhoto; }).join('|');
+  return n;
+};
+const samePrice = (a, b) => a === b || (/\d/.test(a) && /\d/.test(b) && num(a) === num(b));
+const working = s => /^(WORKING|PHOTO FOUND)/i.test(s);
+const failed = s => s !== '' && s !== 'OK' && !working(s);
+// The lines for one row that changed since the last run.
+const diffLog = (id, p, c) => {
+  const cancelFlow = p.f === 'Cancel' || /^cancelled/i.test(c.fb);
+  if (c.o !== p.o) addLog(id, 'sheet', c.o === 'Approved' ? 'offer.approved' : c.o === 'Rejected' ? 'offer.rejected' : p.o === 'Rejected' ? 'offer.resubmitted' : 'offer.reset');
+  if (c.f !== p.f) {
+    const f = c.f;
+    const act = f === 'Done' ? (p.f === 'Cancel' ? '' : 'design.approved') : f === 'Redo' ? 'design.redo' : f === 'Redo next image' ? 'design.redo_next' : f === 'ignore' ? 'design.skipped'
+      : f === 'Cancel' ? 'schedule.cancel' : f === '' ? ((/^redo/i.test(p.f) || p.f === 'Cancel' || /^published/i.test(p.f)) ? '' : 'design.back') : '';
+    if (act) addLog(id, 'sheet', act);
+  }
+  if (c.d !== p.d || c.t !== p.t) {
+    const was = [p.d, p.t].filter(Boolean).join(' '), now = [c.d, c.t].filter(Boolean).join(' ');
+    if (c.d && c.t) addLog(id, 'sheet', 'schedule.set', { note: now });
+    else if (!(cancelFlow && !c.d && !c.t)) addLog(id, 'sheet', 'schedule.cleared', { note: was ? was + ' → -' : '' });
+  }
+  const changes = [];
+  const building = c.u !== p.u || (working(c.ps) && !working(p.ps));
+  if (!samePrice(c.pa, p.pa)) changes.push({ f: 'priceAfter', from: p.pa, to: c.pa });
+  if (c.st !== p.st) changes.push({ f: 'style', from: p.st, to: c.st });
+  if (c.de !== p.de) changes.push({ f: 'details', from: p.de, to: c.de });
+  if (c.cs !== p.cs) changes.push({ f: 'captionStyle', from: p.cs, to: c.cs });
+  if (c.it !== p.it) changes.push({ f: 'items', from: p.it, to: c.it });
+  else if (c.mp !== p.mp) changes.push({ f: 'photos', from: '', to: c.mp.split('|').filter(Boolean).join(' | ') || '-' });
+  // The workflows write the caption themselves when they make or schedule a poster; only a change to a written caption counts.
+  if (c.c !== p.c && p.c !== '' && c.c !== '' && !building && c.fb === p.fb) changes.push({ f: 'caption', from: '', to: '(changed)' });
+  if (changes.length) addLog(id, 'sheet', 'edited', { changes: changes.slice(0, 12) });
+  if (working(c.ps) && !working(p.ps)) addLog(id, 'system', 'poster.building');
+  if (failed(c.ps) && c.ps !== p.ps) addLog(id, 'system', 'poster.failed', { note: c.ps.slice(0, 300) });
+  if (c.u !== p.u && c.u !== '' && !failed(c.ps)) addLog(id, 'system', 'poster.built');
+  if (c.fb !== p.fb) {
+    const fb = c.fb;
+    if (/^scheduled/i.test(fb)) addLog(id, 'system', 'fb.scheduled', { note: (c.s || fb).slice(0, 300) });
+    else if (/^(published|posted)/i.test(fb)) addLog(id, 'system', 'fb.published');
+    else if (/^cancelled/i.test(fb)) addLog(id, 'system', 'fb.cancelled');
+    else if (fb !== '' && !/^waiting/i.test(fb)) addLog(id, 'system', 'fb.error', { note: fb.slice(0, 300) });
+  }
+  if (c.ig !== p.ig) {
+    if (/^(published|posted)/i.test(c.ig)) addLog(id, 'system', 'ig.published');
+    else if (/error|fail/i.test(c.ig)) addLog(id, 'system', 'ig.error', { note: c.ig.slice(0, 300) });
+  }
+};
+
 // Writes the allowed fields of an app edit into the post's row. Returns how many cells change.
 const applyEdits = (row, e) => {
   let n = 0;
@@ -176,7 +258,7 @@ for (const d of docs.filter(x => x.f.appDirty === true)) {
       // A published post may go: its row is emptied like the sheet's Clear button does, and it stays on Facebook and Instagram.
       const out = /^(published|posted)/i, queued = /^scheduled/i;
       const isOut = out.test(cur('FB status')) || out.test(cur('IG status')) || /^published/i.test(cur('Feedback'));
-      if (queued.test(cur('FB status')) || queued.test(cur('IG status')) || (!isOut && cur('FB post id') !== '')) { settle(d, 'This post is on the schedule, so it was not deleted. Cancel its schedule first.'); notes.push('delete refused: ' + d.id); continue; }
+      if (queued.test(cur('FB status')) || queued.test(cur('IG status')) || (!isOut && cur('FB post id') !== '')) { settle(d, 'This post is on the schedule, so it was not deleted. Cancel its schedule first.'); addLog(d.id, 'system', 'delete.refused'); notes.push('delete refused: ' + d.id); continue; }
       if (/^(WORKING|PHOTO FOUND)/i.test(cur('Photo status'))) { notes.push('delete waits, poster being built: ' + d.id); continue; }
       const stop = head.findIndex(h => /^clear published/i.test(h));
       const end = stop > 0 ? stop : head.length;
@@ -192,11 +274,17 @@ for (const d of docs.filter(x => x.f.appDirty === true)) {
       const tag = tags.find(m => clean(m.metadataValue) === d.id && (m.location.dimensionRange.startIndex || 0) + 1 === row.r);
       if (tag) dropTag(tag);
       row.isPost = false; row.gone = true; rowOf.delete(d.id);
+      addLog(d.id, 'system', 'removed', { note: 'Row ' + row.r, title: titleOfItems(row.d.items) });
       push({ delete: d.name }, { kind: 'delete', id: d.id });
       stats.removed++;
       continue;
     }
-    const n = applyEdits(row, (d.f.appEdits && typeof d.f.appEdits === 'object') ? d.f.appEdits : {});
+    const edits = (d.f.appEdits && typeof d.f.appEdits === 'object') ? d.f.appEdits : {};
+    const n = applyEdits(row, edits);
+    const before = prevSeen && prevSeen[d.id];
+    // Changes made in the sheet before the app edit arrived are still logged; the app edit itself was logged by the app.
+    if (before) diffLog(d.id, before, snap(row.d));
+    nextSeen[d.id] = withEdits(snap(row.d), edits, row.d);
     stats.appEdits++; stats.appCells += n;
     settle(d, '');
     continue;
@@ -224,6 +312,7 @@ for (const d of docs.filter(x => x.f.appDirty === true)) {
   addTag(free.r, d.id);
   free.blank = false;
   placed.push(d.id);
+  addLog(d.id, 'system', 'sheet.added', { note: 'Row ' + free.r });
   stats.appNew++;
   // The post keeps saying where its offer stands until the sheet row is mirrored back.
   if (OFFER_COL) push({ update: { name: d.name, fields: fieldsOf({ appDirty: false, offer: clean(f.offer) === 'Approved' ? 'Approved' : '' }) }, updateMask: { fieldPaths: FLAGS.concat(['offer']) }, currentDocument: { updateTime: d.updateTime } }, { kind: 'flags', id: d.id });
@@ -237,6 +326,13 @@ const MIRROR = ['order', 'items', 'company', 'priceBefore', 'priceAfter', 'style
 const base = {};
 const old = sameSheet ? (sd.hash || {}) : {};
 for (const row of postRows) {
+  if (!(row.id in nextSeen)) {
+    const cur = snap(row.d);
+    const before = prevSeen && prevSeen[row.id];
+    if (before) diffLog(row.id, before, cur);
+    else if (prevSeen && row.fresh) addLog(row.id, 'sheet', 'created', { title: cur.it, note: [row.d.priceAfter || row.d.priceBefore, row.d.style].filter(Boolean).join(' · ') });
+    nextSeen[row.id] = cur;
+  }
   if (skipMirror.has(row.id)) { base[row.id] = '-'; continue; }
   const h = hash(JSON.stringify(row.d));
   const have = full ? (docAt.get(row.id) ? docAt.get(row.id).f.syncHash : undefined) : old[row.id];
@@ -248,6 +344,8 @@ for (const id of placed) base[id] = '-'; // mirrored on the next run, once the s
 const gone = full ? docs.map(d => d.id) : Object.keys(old);
 for (const id of gone) {
   if (rowOf.has(id) || handled.has(id)) continue;
+  // The row was emptied or removed in the sheet (by hand or by the Clear buttons).
+  if (prevSeen && prevSeen[id]) addLog(id, 'sheet', 'cleared', { title: prevSeen[id].it });
   push({ delete: path('posts', id) }, { kind: 'delete', id });
   stats.removed++;
 }
@@ -284,8 +382,9 @@ for (const k of Object.keys(catalog)) {
 const beatDue = full || !sameSheet || !sd.beat || Date.now() - sd.beat > 10 * 60 * 1000;
 if (beatDue) push({ update: { name: path('status', 'engine'), fields: fieldsOf({ lastSync: Date.now(), note: 'Sheet sync: ' + postRows.length + ' posts' }) } }, { kind: 'beat', id: 'engine' });
 
+stats.logged = logged;
 stats.sheetRequests = sheetReq.length;
 stats.writes = writes.length;
 // A dry run only reports: it keeps a small sample so the result is easy to read.
 if (cfg.dryRun === true) return [{ json: { dryRun: true, full, stats, notes, sheetRequests: sheetReq.slice(0, 6), writes: writes.slice(0, 2).concat(writes.slice(-4)), meta: meta.slice(0, 2).concat(meta.slice(-4)), base: {} } }];
-return [{ json: { dryRun: false, full, stats, notes, sheetRequests: sheetReq, writes, meta, base } }];
+return [{ json: { dryRun: false, full, stats, notes, sheetRequests: sheetReq, writes, meta, base, seen: nextSeen } }];

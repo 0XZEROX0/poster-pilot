@@ -21,6 +21,8 @@ chunks.forEach((c, k) => {
   });
 });
 sd.hash = cache;
+// How each row looked, for the history lines of the next run.
+if (plan.seen) sd.seen = plan.seen;
 sd.catalog = catalog;
 sd.sheet = cfg.spreadsheetId;
 if (plan.full) sd.lastFull = Date.now();

@@ -5,8 +5,9 @@ import type { Data } from '../data/types'
 import { t } from '../i18n'
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { CardSize } from './CardSize'
+import { DeletedHistory } from './History'
 import { PostCard } from './PostRow'
-import { CategoryChips, categoryOn, Empty, SearchBox, StyleChips, styleOn } from './ui'
+import { CategoryChips, categoryOn, Empty, Icon, SearchBox, StyleChips, styleOn } from './ui'
 
 const STAGES = ['review', 'fix', 'scheduled', 'posted'] as const
 const STAGE_LABEL: Record<string, string> = { review: 'Review', fix: 'Fix', scheduled: 'Approved', posted: 'Posted' }
@@ -17,12 +18,19 @@ export function DatabaseView({ data, onOpen }: { data: Data; onOpen: (id: string
   const [style, setStyle] = useState('')
   const [stage, setStage] = useState('')
   const [category, setCategory] = useState('')
+  const [deleted, setDeleted] = useState(false)
   const all = data.posts.filter((p) => p.posterUrl !== '')
   const inStage = all.filter((p) => !stage || stageOf(p) === stage)
   const byStage = inStage.filter((p) => !categoryOn(inStage, category) || categoryOf(p) === category)
   const shown = byStage.filter((p) => (!styleOn(byStage, style) || p.style === style) && matchesSearch(p, query))
   const bulk = useBulk(shown.map((p) => p.id))
-  if (!all.length) return <div className="view"><Empty icon="database" text={t('No designs yet. Every post that has a poster shows up here.')} /></div>
+  const gone = (
+    <>
+      <button className="link" onClick={() => setDeleted(true)}><Icon name="clock" size={16} />{t('Deleted posts')}</button>
+      {deleted && <DeletedHistory onClose={() => setDeleted(false)} />}
+    </>
+  )
+  if (!all.length) return <div className="view"><Empty icon="database" text={t('No designs yet. Every post that has a poster shows up here.')} />{gone}</div>
   const post = (id: string) => data.posts.find((p) => p.id === id)
   // A post still waiting on Facebook's schedule has to be cancelled first, so nothing is left behind there.
   const free = (id: string) => { const p = post(id); return p && (stageOf(p) === 'posted' || !onFacebook(p)) ? p : null }
@@ -43,6 +51,7 @@ export function DatabaseView({ data, onOpen }: { data: Data; onOpen: (id: string
         {actions.length > 0 && <BulkToggle bulk={bulk} />}
         <CardSize />
       </div>
+      {gone}
       {actions.length > 0 && <p className="hint">{t('Deleting removes the post from the app, empties its row in the sheet and moves its poster to the Google Drive bin. Facebook and Instagram are not touched.')}</p>}
       {shown.length === 0 ? <Empty icon="search" text={t('Nothing matches.')} /> : (
         <div className="cards cards-sm">{shown.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><PostCard post={p} onOpen={onOpen} /></Pick>)}</div>

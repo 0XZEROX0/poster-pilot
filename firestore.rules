@@ -209,6 +209,24 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market']);
       allow update: if canAct() && postChangeOk();
     }
+    // The history of every post. The app adds a line with each change, in the same step, under the
+    // person's own id and the server's time; nobody can change or remove a line afterwards. The
+    // engine writes the sheet and workflow lines with its service account.
+    match /log/{id} {
+      allow read: if isMember();
+      allow create: if canAct()
+        && request.resource.data.keys().hasOnly(['postId', 'at', 'by', 'byName', 'act', 'note', 'changes', 'title'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.postId is string && request.resource.data.postId.size() > 0 && request.resource.data.postId.size() <= 40
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.act in ['created', 'edited', 'offer.approved', 'offer.rejected', 'offer.resubmitted', 'design.approved', 'design.redo', 'design.redo_next',
+          'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'problem.ignored', 'prices.recheck', 'deleted']
+        && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 1000))
+        && (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() <= 300))
+        && (!('changes' in request.resource.data) || (request.resource.data.changes is list && request.resource.data.changes.size() <= 12));
+      allow update, delete: if false;
+    }
     match /catalog/{id} {
       allow read, write: if isMember();
     }
