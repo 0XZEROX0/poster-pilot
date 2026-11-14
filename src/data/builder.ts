@@ -215,18 +215,36 @@ export const quotes: QuoteBackend = firestore ? firestoreQuotes() : localQuotes(
  * The build each person has open right now, kept in drafts/{uid} a moment after every change, so that
  * someone with 'See all saved quotes' can watch it being made. One small write per pause in typing.
  */
-export type LiveBuild = { uid: string; customer: string; sales: string; byName: string; lines: Line[]; extra: number; buildDiscount: boolean; total: number; at: number }
+/** extra is the builder's own extra discount; grant is the one given from Live quotes (0 when none). */
+export type LiveBuild = { uid: string; customer: string; sales: string; byName: string; lines: Line[]; extra: number; grant: number; buildDiscount: boolean; total: number; at: number }
+
+function asLive(uid: string, d: Record<string, unknown>): LiveBuild {
+  const q = asQuote(uid, d)
+  return { uid, customer: q.customer, sales: q.sales, byName: q.byName, lines: q.lines, extra: q.extra, grant: Number(d.grant) || 0, buildDiscount: q.buildDiscount, total: q.total, at: q.at || Date.now() }
+}
+
+/** What a quote is made of, to tell whether two versions differ (empty rows and line ids don't count). */
+export const shape = (b: { customer: string; extra: number; buildDiscount: boolean }, lines: Line[]) =>
+  JSON.stringify([b.customer.trim(), Number(b.extra) || 0, b.buildDiscount, lines.filter((l) => l.name).map((l) => [l.slot, l.pid || l.name, l.qty])])
 
 export const LIVE_IDLE_MS = 30 * 60_000
 
 export const live = {
   /** Shares this person's build. Does nothing in the demo. */
-  async publish(b: Build, total: number): Promise<void> {
+  async publish(b: Build, total: number, grant: number): Promise<void> {
     if (!firestore) return
     const me = getAuth(firestore.app).currentUser
     if (!me) return
     const body = clean(b)
-    await setDoc(doc(firestore, 'drafts', me.uid), { customer: body.customer, sales: body.sales, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, total, at: serverTimestamp(), byName: me.displayName || me.email || '' })
+    await setDoc(doc(firestore, 'drafts', me.uid), { customer: body.customer, sales: body.sales, lines: body.lines, extra: body.extra, grant, buildDiscount: body.buildDiscount, total, at: serverTimestamp(), byName: me.displayName || me.email || '' })
+  },
+  /** One person's open build, live. */
+  watchOne(uid: string, onData: (b: LiveBuild | null) => void): () => void {
+    if (!firestore) {
+      onData(null)
+      return () => {}
+    }
+    return onSnapshot(doc(firestore, 'drafts', uid), (snap) => onData(snap.exists() ? asLive(uid, snap.data()) : null), () => onData(null))
   },
   /** Everyone's open builds, newest first, live. */
   watch(onData: (list: LiveBuild[]) => void, onError: (message: string) => void): () => void {
@@ -236,10 +254,7 @@ export const live = {
     }
     return onSnapshot(
       query(collection(firestore, 'drafts'), orderBy('at', 'desc'), limit(50)),
-      (snap) => onData(snap.docs.map((d) => {
-        const q = asQuote(d.id, d.data())
-        return { uid: d.id, customer: q.customer, sales: q.sales, byName: q.byName, lines: q.lines, extra: q.extra, buildDiscount: q.buildDiscount, total: q.total, at: q.at || Date.now() }
-      })),
+      (snap) => onData(snap.docs.map((d) => asLive(d.id, d.data()))),
       (e) => onError(e.message),
     )
   },
@@ -280,5 +295,40 @@ export const grants = {
     if (!firestore) return
     const me = getAuth(firestore.app).currentUser
     if (me) await deleteDoc(doc(firestore, 'grants', me.uid)).catch(() => {})
+  },
+}
+
+// ---------- Changes someone with 'Edit live quotes' makes to another person's open quote ----------
+
+/** The whole quote as the editor left it: edits/{the builder's uid}. The builder's app takes it in and removes it. */
+export type QuoteEdit = { customer: string; lines: Line[]; extra: number; buildDiscount: boolean; byName: string; at: number }
+
+export const edits = {
+  async send(uid: string, b: Build): Promise<void> {
+    if (!firestore) return
+    const me = getAuth(firestore.app).currentUser
+    if (!me) return
+    const body = clean(b)
+    await setDoc(doc(firestore, 'edits', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() })
+  },
+  /** Changes made to this person's quote by someone else. */
+  watchMine(onData: (e: QuoteEdit) => void): () => void {
+    if (!firestore) return () => {}
+    const me = getAuth(firestore.app).currentUser
+    if (!me) return () => {}
+    return onSnapshot(
+      doc(firestore, 'edits', me.uid),
+      (snap) => {
+        if (!snap.exists() || snap.metadata.hasPendingWrites) return
+        const q = asQuote(me.uid, snap.data())
+        onData({ customer: q.customer, lines: q.lines, extra: q.extra, buildDiscount: q.buildDiscount, byName: q.byName, at: q.at })
+      },
+      () => {},
+    )
+  },
+  async clearMine(): Promise<void> {
+    if (!firestore) return
+    const me = getAuth(firestore.app).currentUser
+    if (me) await deleteDoc(doc(firestore, 'edits', me.uid)).catch(() => {})
   },
 }

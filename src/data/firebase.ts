@@ -1,6 +1,6 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
+import { connectAuthEmulator, getAuth, GoogleAuthProvider, signInWithCredential } from 'firebase/auth'
+import { connectFirestoreEmulator, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,3 +20,13 @@ export const auth = app ? getAuth(app) : null
 
 // Offline cache: the app opens instantly and keeps working without a connection; changes sync later.
 export const firestore = app ? initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }) : null
+
+// Local testing only (npm run dev with VITE_EMULATOR=1): talk to the Firebase emulators, never the real project.
+// import.meta.env.DEV is false in the built app, so none of this ships.
+if (import.meta.env.DEV && import.meta.env.VITE_EMULATOR && auth && firestore) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+  connectFirestoreEmulator(firestore, '127.0.0.1', 8085)
+  const a = auth
+  ;(window as unknown as Record<string, unknown>).__testSignIn = (sub: string, email: string, name: string) =>
+    signInWithCredential(a, GoogleAuthProvider.credential(JSON.stringify({ sub, email, name, email_verified: true })))
+}

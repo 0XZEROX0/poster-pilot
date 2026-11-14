@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -272,9 +272,10 @@ service cloud.firestore {
     }
     // The build each person has open (drafts/{their uid}), shared as they work so it can be watched live.
     match /drafts/{uid} {
-      allow read: if isMember() && (uid == request.auth.uid || can('quotes.all') || can('quotes.discount'));
+      allow read: if isMember() && (uid == request.auth.uid || can('quotes.all') || can('quotes.discount') || can('quotes.edit'));
       allow create, update: if isMember() && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['customer', 'sales', 'lines', 'extra', 'buildDiscount', 'total', 'at', 'byName'])
+        && request.resource.data.keys().hasOnly(['customer', 'sales', 'lines', 'extra', 'grant', 'buildDiscount', 'total', 'at', 'byName'])
+        && (!('grant' in request.resource.data) || request.resource.data.grant is number)
         && request.resource.data.customer is string && request.resource.data.customer.size() <= 120
         && request.resource.data.sales is string && request.resource.data.sales.size() <= 120
         && request.resource.data.lines is list && request.resource.data.lines.size() <= 40
@@ -282,6 +283,19 @@ service cloud.firestore {
         && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
         && request.resource.data.at == request.time;
       allow delete: if isMember() && uid == request.auth.uid;
+    }
+    // Changes someone with 'Edit live quotes' makes to another person's open quote; the builder's app takes them in.
+    match /edits/{uid} {
+      allow read: if isMember() && (uid == request.auth.uid || can('quotes.edit'));
+      allow create, update: if can('quotes.edit')
+        && request.resource.data.keys().hasOnly(['customer', 'lines', 'extra', 'buildDiscount', 'by', 'byName', 'at'])
+        && request.resource.data.customer is string && request.resource.data.customer.size() <= 120
+        && request.resource.data.lines is list && request.resource.data.lines.size() <= 40
+        && request.resource.data.extra is number && request.resource.data.buildDiscount is bool
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.at == request.time;
+      allow delete: if isMember() && (uid == request.auth.uid || can('quotes.edit'));
     }
     // An extra discount someone with 'Give extra discount' puts on another person's open quote.
     match /grants/{uid} {
