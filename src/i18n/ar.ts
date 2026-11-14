@@ -275,6 +275,7 @@ export const ar: Record<string, string> = {
   'Checking competitor prices…': 'جارٍ فحص أسعار المنافسين…',
   'Competitor prices': 'أسعار المنافسين',
   'Check again': 'افحص من جديد',
+  'Check prices again': 'افحص الأسعار من جديد',
   'The check did not work this time.': 'لم ينجح الفحص هذه المرة.',
   'Competitors': 'المنافسون',
   'Yours': 'سعرك',

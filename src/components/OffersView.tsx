@@ -116,6 +116,8 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
       { label: 'Approve offer', icon: 'check', tone: 'primary' as const, run: (id: string) => (open(id) ? backend.updatePost(id, { offer: 'Approved', offerBy: myName(), offerNote: '' }) : false) },
       { label: 'Send back', run: (id: string) => (open(id) ? backend.updatePost(id, { offer: 'Rejected', offerBy: myName(), offerNote: '' }) : false) },
     ] : []),
+    // Asks the engine for fresh competitor prices, like Check again on each card. Sent-back offers have no prices.
+    { label: 'Check prices again', icon: 'redo', run: (id: string) => { const p = post(id); return p && offerOf(p) === 'waiting' ? backend.updatePost(id, { marketAsk: Date.now() }) : false } },
     ...(allowed('delete') ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => backend.removePost(id) }] : []),
   ]
   const cards = (list: Post[]) => <div className="cards">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><OfferCard post={p} onOpen={onOpen} /></Pick>)}</div>
