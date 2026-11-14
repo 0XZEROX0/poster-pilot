@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { chosen, emptyLine, fresh, misfit, newBuild, pick, quotes, SHOP, slotOf, SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
+import { chosen, complete, emptyLine, fresh, misfit, newBuild, pick, quotes, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { matches, money, parseMoney, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
 import { myName } from '../data/store'
 import { locale, t, tn } from '../i18n'
@@ -11,7 +11,10 @@ const DRAFT_KEY = 'posterpilot.builder.draft'
 const loadDraft = (): Build => {
   try {
     const raw = localStorage.getItem(DRAFT_KEY)
-    if (raw) return JSON.parse(raw) as Build
+    if (raw) {
+      const b = JSON.parse(raw) as Build
+      return { ...b, lines: complete(b.lines ?? []) }
+    }
   } catch {
     // A broken or missing draft: start a new one.
   }
@@ -63,10 +66,11 @@ export function BuilderView() {
     if (at === b.lines.length && !b.lines.some((l) => SLOTS.findIndex((s) => s.key === l.slot) <= order)) at = 0
     return { ...b, lines: [...b.lines.slice(0, at), emptyLine(slot), ...b.lines.slice(at)] }
   })
-  /** Empties a row; a second row of the same kind goes away instead. */
+  /** The last row of a kind a build starts with always stays: removing it only empties it. */
+  const keeps = (line: Line) => START_SLOTS.includes(line.slot) && build.lines.filter((l) => l.slot === line.slot).length <= 1
   const removeLine = (line: Line) => setBuild((b) => {
-    const same = b.lines.filter((l) => l.slot === line.slot).length
-    return same > 1 || !line.name ? { ...b, lines: b.lines.filter((l) => l.id !== line.id) } : { ...b, lines: b.lines.map((l) => (l.id === line.id ? emptyLine(l.slot) : l)) }
+    const last = START_SLOTS.includes(line.slot) && b.lines.filter((l) => l.slot === line.slot).length <= 1
+    return last ? { ...b, lines: b.lines.map((l) => (l.id === line.id ? emptyLine(l.slot) : l)) } : { ...b, lines: b.lines.filter((l) => l.id !== line.id) }
   })
   const start = () => {
     setBuild(newBuild(myName() || build.sales))
@@ -139,7 +143,11 @@ export function BuilderView() {
               <span className="num bl-total">{line.name ? money((line.alone ?? line.in ?? 0) * line.qty) : ''}</span>
               <span className="bl-acts">
                 <button className="icon-btn" title={tn('Another %s', { s: t(slot.label) })} aria-label={tn('Another %s', { s: t(slot.label) })} onClick={() => addAfter(line)}><Icon name="plus" size={16} /></button>
-                <button className="icon-btn" title={t('Remove')} aria-label={t('Remove')} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>
+                {keeps(line) ? (
+                  <button className="icon-btn" title={t('Empty this row')} aria-label={t('Empty this row')} disabled={!line.name} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>
+                ) : (
+                  <button className="icon-btn" title={t('Remove')} aria-label={t('Remove')} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>
+                )}
               </span>
             </div>
           )
@@ -165,7 +173,7 @@ export function BuilderView() {
       </div>
 
       {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { setLine(pickingLine.id, (l) => pick(l, cat, item)); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
-      {saved && <SavedSheet onOpen={(q) => { setBuild(q); setSaved(false); setSure(false) }} onClose={() => setSaved(false)} />}
+      {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, lines: complete(q.lines) }); setSaved(false); setSure(false) }} onClose={() => setSaved(false)} />}
       {createPortal(<QuotePrint build={build} lines={filled} sum={sum} />, document.body)}
     </div>
   )
