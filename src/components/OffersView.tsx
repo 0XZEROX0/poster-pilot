@@ -34,13 +34,13 @@ function MarketBox({ post: p }: { post: Post }) {
           {view.tone === 'high' && <span className="market-warn"><Icon name="fix" size={16} />{t('Check this price before approving.')}</span>}
         </p>
       )}
-      {view.state === 'done' && view.tone === 'partial' && <p className="small">{t('Found {n} of {m} items, so there is no total.').replace('{n}', String(view.found)).replace('{m}', String(view.count))}</p>}
+      {view.state === 'done' && view.tone === 'partial' && <p className="small">{t('{n} of {m} items have an in-stock price, so there is no total.').replace('{n}', String(view.found)).replace('{m}', String(view.count))}</p>}
       <ul className="market-items">
         {m.items.map((it, i) => (
           <li key={i}>
             <span dir="auto" className="market-name">{it.name}</span>
             {it.best ? (
-              <span><a href={it.best.url} target="_blank" rel="noreferrer" dir="ltr">{egp(it.best.price)}</a> {it.best.shop}{stockOf(it.best) && <span className="muted"> · {stockOf(it.best)}</span>}{it.best.note && <span className="muted" dir="auto"> · {it.best.note}</span>}</span>
+              <span><a href={it.best.url} target="_blank" rel="noreferrer" dir="ltr">{egp(it.best.price)}</a> {it.best.shop}{stockOf(it.best) && <span className="muted"> · {stockOf(it.best)}</span>}{it.best.inStock === false && <span className="muted"> · {t('not counted')}</span>}{it.best.note && <span className="muted" dir="auto"> · {it.best.note}</span>}</span>
             ) : <span className="muted">{t('Not found at the shops')}</span>}
             {open && [...it.others.map((h) => ({ h, similar: false })), ...it.similar.map((h) => ({ h, similar: true }))].map(({ h, similar }, j) => (
               <span key={j} className="market-other small"><a href={h.url} target="_blank" rel="noreferrer" dir="ltr">{egp(h.price)}</a> {h.shop}{stockOf(h) && ` · ${stockOf(h)}`}{similar && ` · ${t('similar, not counted')}`} <span className="muted" dir="auto">{h.title}</span></span>
