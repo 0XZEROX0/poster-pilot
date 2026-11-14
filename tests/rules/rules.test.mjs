@@ -200,6 +200,21 @@ await ok('owner narrows the member role', setDoc(doc(boss, 'roles/member'), { na
 await no('owner deletes a built-in role', deleteDoc(doc(boss, 'roles/member')))
 await ok('owner deletes a custom role', deleteDoc(doc(boss, 'roles/reviewer')))
 await no('person whose role was deleted can no longer approve', updateDoc(doc(rev, 'posts/p1'), { feedback: 'ignore' }))
+// history
+const L = (db, over = {}) => ({ postId: 'p2', by: 'u-sch', byName: 'S', act: 'schedule.set', note: 'x', at: serverTimestamp(), ...over })
+await ok('member writes a history line in its own name', setDoc(doc(sch, 'log/l1'), L(sch)))
+{ const b = writeBatch(sch); b.update(doc(sch, 'posts/p2'), { postTime: '20:00', 'appEdits.postTime': '20:00' }); b.set(doc(sch, 'log/l2'), L(sch)); await ok('change and its line in one step', b.commit()) }
+{ const b = writeBatch(sch); b.update(doc(sch, 'posts/p2'), { priceAfter: '1' }); b.set(doc(sch, 'log/l3'), L(sch, { act: 'edited' })); await no('a refused change leaves no line', b.commit()) }
+await no('line in someone else\'s name', setDoc(doc(sch, 'log/l4'), L(sch, { by: 'u-boss' })))
+await no('line with a made-up time', setDoc(doc(sch, 'log/l5'), L(sch, { at: 5 })))
+await no('line pretending to be the sheet', setDoc(doc(sch, 'log/l6'), L(sch, { by: 'sheet' })))
+await no('line with an engine-only kind', setDoc(doc(sch, 'log/l7'), L(sch, { act: 'fb.published' })))
+await no('line with extra fields', setDoc(doc(sch, 'log/l8'), L(sch, { evil: 1 })))
+await no('history line changed', updateDoc(doc(sch, 'log/l1'), { note: 'y' }))
+await no('history line removed', deleteDoc(doc(boss, 'log/l1')))
+await ok('member reads a post history', getDocs(query(collection(sch, 'log'), where('postId', '==', 'p2'))))
+await no('outsider reads history', getDocs(collection(as('u-out', 'out@x.com'), 'log')))
+await no('people-only role writes history', setDoc(doc(hr, 'log/l9'), L(hr, { by: 'u-hr' })))
 await no('status write by owner', setDoc(doc(boss, 'status/engine'), { lastSync: 1 }))
 console.log(`${n} checks, ${bad} wrong`)
 await env.cleanup(); process.exit(bad ? 1 : 0)

@@ -39,3 +39,35 @@ const docs=[
 console.log('--- quick run with tags, edits, new post, delete, ghost, cache');
 o=run({md,docs,sd:{hash:{AAAAAAAAAA:'zz',BBBBBBBBBB:'yy',OLDONE:'q'},catalog:{}}}); show(o);
 console.log(JSON.stringify(o.writes.slice(0,4)));
+
+console.log('--- history: sheet and workflow changes between two runs');
+const md2={matchedDeveloperMetadata:[
+ {developerMetadata:{metadataId:1,metadataKey:'p',metadataValue:'AAAAAAAAAA',location:{locationType:'ROW',dimensionRange:{dimension:'ROWS',startIndex:1,endIndex:2}}}},
+ {developerMetadata:{metadataId:2,metadataKey:'p',metadataValue:'BBBBBBBBBB',location:{locationType:'ROW',dimensionRange:{dimension:'ROWS',startIndex:2,endIndex:3}}}},
+]};
+const logs=o=>o.writes.filter(w=>w.update&&/\/log\//.test(w.update.name)).map(w=>{const f=w.update.fields;return [f.postId.stringValue,f.by.stringValue,f.act.stringValue,(f.note||{}).stringValue||'',f.changes?JSON.stringify(f.changes.arrayValue.values.map(v=>v.mapValue.fields.f.stringValue)):''].join(' ')});
+let sdh={hash:{}};
+o=run({md:md2,sd:sdh});
+console.log('first run logs (expect none):', logs(o).length);
+sdh={hash:{},seen:o.seen};
+const keep=JSON.stringify(posts);
+// Row 3 (BBBB): someone approves the offer... (no offer column here) sets Feedback Done, a time, a new price; the scheduler schedules it.
+posts[2][20]='Done'; posts[2][23]='2026-11-20'; posts[2][24]='18:00'; posts[2][14]='1,399'; posts[2][28]='Scheduled'; posts[2][25]='2026-11-20 18:00';
+// Row 2 (AAAA): Redo in the sheet, poster workflow starts.
+posts[1][20]='Redo'; posts[1][19]='WORKING';
+// A new row typed in the sheet.
+posts[3]=["MB","","","New board","FALSE","","","FALSE","","","FALSE","","","","2,000","Static"];
+o=run({md:md2,sd:sdh}); console.log(logs(o).join('\n'));
+sdh={hash:{},seen:o.seen};
+console.log('--- next run: poster ready, feedback cleared by the workflow; FB published on row 3');
+posts[1][20]=''; posts[1][19]='OK'; posts[1][17]='https://drive.google.com/file/d/NEW/view'; posts[1][26]='new caption by workflow';
+posts[2][28]='Published';
+o=run({md:md2,sd:sdh}); console.log(logs(o).join('\n'));
+sdh={hash:{},seen:o.seen};
+console.log('--- next run: app sets a time on AAAA (no double line), row 3 cleared in the sheet');
+posts[2]=blank();
+const docs2=[{document:{name:'projects/P/databases/(default)/documents/posts/AAAAAAAAAA',updateTime:'t9',fields:fv({appDirty:true,appEdits:{postDate:'2026-11-22',postTime:'12:00'}})}}];
+o=run({md:md2,sd:{...sdh,hash:{AAAAAAAAAA:'x',BBBBBBBBBB:'y'}},docs:docs2}); console.log(logs(o).join('\n'));
+sdh={hash:{},seen:o.seen};
+posts[1][23]='2026-11-22'; posts[1][24]='12:00';
+o=run({md:md2,sd:sdh}); console.log('after the sheet shows the app time (expect none):', logs(o).length);

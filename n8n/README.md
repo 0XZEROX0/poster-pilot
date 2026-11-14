@@ -17,7 +17,7 @@ How it works
   writes those into the row: Feedback, Caption, Caption style, Post date, Post time, Price after, Style,
   Details, Manual photo and Next photo. A post created in the app goes into the first blank row.
 - Never written: Company, Price before and Preview (formulas), and everything the other workflows fill in.
-- Deleting a post from the app is not carried over to the sheet yet.
+- History: each run compares every row with the last run (static data `seen`) and writes `log/{id}` lines for sheet edits (by `sheet`) and poster/scheduler results (by `system`). The app writes its own lines.
 - The `Settings` node has `dryRun`. When it is on, the run only reports what it would do.
 
 ## Removing deleted posters from Drive

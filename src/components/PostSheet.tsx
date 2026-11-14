@@ -4,6 +4,7 @@ import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { problemText } from './FixView'
+import { PostHistory } from './History'
 import { Poster } from './Poster'
 import { StageChip } from './PostRow'
 import { Sheet } from './Sheet'
@@ -156,6 +157,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             <textarea dir="auto" rows={9} readOnly={posted} value={draft.caption} onChange={(e) => set({ caption: e.target.value })} />
           </label>
           {!posted && <button className="link" onClick={() => set({ caption: buildCaption(draft, data.templates) })}>{t('Rebuild from template')}</button>}
+          <PostHistory postId={post.id} />
           {allowed('delete') && (
             <div className="danger">
               {locked ? (

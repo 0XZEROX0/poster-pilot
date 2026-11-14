@@ -89,3 +89,13 @@ export type Data = {
 export type NewPost = Pick<Post, 'items' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime'>
 
 export const emptyData: Data = { loaded: false, posts: [], products: [], styles: [], templates: [], health: null }
+
+/** One field that changed in a log entry, as short text. */
+export type LogChange = { f: string; from: string; to: string }
+
+/**
+ * One line of a post's history (Firestore `log/{id}`). Written by the app in the same step as the
+ * change, or by the engine for what happened in the sheet and the workflows. Entries are never changed.
+ * `by` is the person's id, or 'sheet' (someone typed in the Posts sheet) or 'system' (a workflow).
+ */
+export type LogEntry = { id: string; postId: string; at: number; by: string; byName: string; act: string; note?: string; changes?: LogChange[]; title?: string }
