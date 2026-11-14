@@ -237,3 +237,25 @@ export function duplicatesOf(names: string[], posts: Post[]): { same: Post[]; pa
 
 /** A post's category: its item's category from the product list, or Bundle when it holds more than one item. */
 export const categoryOf = (p: Pick<Post, 'items'>) => (p.items.length > 1 ? 'Bundle' : p.items[0]?.category.trim() || 'Other')
+
+/** How far from the typed price an offer may be and still be found. */
+export const PRICE_RANGE = 500
+
+/**
+ * A search that is only a price: "22000", "22,000", "22000 EGP", "21.5", "21.5k", "22k".
+ * A number below 1,000 is read as thousands (21.5 → 21,500). Anything else is not a price.
+ */
+export function priceQuery(query: string): number | null {
+  const m = /^\s*(\d[\d,]*(?:\.\d+)?)\s*(k)?\s*(?:egp|le|ج\.?م)?\s*$/i.exec(query)
+  if (!m) return null
+  const n = Number(m[1].replace(/,/g, ''))
+  if (!Number.isFinite(n) || n <= 0) return null
+  return m[2] || n < 1000 ? Math.round(n * 1000) : n
+}
+
+/** An offer is found by its items (as everywhere else) or by a price within PRICE_RANGE of the typed one. */
+export function matchesOffer(p: Post, query: string): boolean {
+  if (matchesSearch(p, query)) return true
+  const want = priceQuery(query)
+  return want !== null && Math.abs(toNumber(priceOf(p)) - want) <= PRICE_RANGE
+}

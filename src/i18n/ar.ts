@@ -334,4 +334,5 @@ export const ar: Record<string, string> = {
   'Oldest first': 'الأقدم أولًا',
   'Price: high to low': 'السعر: من الأعلى للأقل',
   'Price: low to high': 'السعر: من الأقل للأعلى',
+  'Search by item or price…': 'ابحث باسم المنتج أو السعر…',
 }

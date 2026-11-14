@@ -1,7 +1,7 @@
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { CardSize } from './CardSize'
 import { useState } from 'react'
-import { formatPrice, hasOffer, marketOf, matchesSearch, offerOf, priceOf, stageOf, titleOf, toNumber } from '../data/logic'
+import { formatPrice, hasOffer, marketOf, matchesOffer, offerOf, priceOf, priceQuery, stageOf, titleOf, toNumber } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, MarketHit, Post } from '../data/types'
 import { t } from '../i18n'
@@ -134,7 +134,7 @@ function sortOffers(list: Post[], order: Order) {
 export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) => void }) {
   const [query, setQuery] = useState('')
   const all = data.posts.filter((p) => stageOf(p) === 'offer')
-  // Search by item name (also category, brand and style), like the other pages.
+  // Search by item name (also category, brand and style), like the other pages, or by price (500 EGP either way).
   const [order, setOrderState] = useState<Order>(savedOrder)
   const setOrder = (o: Order) => {
     setOrderState(o)
@@ -144,7 +144,12 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
       // The choice then lasts until the page is closed.
     }
   }
-  const offers = sortOffers(all.filter((p) => matchesSearch(p, query)), order)
+  const found = all.filter((p) => matchesOffer(p, query))
+  // A price search in the sheet order shows the closest price first.
+  const want = priceQuery(query)
+  const offers = want !== null && order === 'list'
+    ? found.slice().sort((a, b) => Math.abs(toNumber(priceOf(a)) - want) - Math.abs(toNumber(priceOf(b)) - want))
+    : sortOffers(found, order)
   const waiting = offers.filter((p) => offerOf(p) === 'waiting')
   const back = offers.filter((p) => offerOf(p) === 'rejected')
   const bulk = useBulk(offers.map((p) => p.id))
@@ -166,7 +171,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   return (
     <div className="view">
       <div className="review-bar tools">
-        <SearchBox value={query} onChange={setQuery} />
+        <SearchBox value={query} onChange={setQuery} placeholder={t('Search by item or price…')} />
         <select className="sort-pick" aria-label={t('Sort')} value={order} onChange={(e) => setOrder(e.target.value as Order)}>
           {ORDERS.map((o) => <option key={o.id} value={o.id}>{t(o.label)}</option>)}
         </select>
