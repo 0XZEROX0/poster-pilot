@@ -1,7 +1,7 @@
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { CardSize } from './CardSize'
 import { useState } from 'react'
-import { formatPrice, hasOffer, marketOf, matchesSearch, offerOf, priceOf, stageOf, titleOf } from '../data/logic'
+import { formatPrice, hasOffer, marketOf, matchesSearch, offerOf, priceOf, stageOf, titleOf, toNumber } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, MarketHit, Post } from '../data/types'
 import { t } from '../i18n'
@@ -71,8 +71,8 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
       <div className="card-body">
         <h3 dir="auto">{titleOf(p)}</h3>
         {p.items.length > 1 && <ul className="offer-items">{p.items.map((it, i) => <li key={i} dir="auto">{it.name}</li>)}</ul>}
-        <p className="price">
-          <span dir="ltr">{hasOffer(p) && <s>{formatPrice(p.priceBefore)}</s>} {formatPrice(priceOf(p))} EGP</span> <span className="muted">· {p.style}</span>
+        <p className="price offer-price">
+          <span dir="ltr"><b>{formatPrice(priceOf(p))} EGP</b>{hasOffer(p) && <> <s>{formatPrice(p.priceBefore)}</s></>}</span> <span className="muted">· {p.style}</span>
         </p>
         {p.details && <p className="muted small" dir="auto">{p.details}</p>}
         {!rejected && <MarketBox post={p} />}
@@ -100,12 +100,51 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
   )
 }
 
+type Order = 'list' | 'new' | 'old' | 'high' | 'low'
+const ORDERS: { id: Order; label: string }[] = [
+  { id: 'list', label: 'Sheet order' }, { id: 'new', label: 'Newest first' }, { id: 'old', label: 'Oldest first' },
+  { id: 'high', label: 'Price: high to low' }, { id: 'low', label: 'Price: low to high' },
+]
+const ORDER_KEY = 'posterpilot.offerOrder'
+function savedOrder(): Order {
+  try {
+    const v = localStorage.getItem(ORDER_KEY)
+    if (ORDERS.some((o) => o.id === v)) return v as Order
+  } catch {
+    // No storage: the default order.
+  }
+  return 'list'
+}
+// Newest: offers made in the app by when they were made, then sheet rows by row (a row further down was added later).
+const age = (p: Post) => p.createdAt || 0
+function sortOffers(list: Post[], order: Order) {
+  const price = (p: Post) => toNumber(priceOf(p))
+  const by: Record<Order, ((a: Post, b: Post) => number) | null> = {
+    list: null,
+    new: (a, b) => age(b) - age(a) || b.order - a.order,
+    old: (a, b) => age(a) - age(b) || a.order - b.order,
+    high: (a, b) => price(b) - price(a),
+    low: (a, b) => price(a) - price(b),
+  }
+  const cmp = by[order]
+  return cmp ? list.slice().sort(cmp) : list
+}
+
 /** Offers waiting for approval, and the ones that were sent back to their maker. */
 export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) => void }) {
   const [query, setQuery] = useState('')
   const all = data.posts.filter((p) => stageOf(p) === 'offer')
   // Search by item name (also category, brand and style), like the other pages.
-  const offers = all.filter((p) => matchesSearch(p, query))
+  const [order, setOrderState] = useState<Order>(savedOrder)
+  const setOrder = (o: Order) => {
+    setOrderState(o)
+    try {
+      localStorage.setItem(ORDER_KEY, o)
+    } catch {
+      // The choice then lasts until the page is closed.
+    }
+  }
+  const offers = sortOffers(all.filter((p) => matchesSearch(p, query)), order)
   const waiting = offers.filter((p) => offerOf(p) === 'waiting')
   const back = offers.filter((p) => offerOf(p) === 'rejected')
   const bulk = useBulk(offers.map((p) => p.id))
@@ -128,6 +167,9 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
     <div className="view">
       <div className="review-bar tools">
         <SearchBox value={query} onChange={setQuery} />
+        <select className="sort-pick" aria-label={t('Sort')} value={order} onChange={(e) => setOrder(e.target.value as Order)}>
+          {ORDERS.map((o) => <option key={o.id} value={o.id}>{t(o.label)}</option>)}
+        </select>
         {actions.length > 0 && <BulkToggle bulk={bulk} />}
         <CardSize />
       </div>
