@@ -484,3 +484,6 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .market-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .role-pages-title { font-weight: 600; font-size: 0.875rem; margin-top: 6px; }
 .role-pages { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+/* A card with no poster on top keeps its first line clear of the selection checkbox. */
+.sel > .card.offer .card-body > :first-child { padding-inline-end: 34px; }
+.sel .poster-problem:not(.poster-small), .sel .poster-building:not(.poster-small) { padding-inline: 40px; }
