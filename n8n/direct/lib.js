@@ -209,7 +209,9 @@ function pricesFrom(items, products) {
   if (!list.length) return { priceBefore: '', company: '' };
   let sum = 0, bad = false; const companies = [];
   for (const it of list) {
-    const p = products.find(x => x.category === clean(it.category) && clean(x.name).toLowerCase() === clean(it.name).toLowerCase()); // like the sheet: same category, any case
+    // Same category, any case, and any kind or number of spaces (names copied from the web carry no-break spaces).
+    const same = (a, b) => clean(a).replace(/\s+/g, ' ').toLowerCase() === clean(b).replace(/\s+/g, ' ').toLowerCase();
+    const p = products.find(x => x.category === clean(it.category) && same(x.name, it.name));
     if (!p || (clean(p.price) !== '' && !isNum(p.price))) { bad = true; continue; }
     sum += clean(p.price) === '' ? 0 : toNum(p.price);
     if (clean(p.company) && !companies.includes(clean(p.company))) companies.push(clean(p.company));
