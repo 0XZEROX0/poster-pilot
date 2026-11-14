@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -251,7 +251,7 @@ service cloud.firestore {
         && request.resource.data.changes is list && request.resource.data.changes.size() <= 12;
       allow update, delete: if false;
     }
-    // Quotations made in the builder. Everyone inside reads them; whoever made one (or the owner) changes or deletes it.
+    // Quotations made in the builder. Whoever made one (or the owner) changes or deletes it.
     function quoteOk() {
       let d = request.resource.data;
       return d.keys().hasOnly(['customer', 'sales', 'lines', 'extra', 'buildDiscount', 'total', 'at', 'by', 'byName'])
@@ -263,7 +263,8 @@ service cloud.firestore {
         && d.byName is string && d.byName.size() <= 200;
     }
     match /quotes/{id} {
-      allow read: if isMember();
+      // Each person reads their own quotes; 'See all saved quotes' (and the owner) reads everyone's.
+      allow read: if isMember() && (resource.data.by == request.auth.uid || can('quotes.all'));
       allow create: if isMember() && quoteOk() && request.resource.data.by == request.auth.uid;
       allow update: if isMember() && (resource.data.by == request.auth.uid || isOwner()) && quoteOk()
         && request.resource.data.by == resource.data.by && request.resource.data.byName == resource.data.byName;

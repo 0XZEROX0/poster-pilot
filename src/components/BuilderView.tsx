@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { chosen, complete, emptyLine, fresh, misfit, newBuild, pick, quotes, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { matches, money, parseMoney, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
-import { myName } from '../data/store'
+import { allowed, isOwner, myId, myName } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
 import { Chip, Empty, Icon, SearchBox, showToast } from './ui'
@@ -107,7 +107,14 @@ export function BuilderView() {
           <label><span>{t('Sales man')}</span><input dir="auto" value={build.sales} onChange={(e) => patch({ sales: e.target.value })} /></label>
         </div>
         <button className="link" onClick={() => setSaved(true)}><Icon name="clock" size={16} />{t('Saved quotes')}</button>
-        {sure ? <button className="btn btn-danger" onClick={start}>{t('Clear this build')}</button> : <button className="btn btn-ghost" onClick={() => (filled.length ? setSure(true) : start())}><Icon name="plus" size={18} />{t('New')}</button>}
+        {sure ? (
+          <span className="clear-confirm">
+            <button className="btn btn-danger" onClick={start}><Icon name="trash" size={18} />{t('Yes, clear it')}</button>
+            <button className="btn btn-ghost" onClick={() => setSure(false)}>{t('Cancel')}</button>
+          </span>
+        ) : (
+          <button className="btn btn-ghost" disabled={!filled.length && !build.customer && !build.extra && !build.id} onClick={() => setSure(true)}><Icon name="trash" size={18} />{t('Clear quotation')}</button>
+        )}
       </div>
 
       <div className="bl">
@@ -173,7 +180,7 @@ export function BuilderView() {
       </div>
 
       {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { setLine(pickingLine.id, (l) => pick(l, cat, item)); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
-      {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, lines: complete(q.lines) }); setSaved(false); setSure(false) }} onClose={() => setSaved(false)} />}
+      {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false) }} onClose={() => setSaved(false)} />}
       {createPortal(<QuotePrint build={build} lines={filled} sum={sum} />, document.body)}
     </div>
   )
@@ -240,9 +247,12 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
   const [list, setList] = useState<SavedQuote[] | null>(null)
   const [max, setMax] = useState(30)
   const [search, setSearch] = useState('')
+  const [person, setPerson] = useState('')
+  const everyone = allowed('quotes.all')
+  const mine = (q: SavedQuote) => q.by === myId() || q.by === 'demo-you'
   useEffect(() => {
-    quotes.list(max).then(setList, () => setList([]))
-  }, [max])
+    quotes.list(max, everyone).then(setList, () => setList([]))
+  }, [max, everyone])
   const remove = async (q: SavedQuote) => {
     try {
       await quotes.remove(q.id)
@@ -253,20 +263,31 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
     }
   }
   const words = search.trim().toLowerCase()
-  const shown = (list ?? []).filter((q) => !words || [q.customer, q.sales, q.byName, ...q.lines.map((l) => l.name)].join(' ').toLowerCase().includes(words))
+  // The people who made the quotes in the list, for the filter.
+  const people = [...new Map((list ?? []).map((q) => [q.by, q.byName || q.sales || q.by])).entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  const shown = (list ?? []).filter((q) => (!person || q.by === person) && (!words || [q.customer, q.sales, q.byName, ...q.lines.map((l) => l.name)].join(' ').toLowerCase().includes(words)))
   return (
     <Sheet title={t('Saved quotes')} onClose={onClose}>
-      <SearchBox value={search} onChange={setSearch} placeholder={t('Search customer, sales man, product…')} />
+      <div className="pick-tools">
+        <SearchBox value={search} onChange={setSearch} placeholder={t('Search customer, sales man, product…')} />
+        {everyone && people.length > 1 && (
+          <select className="sort-pick" value={person} onChange={(e) => setPerson(e.target.value)} aria-label={t('Made by')}>
+            <option value="">{t('Everyone')}</option>
+            {people.map(([uid, name]) => <option key={uid} value={uid}>{name}</option>)}
+          </select>
+        )}
+      </div>
       {list === null ? <p className="muted">{t('Loading…')}</p> : shown.length === 0 ? <Empty icon="builder" text={t('No saved quotes yet.')} /> : (
         <ul className="changes">
           {shown.map((q) => (
             <li key={q.id} className="saved-quote">
               <button className="saved-open" onClick={() => onOpen(q)}>
                 <span className="row-title" dir="auto">{q.customer || t('No customer name')}</span>
+                {everyone && <span className="saved-by">{tn('Made by %s', { s: mine(q) ? t('you') : q.byName || q.sales || t('Someone') })}</span>}
                 <span className="muted">{q.sales || q.byName} · {new Date(q.at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })} · {tn('%n parts', { n: q.lines.length })}</span>
               </button>
               <b className="saved-total">{money(q.total)}</b>
-              <button className="icon-btn" aria-label={t('Delete')} onClick={() => remove(q)}><Icon name="trash" size={16} /></button>
+              {(mine(q) || isOwner()) && <button className="icon-btn" aria-label={t('Delete')} onClick={() => remove(q)}><Icon name="trash" size={16} /></button>}
             </li>
           ))}
         </ul>
