@@ -91,12 +91,14 @@ for (const d of docs) {
 }
 if (prods.length < 100) throw new Error('Only ' + prods.length + ' app products; stopping.');
 
+// Only pages people can see are linked: a draft (such as a Box or Tray page merged into one page with options) is not.
+const LIVE = W.filter(w => w.status === 'publish');
 // Best website product for each app product; a website product goes to the app product it fits best.
 const cand = [];
 for (const p of prods) {
   if (p.web && p.web.ok) continue; // confirmed by a person: kept as it is
   let best = null, bs = 0;
-  for (const w of W) { const s = score(p.name, w); if (s > bs) { bs = s; best = w; } }
+  for (const w of LIVE) { const s = score(p.name, w); if (s > bs) { bs = s; best = w; } }
   if (best) cand.push({ p, w: best, s: bs });
 }
 const taken = new Map();
@@ -137,10 +139,26 @@ const wById0 = new Map(W.map(w => [w.id, w]));
 const optionSet = [];
 for (const p of prods) {
   if (!(p.web && p.web.ok)) continue;
-  const w = wById0.get(Number(p.web.id));
+  let w = wById0.get(Number(p.web.id));
   if (!w) continue;
   const f = {}, paths = [];
-  if (w.type === 'variable' && !p.web.variation) {
+  // A confirmed link to a page that is no longer shown (merged into a page with options) moves to the shown page with
+  // the same name, on the option the name names; it stays confirmed.
+  if (w.status !== 'publish') {
+    let best = null, bs = 0;
+    for (const x of LIVE) { const sc = score(p.name, x); if (sc > bs) { bs = sc; best = x; } }
+    const o = best ? optionFor(p.name, best) : null;
+    if (best && bs >= 80 && (best.type !== 'variable' || o)) {
+      const v = o || best;
+      Object.assign(f, { id: best.id, name: best.name, url: best.url, type: best.type, price: v.price, sale: v.sale, stock: v.stock, variation: o ? o.id : undefined, option: o ? o.name : undefined, error: undefined });
+      paths.push('id', 'name', 'url', 'type', 'price', 'sale', 'stock', 'variation', 'option', 'error');
+      optionSet.push(p.name + ' => moved to ' + best.name + (o ? ' [' + o.name + ']' : ''));
+      w = best;
+    }
+  }
+  // A page that became a page with options (or was renamed): the link follows its name and kind.
+  if (!paths.includes('name') && (p.web.type !== w.type || p.web.name !== w.name) && !p.web.rename) { Object.assign(f, { name: w.name, type: w.type }); paths.push('name', 'type'); }
+  if (w.type === 'variable' && !p.web.variation && !paths.includes('variation')) {
     const o = optionFor(p.name, w);
     if (o) { Object.assign(f, { variation: o.id, option: o.name, price: o.price, sale: o.sale, stock: o.stock }); paths.push('variation', 'option', 'price', 'sale', 'stock'); optionSet.push(p.name + ' => ' + o.name); }
   }
