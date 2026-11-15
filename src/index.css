@@ -702,6 +702,11 @@ button.stock:hover { filter: brightness(1.15); }
   .quote-print .q-sum td { font-weight: 700; }
   .quote-print .q-link { color: #1155cc; text-decoration: underline; }
   .quote-print .q-foot { font-size: 13pt; }
+  /* Without prices: four columns, the product gets the room. */
+  .quote-print.q-plain .q-type { width: 18%; }
+  .quote-print.q-plain .q-qty { width: 11%; }
+  .quote-print.q-plain .q-war { width: 15%; }
+  .quote-print.q-plain tbody tr:not(.q-top):not(.q-head):not(.q-info) td { padding-top: 9px; padding-bottom: 9px; }
 }
 .saved-by { font-size: 0.75rem; font-weight: 700; color: var(--accent); }
 .choice-new { display: flex; align-items: center; gap: 8px; }

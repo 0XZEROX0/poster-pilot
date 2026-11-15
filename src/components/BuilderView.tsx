@@ -648,13 +648,15 @@ function GiveDiscount({ uid, whose }: { uid: string; whose: string }) {
 const PRINT_PRICES_KEY = 'posterpilot.builder.printPrices'
 
 function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean }) {
-  // Without prices the table has 4 columns instead of 6.
-  const wide = prices ? 5 : 3
   const logo = `${import.meta.env.BASE_URL}static-logo.png`
+  // Without prices: its own four-column layout (type, product, quantity, warranty), no money anywhere on the paper.
+  const cols = prices ? 6 : 4
   return (
-    <div className="quote-print" dir="ltr" lang="en">
+    <div className={`quote-print${prices ? '' : ' q-plain'}`} dir="ltr" lang="en">
       <table>
-        <colgroup><col className="q-type" /><col /><col className="q-n" /><col className="q-n" />{prices && <><col className="q-n" /><col className="q-n2" /></>}</colgroup>
+        {prices
+          ? <colgroup><col className="q-type" /><col /><col className="q-n" /><col className="q-n" /><col className="q-n" /><col className="q-n2" /></colgroup>
+          : <colgroup><col className="q-type" /><col /><col className="q-qty" /><col className="q-war" /></colgroup>}
         <tbody>
           <tr className="q-top">
             <td><img src={logo} alt="Static" /></td>
@@ -674,17 +676,17 @@ function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]
               <td className="q-c"><b>{slotOf(l.slot).label}</b></td>
               <td className="q-c" dir="auto">{l.name}</td>
               <td className="q-c">{l.qty}</td>
-              <td className="q-c">{l.warranty ?? ''}</td>
+              <td className="q-c">{prices ? l.warranty ?? '' : l.warranty ? `${l.warranty} ${l.warranty === 1 ? 'Year' : 'Years'}` : ''}</td>
               {prices && <td className="q-c">{money(l.alone ?? l.in)}</td>}
               {prices && <td className="q-c">{money((l.alone ?? l.in ?? 0) * l.qty)}</td>}
             </tr>
           ))}
-          <tr className="q-sum"><th colSpan={wide}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>
-          <tr className="q-sum"><th colSpan={wide}>TOTAL</th><td className="q-c">{money(sum.total)}</td></tr>
-          <tr><td className="q-c"><b>Location</b></td><td colSpan={wide} className="q-c" dir="rtl" lang="ar"><b>{SHOP.location}</b></td></tr>
-          <tr><td className="q-c"><b>Website</b></td><td colSpan={wide} className="q-c"><b className="q-link">{SHOP.website}</b></td></tr>
-          <tr><td className="q-c"><b>Phone</b></td><td colSpan={wide} className="q-c"><b>{SHOP.phone}</b></td></tr>
-          <tr><td colSpan={wide + 1} className="q-c q-foot" dir="rtl" lang="ar"><b>{SHOP.footer}</b></td></tr>
+          {prices && <tr className="q-sum"><th colSpan={5}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>}
+          {prices && <tr className="q-sum"><th colSpan={5}>TOTAL</th><td className="q-c">{money(sum.total)}</td></tr>}
+          <tr className="q-info"><td className="q-c"><b>Location</b></td><td colSpan={cols - 1} className="q-c" dir="rtl" lang="ar"><b>{SHOP.location}</b></td></tr>
+          <tr className="q-info"><td className="q-c"><b>Website</b></td><td colSpan={cols - 1} className="q-c"><b className="q-link">{SHOP.website}</b></td></tr>
+          <tr className="q-info"><td className="q-c"><b>Phone</b></td><td colSpan={cols - 1} className="q-c"><b>{SHOP.phone}</b></td></tr>
+          {prices && <tr><td colSpan={cols} className="q-c q-foot" dir="rtl" lang="ar"><b>{SHOP.footer}</b></td></tr>}
         </tbody>
       </table>
     </div>
