@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { bulkPatches, casePsu, fieldLabel, loadWebProducts, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, usePrices, webPending, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem, type WebProduct } from '../data/prices'
+import { bulkPatches, casePsu, fieldLabel, loadWebProducts, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, sameName as sameNameLoose, usePrices, webNameDiff, webPending, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem, type WebProduct } from '../data/prices'
 import { allowed } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -28,7 +28,7 @@ export function PricesView() {
   const [search, setSearch] = useState('')
   const [hidden, setHidden] = useState(false)
   const [stock, setStock] = useState<'' | 'in' | 'out'>('')
-  const [webF, setWebF] = useState<'' | 'check' | 'linked' | 'none'>('')
+  const [webF, setWebF] = useState<'' | 'check' | 'names' | 'linked' | 'none'>('')
   const [view, setView] = useState<ViewMode>(savedView)
   // "Show all" counts for the list it was pressed on; another category or search starts short again.
   const [allFor, setAllFor] = useState<string | null>(null)
@@ -43,6 +43,7 @@ export function PricesView() {
     return out
   }, [cats, current, search, hidden, stock, webF])
   const toCheck = useMemo(() => cats.reduce((n, c) => n + c.items.filter((i) => i.web && !i.web.ok).length, 0), [cats])
+  const nameDiffs = useMemo(() => cats.reduce((n, c) => n + c.items.filter((i) => i.web?.ok && webNameDiff(i)).length, 0), [cats])
 
   if (!loaded) return <div className="splash">{t('Loading…')}</div>
   if (error) return <p className="banner banner-bad" dir="ltr">{error}</p>
@@ -90,6 +91,7 @@ export function PricesView() {
             <select className="sort-pick" value={webF} aria-label={t('Website')} onChange={(e) => setWebF(e.target.value as typeof webF)}>
               <option value="">{t('Website: all')}</option>
               <option value="check">{t('Website link to check')}{toCheck ? ` (${toCheck})` : ''}</option>
+              <option value="names">{t('Name differs on the website')}{nameDiffs ? ` (${nameDiffs})` : ''}</option>
               <option value="linked">{t('On the website')}</option>
               <option value="none">{t('Not on the website')}</option>
             </select>
@@ -140,8 +142,8 @@ type RowProps = { cat: PriceCategory; item: PriceItem; canEdit: boolean; catHead
 
 const specsOf = (item: PriceItem) => specChips(item)
 
-const webOk = (item: PriceItem, f: '' | 'check' | 'linked' | 'none') =>
-  !f || (f === 'check' ? Boolean(item.web && !item.web.ok) : f === 'linked' ? Boolean(item.web?.ok) : !item.web?.ok)
+const webOk = (item: PriceItem, f: '' | 'check' | 'names' | 'linked' | 'none') =>
+  !f || (f === 'check' ? Boolean(item.web && !item.web.ok) : f === 'names' ? Boolean(item.web?.ok && webNameDiff(item)) : f === 'linked' ? Boolean(item.web?.ok) : !item.web?.ok)
 
 /** Where the product stands with the website, as a small chip next to its name. */
 function WebChip({ item }: { item: PriceItem }) {
@@ -150,6 +152,7 @@ function WebChip({ item }: { item: PriceItem }) {
   if (!w.ok) return <Chip tone="warn">{t('Check website link')}</Chip>
   if (w.error) return <Chip tone="bad">{t('Website error')}</Chip>
   if (webPending(item).length) return <Chip tone="info">{t('Sending to website…')}</Chip>
+  if (webNameDiff(item)) return <Chip tone="warn">{t('Name differs')}</Chip>
   return <Chip tone="good">{t('Website')}</Chip>
 }
 const saver = (cat: PriceCategory, item: PriceItem) => (field: 'in' | 'alone' | 'online' | 'onlineSale', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
@@ -364,7 +367,7 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
         <label className="check"><input type="checkbox" checked={hiddenOn} disabled={ro} onChange={(e) => setHidden(e.target.checked)} /> {t('Hidden (not offered in builds)')}</label>
         {sure && <p className="hint bad">{t('Deleting removes the product from the price list. Builds and posts that already use it keep their copy.')}</p>}
       </div>
-      {item && <WebSection cat={startCat} item={live(cats, startCat, item)} canEdit={canEdit} />}
+      {item && <WebSection cat={startCat} item={live(cats, startCat, item)} canEdit={canEdit} onName={setName} />}
       {item && (
         <section className="price-history">
           <h3>{t('History')}</h3>
@@ -383,7 +386,7 @@ const live = (cats: PriceCategory[], cat: string, item: PriceItem) => cats.find(
  * The website product this one is linked to. A suggested link must be confirmed before anything is sent;
  * a confirmed one gets Online price, Online sale and stock sent to static-eg.com within a minute of a change.
  */
-function WebSection({ cat, item, canEdit }: { cat: string; item: PriceItem; canEdit: boolean }) {
+function WebSection({ cat, item, canEdit, onName }: { cat: string; item: PriceItem; canEdit: boolean; onName: (n: string) => void }) {
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
   const w = item.web
@@ -406,7 +409,7 @@ function WebSection({ cat, item, canEdit }: { cat: string; item: PriceItem; canE
   const pending = webPending(item)
   // What confirming would change on the website (the app's prices and stock win).
   const onConfirm = w && !w.ok ? webPending({ ...item, online: item.online ?? w.price, onlineSale: item.onlineSale ?? w.sale }, true) : []
-  const what = (x: string) => t(x === 'price' ? 'Online' : x === 'sale' ? 'Online sale' : 'Stock')
+  const what = (x: string) => t(x === 'price' ? 'Online' : x === 'sale' ? 'Online sale' : x === 'name' ? 'Name' : 'Stock')
   return (
     <section className="web-link">
       <h3>{t('Website')}</h3>
@@ -427,6 +430,7 @@ function WebSection({ cat, item, canEdit }: { cat: string; item: PriceItem; canE
           {!w.ok && onConfirm.length > 0 && <p className="hint bad">{t('Confirming will change on the website')}: {onConfirm.map(what).join(', ')}{onConfirm.includes('stock') ? ` (${item.out ? t('Out of stock') : t('In stock')})` : ''}</p>}
         </div>
       )}
+      {w && <NameChoice cat={cat} item={item} canEdit={canEdit} onName={onName} />}
       {canEdit && (
         <div className="web-actions">
           {w && !w.ok && <button className="btn btn-primary" disabled={busy} onClick={() => save({ ...w, ok: true, score: undefined })}><Icon name="check" size={18} />{t('Confirm link')}</button>}
@@ -436,6 +440,74 @@ function WebSection({ cat, item, canEdit }: { cat: string; item: PriceItem; canE
       )}
       {picking && <WebPicker start={item.name} onPick={pick} />}
     </section>
+  )
+}
+
+/**
+ * When the app and the website call a linked product by different names: keep the app's name (it is sent to the
+ * website), take the website's name (only the app changes), or type a new one for both.
+ */
+function NameChoice({ cat, item, canEdit, onName }: { cat: string; item: PriceItem; canEdit: boolean; onName: (n: string) => void }) {
+  const [typing, setTyping] = useState(false)
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const w = item.web
+  if (!w) return null
+  const options = w.type === 'variable'
+  const there = options ? (w.rename && !sameNameLoose(w.rename, w.name) ? w.rename : null) : webNameDiff(item)
+  // A product with options: the website name is shared by its options, so it is only changed on purpose, never matched to the app's name.
+  if (!there && !(options && canEdit)) return null
+  const save = async (patch: ItemPatch, done: string) => {
+    setBusy(true)
+    try {
+      if (patch.web) patch.web = JSON.parse(JSON.stringify(patch.web)) as typeof patch.web
+      await prices.save(cat, item.id, patch, item)
+      // The sheet's Name box follows, so its Save does not put the old name back.
+      if (patch.name) onName(patch.name)
+      setTyping(false)
+      showToast(done)
+    } catch (e) {
+      fail(e)
+    }
+    setBusy(false)
+  }
+  const forWeb = (n: string) => (sameNameLoose(n, w.name) ? { ...w, rename: undefined } : { ...w, rename: n })
+  const typed = name.replace(/\s+/g, ' ').trim()
+  const form = (
+    <div className="form">
+      <label><span>{options ? t('New name for the website product') : t('New name for both')}</span><input dir="auto" value={name} autoFocus onChange={(e) => setName(e.target.value)} /></label>
+      <div className="web-actions">
+        <button className="btn btn-primary" disabled={busy || !typed} onClick={() => save(options ? { web: forWeb(typed) } : { name: typed, web: forWeb(typed) }, t('Saved'))}>{t('Save')}</button>
+        <button className="btn btn-ghost" disabled={busy} onClick={() => setTyping(false)}>{t('Cancel')}</button>
+      </div>
+    </div>
+  )
+  if (options) {
+    return (
+      <div className="web-actions">
+        {there && <p className="hint">{t('Website name')}: <span dir="auto">{there}</span> ({t('waiting to send')})</p>}
+        {canEdit && !typing && <button className="btn btn-ghost" disabled={busy} onClick={() => { setName(w.rename || w.name); setTyping(true) }}><Icon name="edit" size={18} />{t('Rename on the website')}</button>}
+        {canEdit && typing && <><p className="hint">{t('This website product has options. A new name there is the name of all its options.')}</p>{form}</>}
+      </div>
+    )
+  }
+  return (
+    <div className="web-card web-names">
+      <strong>{t('The name is different on the website')}</strong>
+      <div className="web-names-grid">
+        <span className="muted">{t('Price list')}</span><span dir="auto">{item.name}</span>
+        <span className="muted">{t('Website')}</span><span dir="auto">{there}{w.rename ? ` (${t('waiting to send')})` : ''}</span>
+      </div>
+      {!w.ok && <p className="hint">{t('A name for the website is sent once the link is confirmed.')}</p>}
+      {canEdit && !typing && (
+        <div className="web-actions">
+          <button className="btn btn-ghost" disabled={busy} onClick={() => save({ web: forWeb(item.name) }, t('The website will get this name'))}>{t('Keep the price list name')}</button>
+          <button className="btn btn-ghost" disabled={busy} onClick={() => save({ name: w.name, web: { ...w, rename: undefined } }, t('Saved'))}>{t('Use the website name')}</button>
+          <button className="btn btn-ghost" disabled={busy} onClick={() => { setName(item.name); setTyping(true) }}><Icon name="edit" size={18} />{t('New name')}</button>
+        </div>
+      )}
+      {canEdit && typing && form}
+    </div>
   )
 }
 

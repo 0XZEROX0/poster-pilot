@@ -911,3 +911,5 @@ button.stock:hover { filter: brightness(1.15); }
 .web-picker li button { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 8px 12px; text-align: start; }
 .web-picker li button:hover { background: var(--surface-2); }
 .web-picker li .muted { font-size: 0.8125rem; }
+.web-names { border: 1px solid var(--warn); }
+.web-names-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; overflow-wrap: anywhere; }
