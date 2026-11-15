@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { buildCaption, cairoNow, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
+import { buildCaption, cairoNow, itemName, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
@@ -160,7 +160,10 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
           )}
           {!posted && draft.items.map((it, i) => (
             <fieldset key={i} className={`item-box${it.photoMissing && problem ? ' item-missing' : ''}`}>
-              <legend dir="auto">{it.name}</legend>
+              <legend dir="auto">{itemName(it)}</legend>
+              {post.variants && it.label !== undefined && (
+                <label><span>{t('Version name')}</span><input dir="auto" value={it.label} placeholder={t('Colour or name, e.g. Jungle Panda')} onChange={(e) => setItem(i, { label: e.target.value })} /></label>
+              )}
               {it.photoMissing && problem && <p className="problem-title"><Icon name="fix" size={16} />{t('No photo was found for this item.')}</p>}
               <label>
                 <span>{t('Photo link')}</span>

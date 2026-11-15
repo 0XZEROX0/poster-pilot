@@ -1,5 +1,5 @@
 import type { Backend } from './backend'
-import { DEMO_POSTER, demoData, demoPhotoChoices } from './demo'
+import { DEMO_POSTER, demoData, demoPhotoChoices, demoVersionPhotos } from './demo'
 import { describe, describeDelete, describeNew } from './history'
 import { buildCaption, cairoNow } from './logic'
 import type { Data, LogEntry, Post } from './types'
@@ -118,6 +118,11 @@ export function createLocalBackend(): Backend {
         if (p) patchPost(id, { photoAsk: undefined, photoChoices: demoPhotoChoices(p, patch.photoAsk ?? 0) })
       }, 1500)
       else engine(id)
+    },
+    versionPhotos(name, onData) {
+      onData({ name, asked: Date.now(), answered: 0, choice: null })
+      const id = setTimeout(() => onData({ name, asked: Date.now(), answered: Date.now(), choice: demoVersionPhotos(name) }), 1500)
+      return () => clearTimeout(id)
     },
     async removePost(id) {
       note(id, describeDelete(data.posts.find((p) => p.id === id)))

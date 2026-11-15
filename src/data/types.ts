@@ -8,6 +8,11 @@ export type PostItem = {
   nextPhoto: boolean
   /** Set by the engine: this is the item whose photo could not be found. */
   photoMissing?: boolean
+  /**
+   * Versions of one product picked from the website photos: what tells this version apart ("Jungle Panda").
+   * `name` stays the price list name, so the price check still finds it; the poster and caption show both.
+   */
+  label?: string
 }
 
 /** What the person decided about a finished poster (sheet: Feedback). */
@@ -73,7 +78,10 @@ export type Post = {
 }
 
 /** One photo of a product on the website: the full photo and a small one for the picker. */
-export type WebPhoto = { src: string; thumb: string }
+export type WebPhoto = { src: string; thumb: string; /** The website option this photo belongs to ("Jungle Panda"), when it is an option's own photo. */ label?: string }
+
+/** Someone's request for the website photos of one product, to pick versions from in New offer (photoAsks/{uid}). */
+export type VersionPhotos = { name: string; asked: number; answered: number; choice: PhotoChoiceItem | null }
 
 /** What the engine found on the website for one item: the product it matched and all its photos. Empty when there is none. */
 export type PhotoChoiceItem = {

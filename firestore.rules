@@ -273,6 +273,16 @@ service cloud.firestore {
         : request.resource.data.keys().hasOnly(['name', 'order', 'items', 'importedAt']) && request.resource.data.items is map);
       allow delete: if false;
     }
+    // New offer, "Versions of one product": a person asks for every website photo of one product (one request each,
+    // overwritten by the next). The engine answers in the same document with its service account.
+    match /photoAsks/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid && isMember();
+      allow create, update: if signedIn() && request.auth.uid == uid && can('offers.create')
+        && request.resource.data.keys().hasOnly(['name', 'ask', 'by'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 300
+        && request.resource.data.ask is int && request.resource.data.by == uid;
+      allow delete: if false;
+    }
     // What the engine read from static-eg.com (web/products: every website product, for linking by hand).
     // Only the engine writes it.
     match /web/{id} {

@@ -1,4 +1,4 @@
-import type { CaptionTemplate, PhotoChoiceItem, Post } from './types'
+import type { CaptionTemplate, PhotoChoiceItem, Post, PostItem } from './types'
 
 /** Where a post is in its life. Each post is in exactly one stage. */
 export type Stage = 'offer' | 'building' | 'fix' | 'review' | 'scheduled' | 'posted' | 'skipped'
@@ -78,6 +78,9 @@ export function stageOf(p: Post): Stage {
   return 'review'
 }
 
+/** An item's name as the poster and caption show it: the price list name plus the version, when it has one. */
+export const itemName = (i: Pick<PostItem, 'name' | 'label'>) => [i.name.trim(), (i.label ?? '').trim()].filter(Boolean).join(' ')
+
 export const titleOf = (p: Pick<Post, 'items' | 'variants' | 'title'>) => p.variants ? variantsName(p) : p.items.map((i) => i.name.trim()).filter(Boolean).join(' + ')
 
 /** Most items a post can hold: 3 products, or 4 versions of one product. */
@@ -105,7 +108,7 @@ export function optionOf(title: string, name: string): string {
 
 /** A versions post's name for captions and lists: "Metapanda PD98 (Jungle Panda / Hurricane Panda)". */
 export function variantsName(p: Pick<Post, 'items' | 'title'>): string {
-  const names = p.items.map((i) => i.name.trim()).filter(Boolean)
+  const names = p.items.map(itemName).filter(Boolean)
   const title = (p.title ?? '').trim() || commonTitle(names)
   const opts = names.map((n) => optionOf(title, n)).filter((o) => o.toLowerCase() !== title.toLowerCase())
   return opts.length ? `${title} (${opts.join(' / ')})` : title

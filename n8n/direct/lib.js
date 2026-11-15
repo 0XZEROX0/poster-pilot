@@ -71,6 +71,7 @@ function rowOf(doc, raw) {
     if (m) {
       const it = items[Number(m[2]) - 1];
       if (m[1] === 'Next photo') v = raw ? !!(it && it.nextPhoto === true) : ((it && it.nextPhoto === true) ? 'TRUE' : 'FALSE');
+      else if (m[1] === 'Item') v = it ? fullName(it) : '';
       else v = it ? str(it[ITEM_KEY[m[1]]]) : '';
     } else if (h in TYPED) {
       v = str(f[TYPED[h]]);
@@ -89,10 +90,15 @@ function rowOf(doc, raw) {
   row.row_number = doc.id;
   return row;
 }
+/**
+ * An item's name as the poster and caption show it: the price list name plus its version ("Jungle Panda"), for
+ * versions picked from the website photos. Same as itemName in src/data/logic.ts. Prices use `name` alone.
+ */
+function fullName(it) { return [clean(it && it.name), clean(it && it.label)].filter(Boolean).join(' '); }
 /** Same rule as the app (src/data/logic.ts commonTitle / optionOf / variantsName). */
 function variantsOf(f) {
   if (!f || f.variants !== true) return null;
-  const names = (Array.isArray(f.items) ? f.items : []).map(it => clean(it && it.name)).filter(Boolean);
+  const names = (Array.isArray(f.items) ? f.items : []).map(it => fullName(it)).filter(Boolean);
   if (!names.length) return null;
   const lists = names.map(n => n.split(/\s+/).filter(Boolean));
   const common = [];
@@ -156,12 +162,13 @@ function applyCols(f0, cols) {
       if (!it) continue; // no item in that column: nothing to tick
       const key = ITEM_KEY[m[1]];
       const v = key === 'nextPhoto' ? (v0 === true || low(v0) === 'true') : clean(v0);
+      if (key === 'name' && v === fullName(it)) continue; // the shown name of a version: nothing changed
       if (it[key] !== v) { it[key] = v; itemsDirty = true; }
       continue;
     }
     if (h === '_missing' || h === '_found') {
       const want = h === '_missing';
-      for (const it of items) if (nameKey(it.name) === nameKey(v0) && (it.photoMissing === true) !== want) { it.photoMissing = want; itemsDirty = true; }
+      for (const it of items) if ((nameKey(it.name) === nameKey(v0) || nameKey(fullName(it)) === nameKey(v0)) && (it.photoMissing === true) !== want) { it.photoMissing = want; itemsDirty = true; }
       continue;
     }
     if (h === '_moved') { if (ex.moved !== 'yes') { ex.moved = 'yes'; exDirty = true; } continue; }
@@ -217,7 +224,7 @@ const logWrite = (project, postId, act, note, title, at) => {
   fields.at = { timestampValue: at };
   return { update: { name: 'projects/' + project + '/databases/(default)/documents/log/' + randomId(20), fields }, currentDocument: { exists: false } };
 };
-const titleOf = f => (Array.isArray(f.items) ? f.items : []).map(it => clean(it && it.name)).filter(Boolean).join(' + ').slice(0, 280);
+const titleOf = f => (Array.isArray(f.items) ? f.items : []).map(it => fullName(it)).filter(Boolean).join(' + ').slice(0, 280);
 
 // ---------- the product list ----------
 /** Price before and Company, worked out from the product list like the sheet's formulas did. */
