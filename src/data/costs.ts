@@ -6,13 +6,13 @@ import { costKey, costsOf, type CostMap } from './costMath'
 import { money, type PriceChange } from './prices'
 import { allowed } from './store'
 
-// What each product costs the shop. Only people whose role has 'Edit prices' may see or change it, and the
+// What each product costs the shop. Only people whose role has 'See and edit cost' may see or change it, and the
 // database enforces that: the cost is NOT a field of the price list (everyone in the system reads prices/*,
 // and the engine and the website sync read it too), it lives in its own collection that nobody else can read.
 //
 //   costs/{category}  { items: { [productId]: { cost, at, byName } } }   same category ids as prices/{category}
 //   costLog/{auto}    { cat, pid, name, act: 'cost', changes: [{ f: 'cost', from, to }], at, by, byName }
-//                     never changed or removed; read only with 'Edit prices' (so not part of priceLog, which
+//                     never changed or removed; read only with 'See and edit cost' (so not part of priceLog, which
 //                     everyone reads)
 //
 // The cost is never copied anywhere else: quotes, live quotes (drafts), posts, the engine and the website
@@ -155,7 +155,7 @@ const set = (patch: Partial<CostState>) => {
 const EMPTY: CostState = { loaded: true, costs: {}, error: '' }
 
 function hold() {
-  if (!allowed('prices.edit')) return
+  if (!allowed('cost')) return
   users++
   clearTimeout(stopTimer)
   if (!stop) stop = costs.watch((c) => set({ costs: c, loaded: true, error: '' }), (error) => set({ error, loaded: true }))
@@ -165,11 +165,11 @@ function hold() {
   }
 }
 
-/** Costs, live, for people whose role may edit prices. Everyone else gets nothing (and reads nothing). */
+/** Costs, live, for people whose role has 'See and edit cost'. Everyone else gets nothing (and reads nothing). */
 export function useCosts(): CostState {
   useEffect(hold, [])
   const s = useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => state)
-  return allowed('prices.edit') ? s : EMPTY
+  return allowed('cost') ? s : EMPTY
 }
 
 // Whether costs are on screen. Hidden every time the app opens, so they are never shown by accident to

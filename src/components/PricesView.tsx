@@ -25,10 +25,11 @@ const savedView = (): ViewMode => {
 export function PricesView() {
   const { loaded, cats, error } = usePrices()
   const canEdit = allowed('prices.edit')
-  // What each product costs: only for roles that may edit prices (the database refuses everyone else), and
+  // What each product costs: only for roles with 'See and edit cost' (the database refuses everyone else), and
   // only on screen after the eye is pressed.
   const { costs: costMap } = useCosts()
-  const showCost = useCostShown() && canEdit
+  const canCost = allowed('cost')
+  const showCost = useCostShown() && canCost
   const [cat, setCat] = useState('')
   const [search, setSearch] = useState('')
   const [hidden, setHidden] = useState(false)
@@ -104,7 +105,7 @@ export function PricesView() {
               <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} title={t('List')} onClick={() => pickView('list')}><Icon name="rows" size={18} /></button>
               <button className={view === 'grid' ? 'on' : ''} aria-pressed={view === 'grid'} title={t('Cards')} onClick={() => pickView('grid')}><Icon name="cards" size={18} /></button>
             </div>
-            {canEdit && <CostEye />}
+            {canCost && <CostEye />}
             <button className="link" onClick={() => setChanges(true)}><Icon name="clock" size={16} />{t('Changes')}</button>
             {canEdit && current && <button className="link" onClick={() => setBulk(true)}><Icon name="edit" size={16} />{t('Change all by %')}</button>}
             {canEdit && <button className="btn btn-primary" onClick={() => setOpen({ cat: current?.id ?? cats[0].id, item: null })}><Icon name="plus" size={18} />{t('Product')}</button>}
@@ -138,8 +139,8 @@ export function PricesView() {
           {!all && rows.length > PAGE && <button className="btn" onClick={() => setAllFor(`${cat}|${search}`)}>{t('Show all')} ({rows.length})</button>}
         </div>
       </div>
-      {open && <ProductSheet cats={cats} cat={open.cat} item={open.item} canEdit={canEdit} costMap={canEdit ? costMap : null} onClose={() => setOpen(null)} />}
-      {changes && <ChangesSheet cats={cats} withCost={canEdit} onClose={() => setChanges(false)} />}
+      {open && <ProductSheet cats={cats} cat={open.cat} item={open.item} canEdit={canEdit} canCost={canCost} costMap={canCost ? costMap : null} onClose={() => setOpen(null)} />}
+      {changes && <ChangesSheet cats={cats} withCost={canCost} onClose={() => setChanges(false)} />}
       {bulk && current && <BulkSheet cat={current} onClose={() => setBulk(false)} />}
     </div>
   )
@@ -297,7 +298,7 @@ function PriceCell({ value, label, canEdit, onSave }: { value: number | null; la
 }
 
 /** One product: every field, its history, hide or delete. Also used to add a product. */
-function ProductSheet({ cats, cat: startCat, item, canEdit, costMap, onClose }: { cats: PriceCategory[]; cat: string; item: PriceItem | null; canEdit: boolean; costMap: CostMap | null; onClose: () => void }) {
+function ProductSheet({ cats, cat: startCat, item, canEdit, canCost, costMap, onClose }: { cats: PriceCategory[]; cat: string; item: PriceItem | null; canEdit: boolean; canCost: boolean; costMap: CostMap | null; onClose: () => void }) {
   const [cat, setCat] = useState(startCat)
   const [name, setName] = useState(item?.name ?? '')
   const [company, setCompany] = useState(item?.company ?? '')
@@ -305,7 +306,7 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, costMap, onClose }: 
   const [alone, setAlone] = useState(item?.alone === null || item?.alone === undefined ? '' : String(item.alone))
   const [online, setOnline] = useState(item?.online === null || item?.online === undefined ? '' : String(item.online))
   const [onlineSale, setOnlineSale] = useState(item?.onlineSale === null || item?.onlineSale === undefined ? '' : String(item.onlineSale))
-  // The cost as it was when the sheet opened, and as typed. Only for roles that may edit prices.
+  // The cost as it was when the sheet opened, and as typed. Only for roles with 'See and edit cost'.
   const cost0 = item && costMap ? costMap[costKey(startCat, item.id)] ?? null : null
   const [cost, setCost] = useState(cost0 === null ? '' : String(cost0))
   const costOn = useCostShown()
@@ -323,10 +324,10 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, costMap, onClose }: 
   useEffect(() => {
     if (!item) return
     const one = { cat: startCat, pid: item.id }
-    // Cost changes are in their own log that only roles that may edit prices can read.
-    Promise.all([prices.history(20, one), canEdit ? costs.history(20, one).catch(() => []) : Promise.resolve([])])
+    // Cost changes are in their own log that only roles with 'See and edit cost' can read.
+    Promise.all([prices.history(20, one), canCost ? costs.history(20, one).catch(() => []) : Promise.resolve([])])
       .then(([a, b]) => setLog([...a, ...b].sort((x, y) => y.at - x.at).slice(0, 20)), () => setLog([]))
-  }, [item, startCat, canEdit])
+  }, [item, startCat, canCost])
   const specFields = SPEC_FIELDS[cat] ?? []
   const guessedPsu = cat === 'case' ? casePsu({ id: '', name, in: null, alone: null, warranty: null, company: '' }) : ''
   // Suggestions for specs and companies come from what the list already uses.
@@ -337,8 +338,23 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, costMap, onClose }: 
 
   const save = async () => {
     const nums = [inb, alone, warranty, online, onlineSale].map(parseMoney)
-    const costNow = canEdit ? parseMoney(cost) : cost0
-    if (nums.some((n) => n === undefined) || costNow === undefined) return showToast(t('Not a number.'))
+    const costNow = canCost ? parseMoney(cost) : cost0
+    if (costNow === undefined) return showToast(t('Not a number.'))
+    if (!canEdit) {
+      // A role that may change cost but not prices: only the cost is saved.
+      if (!item || costNow === cost0) return onClose()
+      setBusy(true)
+      try {
+        await costs.save(startCat, item.id, item.name, costNow, cost0)
+        showToast(t('Saved'))
+        onClose()
+      } catch (e) {
+        fail(e)
+        setBusy(false)
+      }
+      return
+    }
+    if (nums.some((n) => n === undefined)) return showToast(t('Not a number.'))
     if (!name.trim()) return showToast(t('Give the product a name.'))
     const patch: ItemPatch = { name: name.trim(), company: company.trim(), in: nums[0]!, alone: nums[1]!, warranty: nums[2]!, group: group.trim() || undefined, hidden: hiddenOn || undefined, out: outOn || undefined }
     if (online !== online0) patch.online = nums[3] ?? undefined
@@ -354,11 +370,11 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, costMap, onClose }: 
         await prices.save(cat, id, { online: keep.online, onlineSale: keep.onlineSale, web: keep.web && (JSON.parse(JSON.stringify(keep.web)) as typeof keep.web), ...patch }, null)
         await prices.remove(startCat, item)
         if (cost0 !== null) await costs.move({ cat: startCat, pid: item.id }, { cat, pid: id }, cost0)
-        if (canEdit && costNow !== cost0) await costs.save(cat, id, patch.name!, costNow, cost0)
+        if (canCost && costNow !== cost0) await costs.save(cat, id, patch.name!, costNow, cost0)
       } else {
         const id = item?.id ?? newProductId()
         await prices.save(cat, id, patch, item)
-        if (canEdit && costNow !== cost0) await costs.save(cat, id, patch.name!, costNow, cost0)
+        if (canCost && costNow !== cost0) await costs.save(cat, id, patch.name!, costNow, cost0)
       }
       showToast(t('Saved'))
       onClose()
@@ -385,9 +401,9 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, costMap, onClose }: 
     <Sheet
       title={item ? item.name : t('New product')}
       onClose={onClose}
-      footer={canEdit ? (
+      footer={canEdit || (canCost && item) ? (
         <>
-          {item && (sure ? <button className="btn btn-danger" disabled={busy} onClick={remove}>{t('Delete for good')}</button> : <button className="btn btn-ghost" onClick={() => setSure(true)}><Icon name="trash" size={18} />{t('Delete')}</button>)}
+          {canEdit && item && (sure ? <button className="btn btn-danger" disabled={busy} onClick={remove}>{t('Delete for good')}</button> : <button className="btn btn-ghost" onClick={() => setSure(true)}><Icon name="trash" size={18} />{t('Delete')}</button>)}
           <button className="btn btn-primary" disabled={busy} onClick={save}>{t('Save')}</button>
         </>
       ) : undefined}
@@ -403,9 +419,9 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, costMap, onClose }: 
           <label><span>{t('Online')}</span><input inputMode="numeric" value={online} readOnly={ro} placeholder={t('Website price')} onChange={(e) => setOnline(e.target.value)} /></label>
           <label><span>{t('Online sale')}</span><input inputMode="numeric" value={onlineSale} readOnly={ro} placeholder={t('Empty = no sale')} onChange={(e) => setOnlineSale(e.target.value)} /></label>
         </div>
-        {canEdit && (
+        {canCost && (
           <div className="cost-field">
-            <label><span>{t('Cost')} <small className="muted">({t('only people who can edit prices see this')})</small></span>
+            <label><span>{t('Cost')} <small className="muted">({t('only people allowed to see cost see this')})</small></span>
               <span className="cost-input">
                 {costOn
                   ? <input inputMode="numeric" value={cost} placeholder={t('What it costs the shop')} onChange={(e) => setCost(e.target.value)} />

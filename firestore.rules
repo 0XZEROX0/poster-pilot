@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -274,10 +274,10 @@ service cloud.firestore {
       allow delete: if false;
     }
     // What each product costs the shop. Kept apart from prices/* (which everyone inside, the engine and the website
-    // sync read) so that only 'Edit prices' can read it at all. costs/{category} { items: { [productId]: { cost, at, byName } } }.
+    // sync read) so that only roles with 'See and edit cost' can read it at all. costs/{category} { items: { [productId]: { cost, at, byName } } }.
     match /costs/{cat} {
-      allow read: if can('prices.edit');
-      allow create, update: if can('prices.edit')
+      allow read: if can('cost');
+      allow create, update: if can('cost')
         && cat.size() <= 40 && cat != '_meta'
         && request.resource.data.keys().hasOnly(['items'])
         && request.resource.data.items is map;
@@ -285,8 +285,8 @@ service cloud.firestore {
     }
     // Every cost change, like priceLog but only for those who may see cost. Nobody changes or removes a line.
     match /costLog/{id} {
-      allow read: if can('prices.edit');
-      allow create: if can('prices.edit')
+      allow read: if can('cost');
+      allow create: if can('cost')
         && request.resource.data.keys().hasOnly(['cat', 'pid', 'name', 'act', 'changes', 'at', 'by', 'byName'])
         && request.resource.data.by == request.auth.uid
         && request.resource.data.at == request.time
