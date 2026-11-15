@@ -33,7 +33,10 @@ plans.forEach((p, i) => {
     if (p.want.stock === 'outofstock') body.stock_quantity = 0;
     else if (!(Number(target.stock_quantity) > 0)) return fail('The website counts stock for this product; set how many are in stock on the website');
   } else body.stock_status = p.want.stock;
+  // A new name belongs to the product itself; for a product with options that is a second change, to the main product.
+  if (p.want.name && p.type !== 'variable') body.name = p.want.name;
   // Settings.dryRun: everything is worked out, but nothing goes to "Send to website".
   out.push({ json: { ...p, variation: p.type === 'variable' ? target.id : null, method: DRY ? '' : 'PUT', url, body, dry: DRY, error: '' } });
+  if (p.want.name && p.type === 'variable') out.push({ json: { ...p, part: 'name', variation: null, method: DRY ? '' : 'PUT', url: `https://static-eg.com/wp-json/wc/v3/products/${p.id}`, body: { name: p.want.name }, dry: DRY, error: '' } });
 });
 return out;

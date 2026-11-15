@@ -60,6 +60,11 @@ export type WebLink = {
   /** Set by the engine: when the last change reached the website, and the last error. */
   sentAt?: string
   error?: string
+  /** A name the website product should get (chosen in the app). Sent like a price change; gone once the website has it. */
+  rename?: string
+  /** Set by the engine: the website option (variation) this product is, and when it last tried to send. */
+  variation?: number
+  triedAt?: string
 }
 
 /** One product of static-eg.com, from web/products (refreshed by the engine). */
@@ -73,7 +78,23 @@ export function webPending(item: PriceItem, evenIfNotConfirmed = false): string[
   if (item.online !== undefined && item.online !== null && item.online !== (w.price ?? null)) out.push('price')
   if ((item.onlineSale ?? null) !== (w.sale ?? null)) out.push('sale')
   if (w.stock && (item.out ? 'outofstock' : 'instock') !== (w.stock === 'outofstock' ? 'outofstock' : 'instock')) out.push('stock')
+  if (w.rename && !sameName(w.rename, w.name)) out.push('name')
   return out
+}
+
+const normName = (s: string) => s.replace(/\s+/g, ' ').trim()
+/** Two product names are the same when only spaces differ. */
+export const sameName = (a: string, b: string) => normName(a) === normName(b)
+
+/**
+ * The name the linked website product has (or will have, once a chosen name is sent), when it is not the app's name.
+ * Not for a website product with options: its name is shared by several app products ("… Tray", "… Box").
+ */
+export function webNameDiff(item: PriceItem): string | null {
+  const w = item.web
+  if (!w || w.type === 'variable') return null
+  const there = w.rename || w.name
+  return there && !sameName(there, item.name) ? there : null
 }
 
 export type PriceCategory = { id: string; name: string; order: number; items: PriceItem[] }
@@ -147,7 +168,7 @@ export function diff(before: PriceItem | null, patch: ItemPatch): FieldChange[] 
     const was = before ? (before as Record<string, unknown>)[k] : undefined
     if (k === 'web') {
       const a = was as WebLink | undefined, b = v as WebLink | undefined
-      const label = (w?: WebLink) => (w ? `${w.name}${w.ok ? ' ✓' : ''}` : '')
+      const label = (w?: WebLink) => (w ? `${w.rename || w.name}${w.ok ? ' ✓' : ''}` : '')
       if (label(a) !== label(b)) out.push({ f: k, from: label(a), to: label(b) })
       continue
     }
@@ -183,7 +204,7 @@ const num = (v: unknown) => (typeof v === 'number' && !Number.isNaN(v) ? v : nul
 const webOf = (v: unknown): WebLink | undefined => {
   const w = v as Record<string, unknown> | null | undefined
   if (!w || typeof w !== 'object' || typeof w.id !== 'number') return undefined
-  return { id: w.id, name: String(w.name ?? ''), ok: w.ok === true, url: w.url ? String(w.url) : undefined, type: w.type ? String(w.type) : undefined, score: typeof w.score === 'number' ? w.score : undefined, price: num(w.price), sale: num(w.sale), stock: w.stock ? String(w.stock) : undefined, sentAt: w.sentAt ? String(w.sentAt) : undefined, error: w.error ? String(w.error) : undefined }
+  return { id: w.id, name: String(w.name ?? ''), ok: w.ok === true, url: w.url ? String(w.url) : undefined, type: w.type ? String(w.type) : undefined, score: typeof w.score === 'number' ? w.score : undefined, price: num(w.price), sale: num(w.sale), stock: w.stock ? String(w.stock) : undefined, sentAt: w.sentAt ? String(w.sentAt) : undefined, error: w.error ? String(w.error) : undefined, rename: w.rename ? String(w.rename) : undefined, variation: typeof w.variation === 'number' ? w.variation : undefined, triedAt: w.triedAt ? String(w.triedAt) : undefined }
 }
 
 /** Every product on the website, for picking a link by hand. Read once when asked (one document). */

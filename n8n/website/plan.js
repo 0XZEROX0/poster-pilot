@@ -33,6 +33,9 @@ for (const d of (list.documents || [])) {
     if (want.sale !== has.sale) send.sale = want.sale;
     if (w.stock && want.stock !== has.stock) send.stock = want.stock;
     if (!w.stock) send.stock = want.stock; // never read yet
+    // A name chosen in the app for the website product ("Keep the price list name" or "New name").
+    const rename = w.rename && String(w.rename).replace(/\s+/g, ' ').trim() !== String(w.name || '').replace(/\s+/g, ' ').trim() ? String(w.rename).trim() : null;
+    if (rename) { send.name = rename; want.name = rename; }
     if (!Object.keys(send).length && !test) continue;
     // A send that failed is tried again after 30 minutes, not every minute (or at once when the product is changed again).
     const recentFail = w.error && w.triedAt && Date.now() - Date.parse(w.triedAt) < 30 * 60 * 1000;
