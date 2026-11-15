@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { matches, money, parseMoney, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
@@ -24,6 +24,16 @@ const loadDraft = (): Build => {
 const today = () => new Date().toLocaleDateString('en-US')
 
 /** Build a PC from the price list, see if the parts fit, and print the quotation for the customer. */
+/** The parts, grouped as a customer thinks of a PC. */
+const PART_GROUPS = [
+  { title: 'Main parts', slots: ['mb', 'cpu', 'ram', 'gpu', 'ssd'] },
+  { title: 'Case, power and cooling', slots: ['case', 'psu', 'cooler', 'fans', 'paste'] },
+  { title: 'Screen and accessories', slots: ['monitor', 'keyboard', 'mouse', 'pad', 'speaker', 'headset'] },
+  { title: 'Extras', slots: ['extra'] },
+]
+const CORE = ['mb', 'cpu', 'ram', 'ssd', 'case', 'psu']
+const SHORT: Record<string, string> = { mb: 'MB', cpu: 'CPU', ram: 'RAM', gpu: 'GPU', ssd: 'SSD', case: 'CASE', psu: 'PSU', cooler: 'COOL', fans: 'FAN', paste: 'PASTE', monitor: 'MON', keyboard: 'KB', mouse: 'MOUSE', pad: 'PAD', speaker: 'SPK', headset: 'HS', extra: '+' }
+
 export function BuilderView() {
   const { loaded, cats, error } = usePrices()
   const [build, setBuild] = useState<Build>(loadDraft)
@@ -211,104 +221,148 @@ export function BuilderView() {
     setEditing(null)
     setTheirGrant(0)
   }
+  const misfits = lines.filter((l) => { const p = parts.find((x) => x.line === l.id); return p && misfit(p.cat, p.item, parts.filter((x) => x.line !== l.id)) }).length
+  const coreDone = CORE.filter((k) => lines.some((l) => l.slot === k && l.name)).length
   const pickingLine = lines.find((l) => l.id === picking)
   const unused = SLOTS.filter((s) => !build.lines.some((l) => l.slot === s.key))
 
   return (
     <div className="view builder">
-      <div className="review-bar tools">
-        <div className="builder-who">
-          <label><span>{t('Customer')}</span><input dir="auto" value={build.customer} placeholder={t('Optional')} onChange={(e) => patch({ customer: e.target.value })} /></label>
-          <label><span>{t('Sales man')}</span><input dir="auto" value={build.sales} disabled={!!editing} onChange={(e) => patch({ sales: e.target.value })} /></label>
-        </div>
-        {editing ? (
-          <>
-            <p className="edit-banner"><span className="live-dot" aria-hidden="true" />{tn("You're editing %name's quote. They see each change.", { name: editing.name })}</p>
-            {sync && <p className={`edit-sync edit-sync-${sync}`}>{{
-              sending: t('Sending…'),
-              waiting: t('Sent. Waiting for their builder…'),
-              done: tn('%name has your changes.', { name: editing.name }),
-              late: tn("%name's builder has not taken your changes in yet. They need the Builder page open, and may need to close and reopen the app to get the latest version.", { name: editing.name }),
-              denied: t('The database refused your change. Make sure the latest rules are published in Firebase and that your role has Edit live quotes.'),
-              offline: t('Your change could not be sent. Check the connection.'),
-            }[sync]}</p>}
-            <button className="btn btn-primary" onClick={stopEditing}>{t('Done editing')}</button>
-          </>
-        ) : <>
-        {(allowed('quotes.all') || allowed('quotes.discount') || allowed('quotes.edit')) && <button className="link" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
-        <button className="link" onClick={() => setSaved(true)}><Icon name="clock" size={16} />{t('Saved quotes')}</button>
-        {sure ? (
-          <span className="clear-confirm">
-            <button className="btn btn-danger" onClick={start}><Icon name="trash" size={18} />{t('Yes, clear it')}</button>
-            <button className="btn btn-ghost" onClick={() => setSure(false)}>{t('Cancel')}</button>
-          </span>
-        ) : (
-          <button className="btn btn-ghost" disabled={!filled.length && !build.customer && !build.extra && !build.id} onClick={() => setSure(true)}><Icon name="trash" size={18} />{t('Clear quotation')}</button>
-        )}
-        </>}
-      </div>
-
-      <div className="bl">
-        <div className="bl-row bl-head" aria-hidden="true">
-          <span>{t('Type')}</span><span>{t('Product')}</span><span className="num">{t('QTY')}</span><span className="num">{t('Warranty')}</span><span className="num">{t('Price')}</span><span className="num">{t('Total')}</span><span />
-        </div>
-        {lines.map((line) => {
-          const slot = slotOf(line.slot)
-          const live = parts.find((p) => p.line === line.id)
-          const others = parts.filter((p) => p.line !== line.id)
-          const bad = live ? misfit(live.cat, live.item, others) : ''
-          const gone = line.name && line.pid && !live
-          return (
-            <div key={line.id} className={`bl-row${line.name ? '' : ' bl-empty'}${bad ? ' bl-bad' : ''}`}>
-              <span className="bl-type">{t(slot.label)}</span>
-              <button className="bl-product" onClick={() => setPicking(line.id)}>
-                {line.name ? <span className="row-title" dir="auto">{line.name}</span> : <span className="muted">{t('Choose…')}</span>}
-                {(bad || gone || live?.item.out) && (
-                  <span className="bl-notes">
-                    {bad && <Chip tone="bad">{bad}</Chip>}
-                    {gone && <Chip tone="warn">{t('No longer in the price list')}</Chip>}
-                    {live?.item.out && <Chip tone="warn">{t('Out of stock')}</Chip>}
-                  </span>
-                )}
-              </button>
-              {slot.single ? <span className="bl-qty bl-qty-one"><b>1</b></span> : <span className="bl-qty">
-                <button className="icon-btn" aria-label={t('Less')} disabled={line.qty <= 1} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.max(1, l.qty - 1) }))}><Icon name="minus" size={16} /></button>
-                <b>{line.qty}</b>
-                <button className="icon-btn" aria-label={t('More')} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.min(99, l.qty + 1) }))}><Icon name="plus" size={16} /></button>
-              </span>}
-              <span className="num bl-war">{line.name && line.warranty ? tn('%n y', { n: line.warranty }) : ''}</span>
-              <span className="num bl-price">{line.name ? money(line.alone ?? line.in) : ''}</span>
-              <span className="num bl-total">{line.name ? money((line.alone ?? line.in ?? 0) * line.qty) : ''}</span>
-              <span className="bl-acts">
-                {!slot.single && <button className="icon-btn" title={tn('Another %s', { s: t(slot.label) })} aria-label={tn('Another %s', { s: t(slot.label) })} onClick={() => addAfter(line)}><Icon name="plus" size={16} /></button>}
-                {keeps(line) ? (
-                  <button className="icon-btn" title={t('Empty this row')} aria-label={t('Empty this row')} disabled={!line.name} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>
-                ) : (
-                  <button className="icon-btn" title={t('Remove')} aria-label={t('Remove')} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>
-                )}
-              </span>
+      <div className="bx">
+        <div className="bx-main">
+          <section className="bx-head">
+            <div className="builder-who">
+              <label><span>{t('Customer')}</span><input dir="auto" value={build.customer} placeholder={t('Customer name (optional)')} onChange={(e) => patch({ customer: e.target.value })} /></label>
+              <label><span>{t('Sales man')}</span><input dir="auto" value={build.sales} disabled={!!editing} onChange={(e) => patch({ sales: e.target.value })} /></label>
             </div>
-          )
-        })}
-      </div>
-      {unused.length > 0 && (
-        <select className="sort-pick add-row" value="" onChange={(e) => e.target.value && addSlot(e.target.value)} aria-label={t('Add a row')}>
-          <option value="">{t('+ Add a row')}</option>
-          {SLOTS.map((s) => <option key={s.key} value={s.key}>{t(s.label)}</option>)}
-        </select>
-      )}
+            {editing ? (
+              <div className="bx-links">
+                <p className="edit-banner"><span className="live-dot" aria-hidden="true" />{tn("You're editing %name's quote. They see each change.", { name: editing.name })}</p>
+                {sync && <p className={`edit-sync edit-sync-${sync}`}>{{
+                  sending: t('Sending…'),
+                  waiting: t('Sent. Waiting for their builder…'),
+                  done: tn('%name has your changes.', { name: editing.name }),
+                  late: tn("%name's builder has not taken your changes in yet. They need the Builder page open, and may need to close and reopen the app to get the latest version.", { name: editing.name }),
+                  denied: t('The database refused your change. Make sure the latest rules are published in Firebase and that your role has Edit live quotes.'),
+                  offline: t('Your change could not be sent. Check the connection.'),
+                }[sync]}</p>}
+                <button className="btn btn-primary" onClick={stopEditing}>{t('Done editing')}</button>
+              </div>
+            ) : (
+              <div className="bx-links">
+                {(allowed('quotes.all') || allowed('quotes.discount') || allowed('quotes.edit')) && <button className="chip-btn" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
+                <button className="chip-btn" onClick={() => setSaved(true)}><Icon name="clock" size={16} />{t('Saved quotes')}</button>
+                {sure ? (
+                  <span className="clear-confirm">
+                    <button className="btn btn-danger" onClick={start}><Icon name="trash" size={18} />{t('Yes, clear it')}</button>
+                    <button className="btn btn-ghost" onClick={() => setSure(false)}>{t('Cancel')}</button>
+                  </span>
+                ) : (
+                  <button className="chip-btn" disabled={!filled.length && !build.customer && !build.extra && !build.id} onClick={() => setSure(true)}><Icon name="trash" size={16} />{t('Clear')}</button>
+                )}
+              </div>
+            )}
+          </section>
 
-      <div className="bl-sum">
-        <div><span>{t('Price')}</span><b>{money(sum.subtotal)}</b></div>
-        <label className="check"><input type="checkbox" checked={build.buildDiscount} onChange={(e) => patch({ buildDiscount: e.target.checked })} /> {t('Build discount')} <b>{money(sum.saved)}</b></label>
-        <label className="bl-extra"><span>{t('Extra discount')}</span><input inputMode="numeric" value={build.extra ? String(build.extra) : ''} placeholder="0" onChange={(e) => { const v = parseMoney(e.target.value); if (v !== undefined) patch({ extra: v ?? 0 }) }} /></label>
-        {given > 0 && <div className="bl-grant"><span>{!editing && grant ? tn('Extra discount from %name', { name: grant.byName || t('Someone') }) : t('Extra discount given')}</span><b>{money(given)}</b></div>}
-        <div><span>{t('Discount')}</span><b>{money(sum.discount)}</b></div>
-        <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)}</b></div>
-        <div className="actions">
-          {!editing && <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>}
-          <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print quotation')}</button>
+          {PART_GROUPS.map((g) => {
+            const rows = lines.filter((l) => g.slots.includes(slotOf(l.slot).key))
+            if (!rows.length) return null
+            const done = rows.filter((l) => l.name).length
+            return (
+              <section key={g.title} className="bx-group">
+                <h3 className="bx-group-title"><span>{t(g.title)}</span><span className="muted small">{tn('%a of %b chosen', { a: done, b: rows.length })}</span></h3>
+                {rows.map((line) => {
+                  const slot = slotOf(line.slot)
+                  const live = parts.find((p) => p.line === line.id)
+                  const others = parts.filter((p) => p.line !== line.id)
+                  const bad = live ? misfit(live.cat, live.item, others) : ''
+                  const gone = line.name && line.pid && !live
+                  const specs = live ? [live.item.company, ...Object.values(live.item.specs ?? {})].filter(Boolean) : []
+                  if (!line.name) {
+                    return (
+                      <div key={line.id} className="bx-part bx-empty">
+                        <button className="bx-pick" onClick={() => setPicking(line.id)}>
+                          <span className="bx-tile">{SHORT[slot.key] ?? '+'}</span>
+                          <span className="bx-what"><span className="bx-label">{t(slot.label)}</span><span className="bx-choose"><Icon name="plus" size={16} />{tn('Choose %s', { s: t(slot.label) })}</span></span>
+                        </button>
+                        {!keeps(line) && <button className="icon-btn" title={t('Remove')} aria-label={t('Remove')} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>}
+                      </div>
+                    )
+                  }
+                  const unit = line.alone ?? line.in ?? 0
+                  const lastOfKind = !slot.single && rows.filter((l) => l.slot === line.slot).at(-1)?.id === line.id
+                  return (
+                    <Fragment key={line.id}>
+                    <div className={`bx-part${bad ? ' bx-bad' : ''}`}>
+                      <button className="bx-pick" onClick={() => setPicking(line.id)} title={t('Change')}>
+                        <span className="bx-tile on">{SHORT[slot.key] ?? '•'}</span>
+                        <span className="bx-what">
+                          <span className="bx-label">{t(slot.label)}</span>
+                          <span className="bx-name" dir="auto">{line.name}</span>
+                          <span className="bx-specs">
+                            {specs.map((x) => <span key={x} className="spec">{x}</span>)}
+                            {line.warranty ? <span className="spec">{tn('%n y warranty', { n: line.warranty })}</span> : null}
+                            {bad && <Chip tone="bad">{bad}</Chip>}
+                            {gone && <Chip tone="warn">{t('No longer in the price list')}</Chip>}
+                            {live?.item.out && <Chip tone="warn">{t('Out of stock')}</Chip>}
+                          </span>
+                        </span>
+                      </button>
+                      <div className="bx-side-of-part">
+                        <b className="bx-price">{money(unit * line.qty)}</b>
+                        {!slot.single && (
+                          <span className="bl-qty">
+                            <button className="icon-btn" aria-label={t('Less')} disabled={line.qty <= 1} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.max(1, l.qty - 1) }))}><Icon name="minus" size={14} /></button>
+                            <b>{line.qty}</b>
+                            <button className="icon-btn" aria-label={t('More')} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.min(99, l.qty + 1) }))}><Icon name="plus" size={14} /></button>
+                          </span>
+                        )}
+                        {line.qty > 1 && <span className="muted small">{money(unit)} × {line.qty}</span>}
+                        <span className="bx-acts">
+                          <button className="icon-btn" title={keeps(line) ? t('Empty this row') : t('Remove')} aria-label={keeps(line) ? t('Empty this row') : t('Remove')} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>
+                        </span>
+                      </div>
+                    </div>
+                    {lastOfKind && <button className="bx-more" onClick={() => addAfter(line)}><Icon name="plus" size={14} />{tn('Another %s', { s: t(slot.label) })}</button>}
+                    </Fragment>
+                  )
+                })}
+              </section>
+            )
+          })}
+          {unused.length > 0 && (
+            <select className="sort-pick add-row" value="" onChange={(e) => e.target.value && addSlot(e.target.value)} aria-label={t('Add a row')}>
+              <option value="">{t('+ Add a part')}</option>
+              {unused.map((s) => <option key={s.key} value={s.key}>{t(s.label)}</option>)}
+            </select>
+          )}
         </div>
+
+        <aside className="bx-sum">
+          <div className={`bx-fit${misfits ? ' bad' : filled.length ? ' good' : ''}`}>
+            <Icon name={misfits ? 'fix' : 'check'} size={18} />
+            <span>{misfits ? tn('%n parts do not fit together', { n: misfits }) : filled.length ? t('All parts fit together') : t('Pick parts to start the quote')}</span>
+          </div>
+          <div className="bx-progress"><span style={{ width: `${Math.round((coreDone / CORE.length) * 100)}%` }} /></div>
+          <p className="muted small">{tn('Needed for a working PC: %a of %b · %n items in total', { a: coreDone, b: CORE.length, n: filled.reduce((n, l) => n + l.qty, 0) })}</p>
+          <div className="bl-sum">
+            <div><span>{t('Price')}</span><b>{money(sum.subtotal)}</b></div>
+            <label className="bx-switch"><input type="checkbox" checked={build.buildDiscount} onChange={(e) => patch({ buildDiscount: e.target.checked })} /><i aria-hidden="true" /><span>{t('Build discount')}</span><b>−{money(sum.saved)}</b></label>
+            <label className="bl-extra"><span>{t('Extra discount')}</span><input inputMode="numeric" value={build.extra ? String(build.extra) : ''} placeholder="0" onChange={(e) => { const v = parseMoney(e.target.value); if (v !== undefined) patch({ extra: v ?? 0 }) }} /></label>
+            {given > 0 && <div className="bl-grant"><span>{!editing && grant ? tn('Extra discount from %name', { name: grant.byName || t('Someone') }) : t('Extra discount given')}</span><b>−{money(given)}</b></div>}
+            <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)} <small>EGP</small></b></div>
+            {sum.discount > 0 && <p className="bx-saved">{tn('The customer saves %n', { n: money(sum.discount) })}</p>}
+            <div className="actions">
+              <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print quotation')}</button>
+              {!editing && <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>}
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="bx-bar">
+        <span><small>{t('TOTAL')}</small><b>{money(sum.total)}</b></span>
+        <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print')}</button>
       </div>
 
       {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { setLine(pickingLine.id, (l) => pick(l, cat, item)); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
