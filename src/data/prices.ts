@@ -62,13 +62,19 @@ export type WebLink = {
   error?: string
   /** A name the website product should get (chosen in the app). Sent like a price change; gone once the website has it. */
   rename?: string
-  /** Set by the engine: the website option (variation) this product is, and when it last tried to send. */
+  /** For a website product with options (Box/Tray, colours): the option this app product is, by id and by name. */
   variation?: number
+  option?: string
+  /** Set by the engine: when it last tried to send. */
   triedAt?: string
 }
 
 /** One product of static-eg.com, from web/products (refreshed by the engine). */
-export type WebProduct = { id: number; name: string; price: number | null; sale: number | null; stock: string; type: string; url: string }
+export type WebOption = { id: number; name: string; price: number | null; sale: number | null; stock: string }
+export type WebProduct = { id: number; name: string; price: number | null; sale: number | null; stock: string; type: string; url: string; options?: WebOption[] }
+
+/** A linked website product with options whose option is not chosen yet (nothing can be sent for it). */
+export const webNeedsOption = (item: PriceItem) => Boolean(item.web && item.web.type === 'variable' && !item.web.variation)
 
 /** What a linked product still has to send to the website. Empty when it is in step (or not confirmed). */
 export function webPending(item: PriceItem, evenIfNotConfirmed = false): string[] {
@@ -168,7 +174,7 @@ export function diff(before: PriceItem | null, patch: ItemPatch): FieldChange[] 
     const was = before ? (before as Record<string, unknown>)[k] : undefined
     if (k === 'web') {
       const a = was as WebLink | undefined, b = v as WebLink | undefined
-      const label = (w?: WebLink) => (w ? `${w.rename || w.name}${w.ok ? ' ✓' : ''}` : '')
+      const label = (w?: WebLink) => (w ? `${w.rename || w.name}${w.option ? ` (${w.option})` : ''}${w.ok ? ' ✓' : ''}` : '')
       if (label(a) !== label(b)) out.push({ f: k, from: label(a), to: label(b) })
       continue
     }
@@ -204,7 +210,7 @@ const num = (v: unknown) => (typeof v === 'number' && !Number.isNaN(v) ? v : nul
 const webOf = (v: unknown): WebLink | undefined => {
   const w = v as Record<string, unknown> | null | undefined
   if (!w || typeof w !== 'object' || typeof w.id !== 'number') return undefined
-  return { id: w.id, name: String(w.name ?? ''), ok: w.ok === true, url: w.url ? String(w.url) : undefined, type: w.type ? String(w.type) : undefined, score: typeof w.score === 'number' ? w.score : undefined, price: num(w.price), sale: num(w.sale), stock: w.stock ? String(w.stock) : undefined, sentAt: w.sentAt ? String(w.sentAt) : undefined, error: w.error ? String(w.error) : undefined, rename: w.rename ? String(w.rename) : undefined, variation: typeof w.variation === 'number' ? w.variation : undefined, triedAt: w.triedAt ? String(w.triedAt) : undefined }
+  return { id: w.id, name: String(w.name ?? ''), ok: w.ok === true, url: w.url ? String(w.url) : undefined, type: w.type ? String(w.type) : undefined, score: typeof w.score === 'number' ? w.score : undefined, price: num(w.price), sale: num(w.sale), stock: w.stock ? String(w.stock) : undefined, sentAt: w.sentAt ? String(w.sentAt) : undefined, error: w.error ? String(w.error) : undefined, rename: w.rename ? String(w.rename) : undefined, variation: typeof w.variation === 'number' ? w.variation : undefined, option: w.option ? String(w.option) : undefined, triedAt: w.triedAt ? String(w.triedAt) : undefined }
 }
 
 /** Every product on the website, for picking a link by hand. Read once when asked (one document). */
@@ -212,10 +218,12 @@ export async function loadWebProducts(): Promise<WebProduct[]> {
   if (!firestore) return [
     { id: 1, name: 'Intel Core i5-14400F Box', price: 8500, sale: 7999, stock: 'instock', type: 'simple', url: '' },
     { id: 2, name: 'AMD Ryzen 5 7600X Tray', price: 9500, sale: null, stock: 'outofstock', type: 'simple', url: '' },
+    { id: 3, name: 'AMD Ryzen 5 7600X Box', price: null, sale: null, stock: 'instock', type: 'variable', url: '', options: [{ id: 31, name: 'Box', price: 9500, sale: null, stock: 'outofstock' }, { id: 32, name: 'Tray', price: 9500, sale: 8999, stock: 'instock' }] },
   ]
   const snap = await getDoc(doc(firestore, 'web', 'products'))
   const items = (snap.data()?.items ?? {}) as Record<string, Record<string, unknown>>
-  return Object.entries(items).map(([id, v]) => ({ id: Number(id), name: String(v.n ?? ''), price: num(v.p), sale: num(v.s), stock: String(v.st ?? ''), type: String(v.t ?? 'simple'), url: String(v.u ?? '') })).sort((a, b) => a.name.localeCompare(b.name))
+  const optionsOf = (o: unknown): WebOption[] | undefined => (Array.isArray(o) ? o.map((x: Record<string, unknown>) => ({ id: Number(x.i), name: String(x.n ?? ''), price: num(x.p), sale: num(x.s), stock: String(x.st ?? '') })) : undefined)
+  return Object.entries(items).map(([id, v]) => ({ id: Number(id), name: String(v.n ?? ''), price: num(v.p), sale: num(v.s), stock: String(v.st ?? ''), type: String(v.t ?? 'simple'), url: String(v.u ?? ''), options: optionsOf(v.o) })).sort((a, b) => a.name.localeCompare(b.name))
 }
 
 const millis = (v: unknown) => (typeof v === 'number' ? v : (v as { toMillis?: () => number } | null)?.toMillis?.() ?? 0)

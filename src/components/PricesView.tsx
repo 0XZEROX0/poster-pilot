@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { bulkPatches, casePsu, fieldLabel, loadWebProducts, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, sameName as sameNameLoose, usePrices, webNameDiff, webPending, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem, type WebProduct } from '../data/prices'
+import { bulkPatches, casePsu, fieldLabel, loadWebProducts, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, sameName as sameNameLoose, usePrices, webNameDiff, webNeedsOption, webPending, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem, type WebOption, type WebProduct } from '../data/prices'
 import { allowed } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -42,7 +42,7 @@ export function PricesView() {
     for (const c of current ? [current] : cats) for (const item of c.items) if ((hidden || !item.hidden) && (!stock || (stock === 'out') === Boolean(item.out)) && webOk(item, webF) && matches(item, search)) out.push({ cat: c, item })
     return out
   }, [cats, current, search, hidden, stock, webF])
-  const toCheck = useMemo(() => cats.reduce((n, c) => n + c.items.filter((i) => i.web && !i.web.ok).length, 0), [cats])
+  const toCheck = useMemo(() => cats.reduce((n, c) => n + c.items.filter((i) => i.web && (!i.web.ok || webNeedsOption(i))).length, 0), [cats])
   const nameDiffs = useMemo(() => cats.reduce((n, c) => n + c.items.filter((i) => i.web?.ok && webNameDiff(i)).length, 0), [cats])
 
   if (!loaded) return <div className="splash">{t('Loading…')}</div>
@@ -143,13 +143,14 @@ type RowProps = { cat: PriceCategory; item: PriceItem; canEdit: boolean; catHead
 const specsOf = (item: PriceItem) => specChips(item)
 
 const webOk = (item: PriceItem, f: '' | 'check' | 'names' | 'linked' | 'none') =>
-  !f || (f === 'check' ? Boolean(item.web && !item.web.ok) : f === 'names' ? Boolean(item.web?.ok && webNameDiff(item)) : f === 'linked' ? Boolean(item.web?.ok) : !item.web?.ok)
+  !f || (f === 'check' ? Boolean(item.web && (!item.web.ok || webNeedsOption(item))) : f === 'names' ? Boolean(item.web?.ok && webNameDiff(item)) : f === 'linked' ? Boolean(item.web?.ok) : !item.web?.ok)
 
 /** Where the product stands with the website, as a small chip next to its name. */
 function WebChip({ item }: { item: PriceItem }) {
   const w = item.web
   if (!w) return null
   if (!w.ok) return <Chip tone="warn">{t('Check website link')}</Chip>
+  if (webNeedsOption(item)) return <Chip tone="warn">{t('Choose website option')}</Chip>
   if (w.error) return <Chip tone="bad">{t('Website error')}</Chip>
   if (webPending(item).length) return <Chip tone="info">{t('Sending to website…')}</Chip>
   if (webNameDiff(item)) return <Chip tone="warn">{t('Name differs')}</Chip>
@@ -405,7 +406,19 @@ function WebSection({ cat, item, canEdit, onName }: { cat: string; item: PriceIt
     }
     setBusy(false)
   }
-  const pick = (p: WebProduct) => save({ id: p.id, name: p.name, ok: true, url: p.url, type: p.type, price: p.price, sale: p.sale, stock: p.stock })
+  const pick = (p: WebProduct, o?: WebOption) => save(o
+    ? { id: p.id, name: p.name, ok: true, url: p.url, type: p.type, variation: o.id, option: o.name, price: o.price, sale: o.sale, stock: o.stock }
+    : { id: p.id, name: p.name, ok: true, url: p.url, type: p.type, price: p.price, sale: p.sale, stock: p.stock })
+  // A website product with options: its options, to show which one this is and to choose it.
+  const [opts, setOpts] = useState<WebOption[] | null>(null)
+  const wid = w?.type === 'variable' ? w.id : 0
+  useEffect(() => {
+    if (!wid) return
+    let live = true
+    loadWebProducts().then((l) => { if (live) setOpts(l.find((p) => p.id === wid)?.options ?? []) }, () => live && setOpts([]))
+    return () => { live = false }
+  }, [wid])
+  const choose = (o: WebOption) => w && save({ ...w, variation: o.id, option: o.name, price: o.price, sale: o.sale, stock: o.stock, error: undefined })
   const pending = webPending(item)
   // What confirming would change on the website (the app's prices and stock win).
   const onConfirm = w && !w.ok ? webPending({ ...item, online: item.online ?? w.price, onlineSale: item.onlineSale ?? w.sale }, true) : []
@@ -417,7 +430,7 @@ function WebSection({ cat, item, canEdit, onName }: { cat: string; item: PriceIt
         <div className="web-card">
           <div className="row-sub">
             {w.ok ? <Chip tone="good">{t('Linked')}</Chip> : <Chip tone="warn">{tn('Suggested by name (%n% sure)', { n: w.score ?? 0 })}</Chip>}
-            {w.type === 'variable' && <Chip tone="info">{t('Has options')}</Chip>}
+            {w.type === 'variable' && (w.option ? <Chip tone="info">{t('Option')}: {w.option}</Chip> : <Chip tone="warn">{t('Option not chosen')}</Chip>)}
           </div>
           <div dir="auto" className="web-name">{w.url ? <a href={w.url} target="_blank" rel="noreferrer">{w.name}</a> : w.name}</div>
           <div className="muted">
@@ -427,6 +440,15 @@ function WebSection({ cat, item, canEdit, onName }: { cat: string; item: PriceIt
           {w.ok && !w.error && pending.length > 0 && <p className="hint">{t('Waiting to send to the website')}: {pending.map(what).join(', ')}</p>}
           {w.ok && w.sentAt && <p className="hint">{t('Last sent')}: {new Date(w.sentAt).toLocaleString(locale())}</p>}
           {!w.ok && <p className="hint">{t('Check that this is the same product. Nothing is sent to the website until you confirm.')}</p>}
+          {w.type === 'variable' && (
+            <div className="web-options">
+              <p className="hint">{w.option ? t('This website page has options. This product is the one marked:') : t('This website page has options. Choose the one this product is:')}</p>
+              {opts === null ? <p className="muted">{t('Loading…')}</p> : opts.length === 0 ? <p className="muted">{t('The options of this page have not been read yet.')}</p> : (
+                <OptionList options={opts} current={w.variation} disabled={!canEdit || busy} onPick={choose} />
+              )}
+              {opts !== null && opts.length > 0 && !w.variation && <p className="hint">{t('If this product is not one of these options, it is not on the website yet: unlink it.')}</p>}
+            </div>
+          )}
           {!w.ok && onConfirm.length > 0 && <p className="hint bad">{t('Confirming will change on the website')}: {onConfirm.map(what).join(', ')}{onConfirm.includes('stock') ? ` (${item.out ? t('Out of stock') : t('In stock')})` : ''}</p>}
         </div>
       )}
@@ -511,8 +533,23 @@ function NameChoice({ cat, item, canEdit, onName }: { cat: string; item: PriceIt
   )
 }
 
-/** Search the website's products and pick one. */
-function WebPicker({ start, onPick }: { start: string; onPick: (p: WebProduct) => void }) {
+/** The options of a website page (Box, Tray, colours), each with its price and stock; the chosen one is marked. */
+function OptionList({ options, current, disabled, onPick }: { options: WebOption[]; current?: number; disabled?: boolean; onPick: (o: WebOption) => void }) {
+  return (
+    <div className="web-option-list">
+      {options.map((o) => (
+        <button key={o.id} type="button" className={o.id === current ? 'on' : ''} aria-pressed={o.id === current} disabled={disabled} onClick={() => onPick(o)}>
+          <strong dir="auto">{o.name || '—'}</strong>
+          <span className="muted">{money(o.price)}{o.sale != null ? ` · ${t('Sale')} ${money(o.sale)}` : ''} · {o.stock === 'outofstock' ? t('Out of stock') : t('In stock')}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Search the website's products and pick one (and, for a page with options, the option). */
+function WebPicker({ start, onPick }: { start: string; onPick: (p: WebProduct, o?: WebOption) => void }) {
+  const [open, setOpen] = useState<number | null>(null)
   const [list, setList] = useState<WebProduct[] | null>(null)
   const [q, setQ] = useState(start.split(' ').slice(0, 3).join(' '))
   useEffect(() => { loadWebProducts().then(setList, () => setList([])) }, [])
@@ -525,10 +562,11 @@ function WebPicker({ start, onPick }: { start: string; onPick: (p: WebProduct) =
         <ul>
           {found.map((p) => (
             <li key={p.id}>
-              <button onClick={() => onPick(p)}>
+              <button onClick={() => (p.options?.length ? setOpen(open === p.id ? null : p.id) : onPick(p))}>
                 <span dir="auto">{p.name}</span>
-                <span className="muted">{money(p.price)}{p.sale != null ? ` · ${t('Sale')} ${money(p.sale)}` : ''} · {p.stock === 'outofstock' ? t('Out of stock') : t('In stock')}</span>
+                <span className="muted">{p.options?.length ? tn('%n options: %o', { n: p.options.length, o: p.options.map((o) => o.name).join(', ') }) : <>{money(p.price)}{p.sale != null ? ` · ${t('Sale')} ${money(p.sale)}` : ''} · {p.stock === 'outofstock' ? t('Out of stock') : t('In stock')}</>}</span>
               </button>
+              {open === p.id && p.options && <div className="web-picker-opts"><p className="hint">{t('Choose the option this product is:')}</p><OptionList options={p.options} onPick={(o) => onPick(p, o)} /></div>}
             </li>
           ))}
         </ul>
