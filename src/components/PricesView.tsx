@@ -104,6 +104,7 @@ export function PricesView() {
                 <span role="columnheader" className="ptable-stock">{t('Stock')}</span>
                 <span role="columnheader" className="ptable-num">{t('In build')}</span>
                 <span role="columnheader" className="ptable-num">{t('Alone')}</span>
+                <span role="columnheader" className="ptable-num">{t('Online')}</span>
               </div>
               {shown.map(({ cat: c, item }, i) => (
                 <ListRow key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} {...heads[i]} onOpen={() => setOpen({ cat: c.id, item })} />
@@ -129,7 +130,7 @@ export function PricesView() {
 type RowProps = { cat: PriceCategory; item: PriceItem; canEdit: boolean; catHead: string; groupHead: string; onOpen: () => void }
 
 const specsOf = (item: PriceItem) => specChips(item)
-const saver = (cat: PriceCategory, item: PriceItem) => (field: 'in' | 'alone', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
+const saver = (cat: PriceCategory, item: PriceItem) => (field: 'in' | 'alone' | 'online', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
 
 /** One line of the table: name and company, specs, then the two prices you can type into. */
 function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
@@ -151,6 +152,7 @@ function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
         <span className="ptable-stock" role="cell"><StockToggle cat={cat} item={item} canEdit={canEdit} /></span>
         <PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} />
         <PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} />
+        <PriceCell value={item.online ?? null} label={t('Online')} canEdit={canEdit} onSave={(v) => save('online', v)} />
       </div>
     </>
   )
@@ -177,6 +179,7 @@ function PriceCard({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps)
         <div className="pcard-prices">
           <label><span>{t('In build')}</span><PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} /></label>
           <label><span>{t('Alone')}</span><PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} /></label>
+          <label><span>{t('Online')}</span><PriceCell value={item.online ?? null} label={t('Online')} canEdit={canEdit} onSave={(v) => save('online', v)} /></label>
         </div>
       </article>
     </>
@@ -237,6 +240,7 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
   const [company, setCompany] = useState(item?.company ?? '')
   const [inb, setIn] = useState(item?.in === null || item?.in === undefined ? '' : String(item.in))
   const [alone, setAlone] = useState(item?.alone === null || item?.alone === undefined ? '' : String(item.alone))
+  const [online, setOnline] = useState(item?.online === null || item?.online === undefined ? '' : String(item.online))
   const [warranty, setWarranty] = useState(item?.warranty === null || item?.warranty === undefined ? '' : String(item.warranty))
   const [group, setGroup] = useState(item?.group ?? '')
   const [specs, setSpecs] = useState<Record<string, string>>(item?.specs ?? {})
@@ -257,10 +261,10 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
   const otherCompanies = [...new Set(cats.flatMap((c) => c.items.map((i) => i.company.trim())).filter((c) => c && !companies.includes(c)))].sort((a, b) => a.localeCompare(b))
 
   const save = async () => {
-    const nums = [inb, alone, warranty].map(parseMoney)
+    const nums = [inb, alone, warranty, online].map(parseMoney)
     if (nums.some((n) => n === undefined)) return showToast(t('Not a number.'))
     if (!name.trim()) return showToast(t('Give the product a name.'))
-    const patch: ItemPatch = { name: name.trim(), company: company.trim(), in: nums[0]!, alone: nums[1]!, warranty: nums[2]!, group: group.trim() || undefined, hidden: hiddenOn || undefined, out: outOn || undefined }
+    const patch: ItemPatch = { name: name.trim(), company: company.trim(), in: nums[0]!, alone: nums[1]!, warranty: nums[2]!, online: nums[3] ?? undefined, group: group.trim() || undefined, hidden: hiddenOn || undefined, out: outOn || undefined }
     const cleanSpecs = Object.fromEntries(specFields.map((k) => [k, (specs[k] ?? '').trim()]))
     if (specFields.length) patch.specs = cleanSpecs
     setBusy(true)
@@ -306,9 +310,10 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
           <select value={cat} disabled={ro} onChange={(e) => setCat(e.target.value)}>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         </label>
         <label><span>{t('Name')}</span><input dir="auto" value={name} readOnly={ro} onChange={(e) => setName(e.target.value)} /></label>
-        <div className="form-row three">
+        <div className="form-row two">
           <label><span>{t('In build')}</span><input inputMode="numeric" value={inb} readOnly={ro} onChange={(e) => setIn(e.target.value)} /></label>
           <label><span>{t('Alone')}</span><input inputMode="numeric" value={alone} readOnly={ro} onChange={(e) => setAlone(e.target.value)} /></label>
+          <label><span>{t('Online')}</span><input inputMode="numeric" value={online} readOnly={ro} placeholder={t('Website price')} onChange={(e) => setOnline(e.target.value)} /></label>
           <label><span>{t('Warranty (years)')}</span><input inputMode="numeric" value={warranty} readOnly={ro} onChange={(e) => setWarranty(e.target.value)} /></label>
         </div>
         <ChoiceField label={t('Company')} value={company} options={companies} more={otherCompanies} moreLabel={t('Other companies')} readOnly={ro} onChange={setCompany} />

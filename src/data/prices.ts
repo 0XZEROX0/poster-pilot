@@ -19,6 +19,8 @@ export type PriceItem = {
   in: number | null
   /** The price when it is sold on its own (sheet: Out / Alone / خارج تجميعة). Posters and offers use this one. */
   alone: number | null
+  /** The price on the website (static-eg.com). Separate from the shop prices; empty means not set yet. */
+  online?: number | null
   /** Years. */
   warranty: number | null
   company: string
@@ -68,7 +70,7 @@ export function casePsu(item: PriceItem | undefined): string {
 export const specChips = (item: PriceItem): string[] =>
   Object.entries(item.specs ?? {}).flatMap(([k, v]) => (!v ? [] : k === 'psu' ? (NO.test(v) ? [] : [`PSU ${v}`]) : [v]))
 
-const FIELD_LABEL: Record<string, string> = { in: 'In build', alone: 'Alone', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', out: 'Stock', specs: 'Specs' }
+const FIELD_LABEL: Record<string, string> = { in: 'In build', alone: 'Alone', online: 'Online', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', out: 'Stock', specs: 'Specs' }
 export const fieldLabel = (f: string) => FIELD_LABEL[f] ?? SPEC_LABEL[f.replace(/^specs\./, '')] ?? f
 
 /** "5,500", or a dash when there is no price. Western digits in both languages, like the price list. */
@@ -140,7 +142,7 @@ export function categoryOf(id: string, d: DocumentData): PriceCategory {
   const raw = (d.items ?? {}) as Record<string, DocumentData>
   const items = Object.entries(raw)
     .filter(([, v]) => v && typeof v === 'object')
-    .map(([pid, v]) => ({ n: typeof v.n === 'number' ? v.n : Number.MAX_SAFE_INTEGER, at: millis(v.at), item: { id: pid, name: String(v.name ?? ''), in: num(v.in), alone: num(v.alone), warranty: num(v.warranty), company: String(v.company ?? ''), group: v.group ? String(v.group) : undefined, specs: v.specs ?? undefined, hidden: v.hidden === true || undefined, out: v.out === true || undefined, at: millis(v.at) || undefined, byName: v.byName || undefined } as PriceItem }))
+    .map(([pid, v]) => ({ n: typeof v.n === 'number' ? v.n : Number.MAX_SAFE_INTEGER, at: millis(v.at), item: { id: pid, name: String(v.name ?? ''), in: num(v.in), alone: num(v.alone), online: num(v.online) ?? undefined, warranty: num(v.warranty), company: String(v.company ?? ''), group: v.group ? String(v.group) : undefined, specs: v.specs ?? undefined, hidden: v.hidden === true || undefined, out: v.out === true || undefined, at: millis(v.at) || undefined, byName: v.byName || undefined } as PriceItem }))
     .sort((a, b) => a.n - b.n || a.at - b.at || a.item.name.localeCompare(b.item.name))
     .map((x) => x.item)
   return { id, name: String(d.name ?? id), order: typeof d.order === 'number' ? d.order : 99, items }
