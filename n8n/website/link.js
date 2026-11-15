@@ -6,9 +6,12 @@
 //   prices/{cat}.items.<pid>.online   the website's current regular price, only when Online price is empty
 //   prices/{cat}.items.<pid>.onlineSale  the website's current sale price, only when Online sale is empty
 // A link is used by the sync only after someone confirms it in the app (ok: true). Links already confirmed are kept.
+// Settings.pullStock = true also copies the website's stock into the app (in stock / out of stock) for confident
+// links (80% or more, or confirmed), with a line in the price history by "Website".
 // Settings.dryRun = true only reports. Nothing is ever written to the website here.
 const S = $('Settings').first().json;
 const DRY = S.dryRun !== false;
+const PULL = S.pullStock === true;
 const NOW = new Date().toISOString();
 
 const dv = v => { if (!v || typeof v !== 'object') return null; if ('stringValue' in v) return v.stringValue; if ('booleanValue' in v) return v.booleanValue; if ('integerValue' in v) return Number(v.integerValue); if ('doubleValue' in v) return Number(v.doubleValue); if ('timestampValue' in v) return v.timestampValue; if ('nullValue' in v) return null; if ('mapValue' in v) { const o = {}; const f = (v.mapValue && v.mapValue.fields) || {}; for (const k of Object.keys(f)) o[k] = dv(f[k]); return o; } if ('arrayValue' in v) return ((v.arrayValue && v.arrayValue.values) || []).map(dv); return null; };
@@ -59,7 +62,7 @@ const prods = [];
 for (const d of docs) {
   const cat = d.name.split('/').pop();
   const f = dv({ mapValue: { fields: d.fields || {} } }) || {};
-  for (const [pid, it] of Object.entries(f.items || {})) prods.push({ cat, catName: f.name || cat, pid, name: String(it.name || ''), online: it.online, onlineSale: it.onlineSale, web: it.web || null });
+  for (const [pid, it] of Object.entries(f.items || {})) prods.push({ cat, catName: f.name || cat, pid, name: String(it.name || ''), out: it.out === true, online: it.online, onlineSale: it.onlineSale, web: it.web || null });
 }
 if (prods.length < 100) throw new Error('Only ' + prods.length + ' app products; stopping.');
 
@@ -77,6 +80,15 @@ for (const c of cand.sort((a, b) => b.s - a.s)) { const key = c.w.type === 'vari
 for (const p of prods) if (p.web && p.web.ok) taken.set('ok' + p.pid, null);
 const links = [...taken.values()].filter(Boolean);
 
+// ---------- stock from the website (Settings.pullStock) ----------
+const stockSet = [];
+if (PULL) {
+  const wById = new Map(W.map(w => [w.id, w]));
+  for (const c of links) if (c.s >= 80) stockSet.push({ p: c.p, w: c.w });
+  for (const p of prods) if (p.web && p.web.ok && wById.has(Number(p.web.id))) stockSet.push({ p, w: wById.get(Number(p.web.id)) });
+}
+const stockChanges = stockSet.filter(x => x.p.out !== (x.w.stock === 'outofstock'));
+
 // ---------- writes ----------
 const byCat = {};
 for (const c of links) {
@@ -88,10 +100,20 @@ for (const c of links) {
   if ((p.online === null || p.online === undefined) && w.price !== null) { fields.online = w.price; paths.push(`items.${p.pid}.online`); }
   if ((p.onlineSale === null || p.onlineSale === undefined) && w.sale !== null) { fields.onlineSale = w.sale; paths.push(`items.${p.pid}.onlineSale`); }
   (byCat[p.cat] = byCat[p.cat] || { fields: {}, paths: [] });
-  byCat[p.cat].fields[p.pid] = fields;
+  byCat[p.cat].fields[p.pid] = Object.assign(byCat[p.cat].fields[p.pid] || {}, fields);
   byCat[p.cat].paths.push(...paths);
 }
 const writes = [];
+const base0 = docs.length ? docs[0].name.replace(/\/prices\/[^/]+$/, '') : '';
+for (const { p, w } of stockChanges) {
+  const out = w.stock === 'outofstock';
+  const b = (byCat[p.cat] = byCat[p.cat] || { fields: {}, paths: [] });
+  b.fields[p.pid] = b.fields[p.pid] || {};
+  if (out) b.fields[p.pid].out = true;
+  b.paths.push(`items.${p.pid}.out`);
+  const id = 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  writes.push({ update: { name: `${base0}/priceLog/${id}`, fields: { cat: ev(p.cat), pid: ev(p.pid), name: ev(p.name), act: ev('edit'), changes: ev([{ f: 'out', from: p.out ? 'Out of stock' : 'In stock', to: out ? 'Out of stock' : 'In stock' }]), at: { timestampValue: NOW }, by: ev('website'), byName: ev('Website') } }, currentDocument: { exists: false } });
+}
 const base = docs.length ? docs[0].name.replace(/\/prices\/[^/]+$/, '') : '';
 for (const [cat, b] of Object.entries(byCat)) {
   writes.push({ update: { name: `${base}/prices/${cat}`, fields: { items: ev(b.fields) } }, updateMask: { fieldPaths: b.paths }, currentDocument: { exists: true } });
@@ -115,6 +137,8 @@ const report = {
   saleFilled: links.filter(c => (c.p.onlineSale === null || c.p.onlineSale === undefined) && c.w.sale !== null).length,
   linkedOutOfStockOnWebsite: links.filter(c => c.w.stock === 'outofstock').length,
   linkedVariable: links.filter(c => c.w.type !== 'simple').map(c => c.p.name + ' => ' + c.w.name),
+  stockToOut: stockChanges.filter(x => x.w.stock === 'outofstock').map(x => x.p.name),
+  stockToIn: stockChanges.filter(x => x.w.stock !== 'outofstock').map(x => x.p.name),
   noMatch: unlinked.length,
   sample: links.filter(c => c.s < 100).slice(0, 60).map(c => `${c.s} | ${c.p.name} => ${c.w.name} | ${c.w.price ?? '-'}${c.w.sale !== null ? ' (sale ' + c.w.sale + ')' : ''} | ${c.w.stock}`),
   weak: links.filter(c => c.s < 80).slice(0, 40).map(c => `${c.s} | ${c.p.name} => ${c.w.name}`),
