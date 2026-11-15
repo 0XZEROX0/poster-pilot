@@ -15,11 +15,32 @@ const optionOf = n => (/\btray\b/i.test(decode(n)) ? 'Tray' : 'Box');
 const ref = Object.values(pages).find(p => p.type === 'variable' && (p.attributes || []).some(a => a.variation));
 const refAttr = ref ? (ref.attributes || []).find(a => a.variation) : null;
 const attrKey = refAttr && refAttr.id ? { id: refAttr.id } : { name: refAttr ? refAttr.name : 'Option' };
+// Every attribute the pages have besides the option (Socket, TDP, Brand, cores... used by filters and the PC builder):
+// the kept page's first, then any the other pages have that it lacks. The option attribute goes last.
+const keyOf = a => (a.id ? 'i' + a.id : 'n' + String(a.name || '').toLowerCase());
+function attrsOf(ps) {
+  const seen = new Set(), list = [];
+  for (const p of ps) for (const a of (p.attributes || [])) {
+    if (a.variation || seen.has(keyOf(a))) continue;
+    seen.add(keyOf(a));
+    list.push({ ...(a.id ? { id: a.id } : { name: a.name }), options: a.options || [], visible: a.visible !== false, variation: false, position: list.length });
+  }
+  return list;
+}
 const out = [], problems = [];
 for (const g of String(S.groups || '').split(';').map(x => x.split(',').map(Number).filter(Boolean)).filter(x => x.length)) {
   const ps = g.map(id => pages[id]).filter(Boolean);
   if (ps.length !== g.length) { problems.push(`${g.join(',')}: a page was not found`); continue; }
-  if (ps.some(p => p.type !== 'simple')) { problems.push(`${g.join(',')}: a page already has options`); continue; }
+  if (ps.some(p => p.type !== 'simple')) {
+    // Already merged (an earlier run): only puts back attributes the old pages had.
+    const v = ps.find(p => p.type === 'variable'), opt = v && (v.attributes || []).find(a => a.variation);
+    if (!v || !opt || ps.filter(p => p.type === 'variable').length > 1) { problems.push(`${g.join(',')}: a page already has options`); continue; }
+    const rest = [v, ...ps.filter(p => p !== v)];
+    const attrs = attrsOf(rest);
+    attrs.push({ ...(opt.id ? { id: opt.id } : { name: opt.name }), options: opt.options, visible: opt.visible !== false, variation: true, position: attrs.length });
+    out.push({ json: { label: `${decode(v.name)}: put back ${attrs.length - 1} attributes on ${v.id}`, keep: v.id, others: [], name: decode(v.name), put: { attributes: attrs }, variations: { create: [] }, moved: {} } });
+    continue;
+  }
   const byOpt = {};
   for (const p of ps) (byOpt[optionOf(p.name)] = byOpt[optionOf(p.name)] || []).push(p);
   if (!byOpt.Box || !byOpt.Tray) { problems.push(`${ps.map(p => p.name).join(' + ')}: not one Box and one Tray`); continue; }
@@ -28,7 +49,8 @@ for (const g of String(S.groups || '').split(';').map(x => x.split(',').map(Numb
   const keep = ps.slice().sort((a, b) => (b.total_sales || 0) - (a.total_sales || 0) || a.id - b.id)[0];
   const others = ps.filter(p => p.id !== keep.id);
   const name = baseName(keep.name);
-  const imgs = (keep.images || []).map(i => ({ id: i.id }));
+  const imgs = [];
+  for (const i of (keep.images || [])) if (!imgs.some(x => x.id === i.id)) imgs.push({ id: i.id });
   const photo = o => ((src[o].images || [])[0] || null);
   for (const o of ['Box', 'Tray']) { const im = photo(o); if (im && !imgs.some(i => i.id === im.id)) imgs.push({ id: im.id }); }
   const variation = o => {
@@ -42,7 +64,7 @@ for (const g of String(S.groups || '').split(';').map(x => x.split(',').map(Numb
   out.push({ json: {
     label: `${name}: keep ${keep.id} (${keep.name}, ${keep.total_sales || 0} sold), drafts ${others.map(p => p.id + ' (' + p.name + ', ' + (p.total_sales || 0) + ' sold)').join(', ')}`,
     keep: keep.id, others: others.map(p => p.id), name,
-    put: { type: 'variable', name, attributes: [{ ...attrKey, options: ['Box', 'Tray'], variation: true, visible: true }], default_attributes: [{ ...attrKey, option: inStock }], images: imgs },
+    put: { type: 'variable', name, attributes: [...attrsOf([keep, ...others]), { ...attrKey, options: ['Box', 'Tray'], variation: true, visible: true, position: attrsOf([keep, ...others]).length }], default_attributes: [{ ...attrKey, option: inStock }], images: imgs },
     variations: { create: ['Box', 'Tray'].map(variation) },
     moved: Object.fromEntries(others.map(p => [p.id, keep.id])),
   } });
