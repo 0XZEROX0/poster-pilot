@@ -920,3 +920,14 @@ button.stock:hover { filter: brightness(1.15); }
 .web-option-list button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .web-option-list button .muted { font-size: 0.8125rem; }
 .web-picker-opts { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+
+/* Activity: the log of the whole app */
+.activity .act-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.activity .act-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.activity .act-filters label, .activity .act-dates label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.activity .act-filters span, .activity .act-dates span { font-size: 0.8125rem; color: var(--muted); font-weight: 600; }
+.act-day { display: flex; flex-direction: column; gap: 4px; }
+.act-day-title { font-size: 0.9375rem; display: flex; align-items: baseline; gap: 8px; }
+.act-meta { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.act-what { font-weight: 600; font-size: 0.875rem; overflow-wrap: anywhere; text-align: start; }
+.act-more { align-self: center; }

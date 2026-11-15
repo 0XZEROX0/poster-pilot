@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -233,6 +233,32 @@ service cloud.firestore {
         && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 1000))
         && (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() <= 300))
         && (!('changes' in request.resource.data) || (request.resource.data.changes is list && request.resource.data.changes.size() <= 12));
+      allow update, delete: if false;
+    }
+    // The activity log of the whole app: everything that has no history of its own above (Builder quotes,
+    // discounts and live edits, people and roles, settings, engine runs). Read on the Activity page together
+    // with log/ and priceLog/. A person adds a line under their own id and the server's time, only for what
+    // their role may do; nobody, the owner included, can change or remove a line. The engine and the website
+    // sync write their lines ('system', 'website') with their service account.
+    function activityOk() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['at', 'by', 'byName', 'app', 'act', 'what', 'note', 'ref'])
+        && d.by == request.auth.uid
+        && d.at == request.time
+        && d.byName is string && d.byName.size() <= 200
+        && (!('what' in d) || (d.what is string && d.what.size() <= 300))
+        && (!('note' in d) || (d.note is string && d.note.size() <= 1000))
+        && (!('ref' in d) || (d.ref is string && d.ref.size() <= 80))
+        && ((d.app == 'builder' && (d.act in ['quote.saved', 'quote.updated', 'quote.deleted']
+              || (d.act in ['quote.discount', 'quote.discount_removed'] && can('quotes.discount'))
+              || (d.act == 'quote.live_edit' && can('quotes.edit'))))
+          || (d.app == 'people' && ((d.act in ['join.accepted', 'join.declined', 'member.removed'] && isAdmin())
+              || (d.act in ['member.role', 'role.saved', 'role.deleted', 'code.reset'] && isOwner())))
+          || (d.app == 'settings' && ((d.act == 'templates.saved' && can('templates.edit')) || d.act == 'engine.run')));
+    }
+    match /activity/{id} {
+      allow read: if can('activity.view');
+      allow create: if isMember() && activityOk();
       allow update, delete: if false;
     }
     // The price list: one document per category (items keyed by product id) and prices/_meta, whose

@@ -17,12 +17,13 @@ import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
 import { applyEditToStored, builderOpen, edits } from './data/builder'
 import { DatabaseView } from './components/DatabaseView'
+import { ActivityView } from './components/ActivityView'
 import { allowed, isOwner, myId, ownOffer, postWork, seesPage, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, tn, useLang } from './i18n'
 
 /** What a tab needs. A tab the person's role cannot use is not shown. */
-const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule' }
+const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view' }
 
 const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
@@ -34,6 +35,7 @@ const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'calendar', label: 'Planner', icon: 'calendar' },
   { id: 'posted', label: 'Posted', icon: 'posted' },
   { id: 'database', label: 'Database', icon: 'database' },
+  { id: 'activity', label: 'Activity', icon: 'clock' },
 ]
 
 type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'settings' } | { kind: 'apps' } | null
@@ -41,7 +43,7 @@ type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'setting
 const tabFromHash = (): Tab => ALL_TABS.find((x) => `#/${x.id}` === location.hash)?.id ?? 'home'
 
 /** Sidebar headings: the shop tools, then everything about posters. */
-const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' ? 'Shop' : 'Posters')
+const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' ? 'Shop' : id === 'activity' ? 'Team' : 'Posters')
 
 /** The engine is "quiet" when it has not written its sign of life for this long. */
 const QUIET_MS = 30 * 60 * 1000
@@ -50,7 +52,7 @@ export default function App() {
   useLang()
   const session = useSession()
   const [wanted, setTab] = useState<Tab>(tabFromHash)
-  const TABS = ALL_TABS.filter((x) => x.id === 'home' || seesPage(x.id)).filter((x) => (x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
+  const TABS = ALL_TABS.filter((x) => x.id === 'home' || x.id === 'activity' || seesPage(x.id)).filter((x) => (x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -152,6 +154,8 @@ export default function App() {
     <PlannerView data={data} onOpen={open} />
   ) : tab === 'database' ? (
     <DatabaseView data={data} onOpen={open} />
+  ) : tab === 'activity' ? (
+    <ActivityView data={data} onOpen={open} />
   ) : (
     <PostedView data={data} onOpen={open} />
   )
