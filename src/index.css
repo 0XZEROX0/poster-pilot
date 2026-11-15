@@ -555,7 +555,7 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 
 /* Prices as a table */
 .ptable { display: flex; flex-direction: column; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); overflow: clip; }
-.ptable-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 170px) 120px 110px 110px; align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid var(--border); }
+.ptable-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 170px) 120px 100px 100px 100px; align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid var(--border); }
 .ptable-row:hover { background: var(--surface-2); }
 .ptable-head { position: sticky; top: 0; z-index: 1; border-top: 0; background: var(--surface); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding-block: 10px; }
 .ptable-head:hover { background: var(--surface); }
@@ -568,7 +568,7 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .ptable-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.75rem; color: var(--muted); }
 .ptable-specs { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 @media (max-width: 640px) {
-  .ptable-row { grid-template-columns: minmax(0, 1fr) 30px 80px 80px; gap: 4px; padding-inline: 10px; }
+  .ptable-row { grid-template-columns: minmax(0, 1fr) 30px 72px 72px 72px; gap: 4px; padding-inline: 10px; }
   .ptable-specs { display: none; }
   .ptable-head .ptable-stock { visibility: hidden; }
   .ptable-stock .stock > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -604,7 +604,7 @@ button.stock:hover { filter: brightness(1.15); }
 .pcard-top .row-title { font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
 .pcard-company { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .pcard-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
-.pcard-prices { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--border); }
+.pcard-prices { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 1px solid var(--border); }
 .pcard-prices label { display: flex; flex-direction: column; gap: 0; padding: 6px 8px 8px; min-width: 0; }
 .pcard-prices label + label { border-inline-start: 1px solid var(--border); }
 .pcard-prices label > span { font-size: 0.6875rem; font-weight: 600; color: var(--muted); padding-inline: 8px; }

@@ -418,6 +418,8 @@ export const ar: Record<string, string> = {
   'Show hidden products': 'إظهار المنتجات المخفية',
   'In build': 'داخل تجميعة',
   'Alone': 'خارج تجميعة',
+  'Online': 'أونلاين',
+  'Website price': 'سعر الموقع',
   'Show all': 'عرض الكل',
   '(no name)': '(بدون اسم)',
   '%n y': '%n سنة',
