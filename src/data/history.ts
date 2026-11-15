@@ -9,7 +9,7 @@ import type { LogChange, LogEntry, Post } from './types'
 /** What the app may write. The database rules hold the same list. */
 export const APP_ACTS = [
   'created', 'edited', 'offer.approved', 'offer.rejected', 'offer.resubmitted', 'design.approved', 'design.redo', 'design.redo_next',
-  'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'problem.ignored', 'prices.recheck', 'deleted',
+  'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'schedule.postnow', 'problem.ignored', 'prices.recheck', 'deleted',
 ] as const
 
 /** English text for each kind of entry, app and engine. */
@@ -28,6 +28,7 @@ export const ACT_TEXT: Record<string, string> = {
   'schedule.set': 'Post date and time set',
   'schedule.cleared': 'Post date and time removed',
   'schedule.cancel': 'Asked to cancel the schedule',
+  'schedule.postnow': 'Asked to post now on Facebook and Instagram',
   'problem.ignored': 'Problem ignored',
   'prices.recheck': 'Asked to check competitor prices again',
   'prices.checked': 'Competitor prices checked',
@@ -83,6 +84,8 @@ export function describe(before: Post | undefined, patch: Partial<Post>): Omit<L
   const nowWhen = [date, time].filter(Boolean).join(' ')
   const moved = ('postDate' in patch || 'postTime' in patch) && wasWhen !== nowWhen
   const whenNote = moved ? (date && time ? { note: nowWhen } : wasWhen ? { note: `${wasWhen} → -` } : {}) : {}
+  // "Post now": the time it carries is the moment of the press; the engine writes the real minute it went out.
+  if (patch.postNow === 'yes') return { act: 'schedule.postnow', ...(nowWhen ? { note: nowWhen } : {}) }
   if ('offer' in patch && patch.offer !== before?.offer) {
     if (patch.offer === 'Approved') return { act: 'offer.approved', ...extra }
     if (patch.offer === 'Rejected') return { act: 'offer.rejected', ...(patch.offerNote ? { note: short(patch.offerNote, 900) } : {}), ...extra }

@@ -51,6 +51,9 @@ export type Post = {
   createdByName?: string
   /** True until the engine has written a post made in the app into the sheet. */
   appNew?: boolean
+  /** 'yes' after someone confirmed "Post now": the engine publishes it on Facebook and Instagram at once (not scheduled),
+   * then empties it and sets Post date / Post time to the minute it went out. */
+  postNow?: string
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
   /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */

@@ -80,6 +80,8 @@ service cloud.firestore {
       let sent = edits.diff(was.get('appEdits', {}));
       let keys = now.diff(was).affectedKeys().union(sent.addedKeys()).union(sent.changedKeys());
       return (!keys.hasAny(['postDate', 'postTime']) || can('schedule'))
+        // "Post now" publishes on Facebook and Instagram at once: only someone who may schedule can ask for it.
+        && (!keys.hasAny(['postNow']) || can('schedule'))
         && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', '')) && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''))))
         && (!keys.hasAny(['appDeleted']) || can('delete'))
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
@@ -229,7 +231,7 @@ service cloud.firestore {
         && request.resource.data.postId is string && request.resource.data.postId.size() > 0 && request.resource.data.postId.size() <= 40
         && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
         && request.resource.data.act in ['created', 'edited', 'offer.approved', 'offer.rejected', 'offer.resubmitted', 'design.approved', 'design.redo', 'design.redo_next',
-          'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'problem.ignored', 'prices.recheck', 'deleted']
+          'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'schedule.postnow', 'problem.ignored', 'prices.recheck', 'deleted']
         && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 1000))
         && (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() <= 300))
         && (!('changes' in request.resource.data) || (request.resource.data.changes is list && request.resource.data.changes.size() <= 12));

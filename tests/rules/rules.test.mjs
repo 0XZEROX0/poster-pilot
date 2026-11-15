@@ -186,6 +186,10 @@ await ok('scheduler sets a time', updateDoc(doc(sch, 'posts/p2'), { postDate: '2
 await no('scheduler skips a design', updateDoc(doc(sch, 'posts/p1'), { feedback: 'ignore' }))
 await no('scheduler sends back to review', updateDoc(doc(sch, 'posts/p3'), { feedback: '' }))
 await no('scheduler edits a price', updateDoc(doc(sch, 'posts/p2'), { priceAfter: '9' }))
+await no('reviewer asks to post now', updateDoc(doc(rev, 'posts/p3'), { postNow: 'yes', 'appEdits.postNow': 'yes', appDirty: true }))
+await no('maker asks to post now through appEdits only', updateDoc(doc(maker, 'posts/p3'), { 'appEdits.postNow': 'yes', appDirty: true }))
+await ok('scheduler asks to post now', updateDoc(doc(sch, 'posts/p3'), { postNow: 'yes', 'appEdits.postNow': 'yes', postDate: '2026-12-01', postTime: '16:05', 'appEdits.postDate': '2026-12-01', 'appEdits.postTime': '16:05', appDirty: true }))
+await ok('scheduler takes back a post now with a new time', updateDoc(doc(sch, 'posts/p3'), { postNow: '', 'appEdits.postNow': '', postDate: '2026-12-01', postTime: '17:00', 'appEdits.postDate': '2026-12-01', 'appEdits.postTime': '17:00' }))
 await ok('scheduler cancels a schedule', updateDoc(doc(sch, 'posts/p3'), { feedback: 'Cancel', 'appEdits.feedback': 'Cancel' }))
 await ok('scheduler gives a cancelled post a new time', updateDoc(doc(sch, 'posts/p3'), { feedback: 'Done', 'appEdits.feedback': 'Done', postTime: '19:00', 'appEdits.postTime': '19:00' }))
 await ok('plain member still does everything on posts', updateDoc(doc(plain, 'posts/p2'), { feedback: '', postDate: '', appDeleted: true }))
@@ -229,6 +233,7 @@ await no('member without post work saves templates', setDoc(doc(hr, 'catalog/tem
 // history
 const L = (db, over = {}) => ({ postId: 'p2', by: 'u-sch', byName: 'S', act: 'schedule.set', note: 'x', at: serverTimestamp(), ...over })
 await ok('member writes a history line in its own name', setDoc(doc(sch, 'log/l1'), L(sch)))
+await ok('post now line', setDoc(doc(sch, 'log/l1pn'), L(sch, { act: 'schedule.postnow' })))
 { const b = writeBatch(sch); b.update(doc(sch, 'posts/p2'), { postTime: '20:00', 'appEdits.postTime': '20:00' }); b.set(doc(sch, 'log/l2'), L(sch)); await ok('change and its line in one step', b.commit()) }
 { const b = writeBatch(sch); b.update(doc(sch, 'posts/p2'), { priceAfter: '1' }); b.set(doc(sch, 'log/l3'), L(sch, { act: 'edited' })); await no('a refused change leaves no line', b.commit()) }
 await no('line in someone else\'s name', setDoc(doc(sch, 'log/l4'), L(sch, { by: 'u-boss' })))

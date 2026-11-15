@@ -708,6 +708,11 @@ button.stock:hover { filter: brightness(1.15); }
 .choice-new input { flex: 1; min-width: 0; font-size: 1rem; }
 .choice-new .link { white-space: nowrap; }
 .clear-confirm { display: inline-flex; gap: 6px; }
+/* "Post now" asks once more before anything goes public. */
+.confirm-post { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.confirm-post p { margin: 0; }
+.confirm-post-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.confirm-post-actions .btn-primary { flex: 1; }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-inline-end: 6px; box-shadow: 0 0 0 3px var(--good-soft); vertical-align: middle; }
 .live-dot.idle { background: var(--muted); box-shadow: none; }
 .live-head { display: flex; align-items: center; color: var(--text-2); font-size: 0.875rem; margin-bottom: 8px; }

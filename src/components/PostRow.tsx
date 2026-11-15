@@ -14,6 +14,7 @@ export function StageChip({ post }: { post: Post }) {
   if (stage === 'building') return <Chip tone="info">{t('Being built')}</Chip>
   if (stage === 'skipped') return <Chip>{t('Skipped')}</Chip>
   if (stage === 'scheduled' && post.feedback === 'Cancel') return <Chip tone="warn">{t('Cancelling the schedule')}</Chip>
+  if (stage === 'scheduled' && post.postNow === 'yes') return <Chip tone="info">{t('Posting now')}</Chip>
   if (stage === 'scheduled') return when && post.fbStatus === 'Scheduled' ? <Chip tone="good">{dayLabel(when.date)} · {timeLabel(when.time)}</Chip> : <Chip tone="warn">{t(when ? 'Being scheduled' : 'Needs a time')}</Chip>
   return <Chip tone="warn">{t('To review')}</Chip>
 }
