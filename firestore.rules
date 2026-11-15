@@ -245,6 +245,12 @@ service cloud.firestore {
         : request.resource.data.keys().hasOnly(['name', 'order', 'items', 'importedAt']) && request.resource.data.items is map);
       allow delete: if false;
     }
+    // What the engine read from static-eg.com (web/products: every website product, for linking by hand).
+    // Only the engine writes it.
+    match /web/{id} {
+      allow read: if can('prices.edit');
+      allow write: if false;
+    }
     match /priceLog/{id} {
       allow read: if isMember();
       allow create: if can('prices.edit')

@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase/auth'
-import { collection, deleteField, doc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch, type DocumentData, type Firestore } from 'firebase/firestore'
+import { collection, deleteField, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch, type DocumentData, type Firestore } from 'firebase/firestore'
 import { useEffect, useSyncExternalStore } from 'react'
 import { firestore } from './firebase'
 
@@ -21,6 +21,8 @@ export type PriceItem = {
   alone: number | null
   /** The price on the website (static-eg.com). Separate from the shop prices; empty means not set yet. */
   online?: number | null
+  /** The sale price on the website. Empty means the product is not on sale there. */
+  onlineSale?: number | null
   /** Years. */
   warranty: number | null
   company: string
@@ -32,9 +34,46 @@ export type PriceItem = {
   hidden?: boolean
   /** Out of stock. Information for now; the builder, offers and a website can use it later. Absent means in stock. */
   out?: boolean
+  /** The product on static-eg.com this one is linked to. Only a confirmed link (ok) is kept in step with the website. */
+  web?: WebLink
   /** Last change: when, and by whom. */
   at?: number
   byName?: string
+}
+
+/**
+ * A link to a website product. The engine suggests links (ok: false) by name; a person confirms or changes them.
+ * price, sale and stock are what the website had when the engine last looked or sent a change.
+ */
+export type WebLink = {
+  id: number
+  name: string
+  ok: boolean
+  url?: string
+  /** simple, or variable for a product with options (colour, Tray/Box). */
+  type?: string
+  /** How sure the name match was, 0-100 (suggested links only). */
+  score?: number
+  price?: number | null
+  sale?: number | null
+  stock?: string
+  /** Set by the engine: when the last change reached the website, and the last error. */
+  sentAt?: string
+  error?: string
+}
+
+/** One product of static-eg.com, from web/products (refreshed by the engine). */
+export type WebProduct = { id: number; name: string; price: number | null; sale: number | null; stock: string; type: string; url: string }
+
+/** What a linked product still has to send to the website. Empty when it is in step (or not confirmed). */
+export function webPending(item: PriceItem, evenIfNotConfirmed = false): string[] {
+  const w = item.web
+  if (!w || (!w.ok && !evenIfNotConfirmed)) return []
+  const out: string[] = []
+  if (item.online !== undefined && item.online !== null && item.online !== (w.price ?? null)) out.push('price')
+  if ((item.onlineSale ?? null) !== (w.sale ?? null)) out.push('sale')
+  if (w.stock && (item.out ? 'outofstock' : 'instock') !== (w.stock === 'outofstock' ? 'outofstock' : 'instock')) out.push('stock')
+  return out
 }
 
 export type PriceCategory = { id: string; name: string; order: number; items: PriceItem[] }
@@ -70,7 +109,7 @@ export function casePsu(item: PriceItem | undefined): string {
 export const specChips = (item: PriceItem): string[] =>
   Object.entries(item.specs ?? {}).flatMap(([k, v]) => (!v ? [] : k === 'psu' ? (NO.test(v) ? [] : [`PSU ${v}`]) : [v]))
 
-const FIELD_LABEL: Record<string, string> = { in: 'In build', alone: 'Alone', online: 'Online', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', out: 'Stock', specs: 'Specs' }
+const FIELD_LABEL: Record<string, string> = { in: 'In build', alone: 'Alone', online: 'Online', onlineSale: 'Online sale', web: 'Website product', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', out: 'Stock', specs: 'Specs' }
 export const fieldLabel = (f: string) => FIELD_LABEL[f] ?? SPEC_LABEL[f.replace(/^specs\./, '')] ?? f
 
 /** "5,500", or a dash when there is no price. Western digits in both languages, like the price list. */
@@ -106,6 +145,12 @@ export function diff(before: PriceItem | null, patch: ItemPatch): FieldChange[] 
       continue
     }
     const was = before ? (before as Record<string, unknown>)[k] : undefined
+    if (k === 'web') {
+      const a = was as WebLink | undefined, b = v as WebLink | undefined
+      const label = (w?: WebLink) => (w ? `${w.name}${w.ok ? ' ✓' : ''}` : '')
+      if (label(a) !== label(b)) out.push({ f: k, from: label(a), to: label(b) })
+      continue
+    }
     if (k === 'out') {
       if (Boolean(was) !== Boolean(v)) out.push({ f: k, from: was ? 'Out of stock' : 'In stock', to: v ? 'Out of stock' : 'In stock' })
       continue
@@ -135,6 +180,23 @@ export function bulkPatches(items: PriceItem[], percent: number, which: 'both' |
 export const newProductId = () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
 
 const num = (v: unknown) => (typeof v === 'number' && !Number.isNaN(v) ? v : null)
+const webOf = (v: unknown): WebLink | undefined => {
+  const w = v as Record<string, unknown> | null | undefined
+  if (!w || typeof w !== 'object' || typeof w.id !== 'number') return undefined
+  return { id: w.id, name: String(w.name ?? ''), ok: w.ok === true, url: w.url ? String(w.url) : undefined, type: w.type ? String(w.type) : undefined, score: typeof w.score === 'number' ? w.score : undefined, price: num(w.price), sale: num(w.sale), stock: w.stock ? String(w.stock) : undefined, sentAt: w.sentAt ? String(w.sentAt) : undefined, error: w.error ? String(w.error) : undefined }
+}
+
+/** Every product on the website, for picking a link by hand. Read once when asked (one document). */
+export async function loadWebProducts(): Promise<WebProduct[]> {
+  if (!firestore) return [
+    { id: 1, name: 'Intel Core i5-14400F Box', price: 8500, sale: 7999, stock: 'instock', type: 'simple', url: '' },
+    { id: 2, name: 'AMD Ryzen 5 7600X Tray', price: 9500, sale: null, stock: 'outofstock', type: 'simple', url: '' },
+  ]
+  const snap = await getDoc(doc(firestore, 'web', 'products'))
+  const items = (snap.data()?.items ?? {}) as Record<string, Record<string, unknown>>
+  return Object.entries(items).map(([id, v]) => ({ id: Number(id), name: String(v.n ?? ''), price: num(v.p), sale: num(v.s), stock: String(v.st ?? ''), type: String(v.t ?? 'simple'), url: String(v.u ?? '') })).sort((a, b) => a.name.localeCompare(b.name))
+}
+
 const millis = (v: unknown) => (typeof v === 'number' ? v : (v as { toMillis?: () => number } | null)?.toMillis?.() ?? 0)
 
 /** A category document as the app uses it. Products keep the order they had in the sheet (`n`), new ones go last. */
@@ -142,7 +204,7 @@ export function categoryOf(id: string, d: DocumentData): PriceCategory {
   const raw = (d.items ?? {}) as Record<string, DocumentData>
   const items = Object.entries(raw)
     .filter(([, v]) => v && typeof v === 'object')
-    .map(([pid, v]) => ({ n: typeof v.n === 'number' ? v.n : Number.MAX_SAFE_INTEGER, at: millis(v.at), item: { id: pid, name: String(v.name ?? ''), in: num(v.in), alone: num(v.alone), online: num(v.online) ?? undefined, warranty: num(v.warranty), company: String(v.company ?? ''), group: v.group ? String(v.group) : undefined, specs: v.specs ?? undefined, hidden: v.hidden === true || undefined, out: v.out === true || undefined, at: millis(v.at) || undefined, byName: v.byName || undefined } as PriceItem }))
+    .map(([pid, v]) => ({ n: typeof v.n === 'number' ? v.n : Number.MAX_SAFE_INTEGER, at: millis(v.at), item: { id: pid, name: String(v.name ?? ''), in: num(v.in), alone: num(v.alone), online: num(v.online) ?? undefined, onlineSale: num(v.onlineSale) ?? undefined, web: webOf(v.web), warranty: num(v.warranty), company: String(v.company ?? ''), group: v.group ? String(v.group) : undefined, specs: v.specs ?? undefined, hidden: v.hidden === true || undefined, out: v.out === true || undefined, at: millis(v.at) || undefined, byName: v.byName || undefined } as PriceItem }))
     .sort((a, b) => a.n - b.n || a.at - b.at || a.item.name.localeCompare(b.item.name))
     .map((x) => x.item)
   return { id, name: String(d.name ?? id), order: typeof d.order === 'number' ? d.order : 99, items }
