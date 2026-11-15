@@ -332,4 +332,26 @@ export const edits = {
     const me = getAuth(firestore.app).currentUser
     if (me) await deleteDoc(doc(firestore, 'edits', me.uid)).catch(() => {})
   },
+  /** For the editor: whether the change sent to this person is still waiting for their builder to take it in. */
+  watchWaiting(uid: string, onData: (waiting: boolean) => void): () => void {
+    if (!firestore) return () => {}
+    return onSnapshot(doc(firestore, 'edits', uid), (snap) => onData(snap.exists() && !snap.metadata.hasPendingWrites), () => {})
+  },
+}
+
+/** The open quote is kept in this browser under this key. */
+export const DRAFT_KEY = 'posterpilot.builder.draft'
+/** True while the Builder page is on screen; it then takes changes from others in itself. */
+export const builderOpen = { current: false }
+/** A change someone made to this person's quote while their Builder page was closed: written into the kept quote. */
+export function applyEditToStored(e: QuoteEdit): boolean {
+  if (e.at && Date.now() - e.at > LIVE_IDLE_MS) return false
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    const b = raw ? (JSON.parse(raw) as Build) : newBuild('')
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...b, customer: e.customer, lines: complete(e.lines), extra: e.extra, buildDiscount: e.buildDiscount }))
+    return true
+  } catch {
+    return false
+  }
 }

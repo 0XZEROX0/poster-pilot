@@ -11,14 +11,15 @@ import { BuilderView } from './components/BuilderView'
 import { PostSheet } from './components/PostSheet'
 import { ReviewView } from './components/ReviewView'
 import { agoLabel, SettingsSheet } from './components/SettingsSheet'
-import { Icon, Toast } from './components/ui'
+import { Icon, showToast, Toast } from './components/ui'
 import { AppsMenu, usePins } from './components/AppsMenu'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
+import { applyEditToStored, builderOpen, edits } from './data/builder'
 import { DatabaseView } from './components/DatabaseView'
 import { allowed, isOwner, myId, ownOffer, postWork, seesPage, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
-import { locale, t, useLang } from './i18n'
+import { locale, t, tn, useLang } from './i18n'
 
 /** What a tab needs. A tab the person's role cannot use is not shown. */
 const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule' }
@@ -55,6 +56,17 @@ export default function App() {
   const [overlay, setOverlay] = useState<Overlay>(null)
   const desktop = useDesktop()
   const { pins, toggle: togglePin } = usePins(TABS.map((x) => x.id))
+
+  // Someone changed this person's quote (Live quotes) while their Builder was closed: keep the change for when they open it.
+  const builderUser = session.mode === 'cloud' && session.access === 'in' && seesPage('builder') ? session.user?.uid : undefined
+  useEffect(() => {
+    if (!builderUser) return
+    return edits.watchMine((e) => {
+      if (builderOpen.current) return
+      void edits.clearMine()
+      if (applyEditToStored(e)) showToast(tn('%name changed your quote. Open the Builder to see it.', { name: e.byName || t('Someone') }))
+    })
+  }, [builderUser])
 
   // The tab lives in the address, so the phone's back button moves between screens.
   useEffect(() => {

@@ -809,3 +809,7 @@ button.stock:hover { filter: brightness(1.15); }
 .apps-settings span { flex: 1; }
 [dir="rtl"] .apps-settings .icon:last-child { transform: scaleX(-1); }
 .bl-qty-one b { color: var(--muted); }
+.edit-sync { flex: 1 1 100%; margin: 0; padding: 6px 12px; border-radius: 10px; font-size: 0.875rem; background: var(--surface-2); color: var(--text-2); }
+.edit-sync-done { background: var(--good-soft); color: var(--good); }
+.edit-sync-late, .edit-sync-offline { background: var(--warn-soft); color: var(--warn); }
+.edit-sync-denied { background: var(--bad-soft); color: var(--bad); }
