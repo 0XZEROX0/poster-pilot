@@ -913,3 +913,9 @@ button.stock:hover { filter: brightness(1.15); }
 .web-picker li .muted { font-size: 0.8125rem; }
 .web-names { border: 1px solid var(--warn); }
 .web-names-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; overflow-wrap: anywhere; }
+.web-options { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.web-option-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.web-option-list button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-align: start; min-width: 120px; }
+.web-option-list button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.web-option-list button .muted { font-size: 0.8125rem; }
+.web-picker-opts { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 6px; }

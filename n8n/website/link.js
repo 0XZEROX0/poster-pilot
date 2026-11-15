@@ -8,6 +8,10 @@
 // A link is used by the sync only after someone confirms it in the app (ok: true). Links already confirmed are kept.
 // Settings.pullStock = true also copies the website's stock into the app (in stock / out of stock) for confident
 // links (80% or more, or confirmed), with a line in the price history by "Website".
+// Products with options (Box/Tray, colours) are read option by option: each app product is linked to the option its
+// name names (web.variation, web.option), with that option's price, sale and stock. web/products lists the options.
+// Settings.renames ("websiteId=New name; ...") puts a new name on the website products listed (sent by the sync once
+// the link is confirmed in the app).
 // Settings.dryRun = true only reports. Nothing is ever written to the website here.
 const S = $('Settings').first().json;
 const DRY = S.dryRun !== false;
@@ -32,14 +36,35 @@ const num = v => { const n = parseFloat(String(v ?? '').replace(/,/g, '')); retu
 
 // ---------- website products ----------
 const web = $('Read website products').all().map(i => i.json).filter(p => p && p.id && p.name);
+// The options of each product with options, from "Read options" (one request per product, paired to its input).
+const VIDS = $('Products with options').all().map(i => i.json.id);
+const optsOf = {};
+for (const it of $('Read options').all()) {
+  const o = it.json || {};
+  if (!o.id || o.error) continue;
+  const pi = Array.isArray(it.pairedItem) ? it.pairedItem[0] : it.pairedItem;
+  const parent = VIDS[pi && typeof pi.item === 'number' ? pi.item : -1];
+  if (parent == null) continue;
+  (optsOf[parent] = optsOf[parent] || []).push({ id: Number(o.id), name: decode((o.attributes || []).map(a => a.option).join(' ')).replace(/\s+/g, ' ').trim(), price: num(o.regular_price), sale: num(o.sale_price), stock: String(o.stock_status || '') });
+}
+const RENAME = {};
+for (const part of String(S.renames || '').split(';')) { const m = part.match(/^\s*(\d+)\s*=\s*(.+?)\s*$/); if (m) RENAME[Number(m[1])] = m[2]; }
 if (web.length < 20) throw new Error('Only ' + web.length + ' website products came back; stopping so nothing is linked by mistake.');
 const W = web.map(p => ({
   id: Number(p.id), name: decode(p.name).replace(/\s+/g, ' ').trim(), type: String(p.type || 'simple'), status: String(p.status || ''),
   price: num(p.regular_price), sale: num(p.sale_price), stock: String(p.stock_status || ''), sku: String(p.sku || ''),
-  url: String(p.permalink || ''), nameWords: new Set(tok(p.name)),
-  // A product with options (colour, Tray/Box) also answers to its option words; the sync picks the option later.
+  url: String(p.permalink || ''), nameWords: new Set(tok(p.name)), options: optsOf[Number(p.id)] || [],
+  // A product with options (colour, Tray/Box) also answers to its option words.
   words: new Set(tok(p.name + ' ' + (p.type === 'variable' ? (p.attributes || []).map(a => (a.options || []).join(' ')).join(' ') : ''))),
 }));
+// The option an app product is: the one whose words are all in the app name (or the only option there is).
+function optionFor(itemName, w) {
+  if (w.type !== 'variable' || !w.options.length) return null;
+  const words = new Set(decode(itemName).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const fits = w.options.filter(o => { const t = decode(o.name).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); return t.length && t.every(x => words.has(x)); });
+  if (fits.length === 1) return fits[0];
+  return w.options.length === 1 ? w.options[0] : null;
+}
 
 // The whole name counts here (a case "+ 750W" is a different product from the case alone), and the brand must match.
 function score(itemName, w) {
@@ -93,15 +118,37 @@ const stockChanges = stockSet.filter(x => x.p.out !== (x.w.stock === 'outofstock
 const byCat = {};
 for (const c of links) {
   const { p, w } = c;
-  const link = { id: w.id, name: w.name, ok: false, score: c.s, price: w.price, sale: w.sale, stock: w.stock, type: w.type, url: w.url, at: NOW };
+  const o = optionFor(p.name, w);
+  const v = o || (w.type === 'variable' ? { price: null, sale: null, stock: '' } : w);
+  const link = { id: w.id, name: w.name, ok: false, score: c.s, price: v.price, sale: v.sale, stock: v.stock || undefined, type: w.type, url: w.url, at: NOW };
+  if (o) { link.variation = o.id; link.option = o.name; }
+  if (RENAME[w.id] && RENAME[w.id] !== w.name) link.rename = RENAME[w.id];
   // Copied once so the app starts with what the website shows; a price someone already typed is never replaced.
   const fields = { web: link };
   const paths = [`items.${p.pid}.web`];
-  if ((p.online === null || p.online === undefined) && w.price !== null) { fields.online = w.price; paths.push(`items.${p.pid}.online`); }
-  if ((p.onlineSale === null || p.onlineSale === undefined) && w.sale !== null) { fields.onlineSale = w.sale; paths.push(`items.${p.pid}.onlineSale`); }
+  if ((p.online === null || p.online === undefined) && v.price !== null) { fields.online = v.price; paths.push(`items.${p.pid}.online`); }
+  if ((p.onlineSale === null || p.onlineSale === undefined) && v.sale !== null) { fields.onlineSale = v.sale; paths.push(`items.${p.pid}.onlineSale`); }
   (byCat[p.cat] = byCat[p.cat] || { fields: {}, paths: [] });
   byCat[p.cat].fields[p.pid] = Object.assign(byCat[p.cat].fields[p.pid] || {}, fields);
   byCat[p.cat].paths.push(...paths);
+}
+// Confirmed links to a product with options get their option (and what the website has for it), and any rename.
+const wById0 = new Map(W.map(w => [w.id, w]));
+const optionSet = [];
+for (const p of prods) {
+  if (!(p.web && p.web.ok)) continue;
+  const w = wById0.get(Number(p.web.id));
+  if (!w) continue;
+  const f = {}, paths = [];
+  if (w.type === 'variable' && !p.web.variation) {
+    const o = optionFor(p.name, w);
+    if (o) { Object.assign(f, { variation: o.id, option: o.name, price: o.price, sale: o.sale, stock: o.stock }); paths.push('variation', 'option', 'price', 'sale', 'stock'); optionSet.push(p.name + ' => ' + o.name); }
+  }
+  if (RENAME[w.id] && RENAME[w.id] !== w.name && !p.web.rename) { f.rename = RENAME[w.id]; paths.push('rename'); }
+  if (!paths.length) continue;
+  const b = (byCat[p.cat] = byCat[p.cat] || { fields: {}, paths: [] });
+  b.fields[p.pid] = Object.assign(b.fields[p.pid] || {}, { web: f });
+  b.paths.push(...paths.map(k => `items.${p.pid}.web.${k}`));
 }
 const writes = [];
 const base0 = docs.length ? docs[0].name.replace(/\/prices\/[^/]+$/, '') : '';
@@ -119,7 +166,7 @@ for (const [cat, b] of Object.entries(byCat)) {
   writes.push({ update: { name: `${base}/prices/${cat}`, fields: { items: ev(b.fields) } }, updateMask: { fieldPaths: b.paths }, currentDocument: { exists: true } });
 }
 const catalog = {};
-for (const w of W) catalog[String(w.id)] = { n: w.name, p: w.price, s: w.sale, st: w.stock, t: w.type, k: w.sku, u: w.url, v: w.status };
+for (const w of W) catalog[String(w.id)] = { n: w.name, p: w.price, s: w.sale, st: w.stock, t: w.type, k: w.sku, u: w.url, v: w.status, o: w.type === 'variable' ? w.options.map(o => ({ i: o.id, n: o.name, p: o.price, s: o.sale, st: o.stock })) : undefined };
 writes.push({ update: { name: `${base}/web/products`, fields: { at: { timestampValue: NOW }, count: ev(W.length), items: ev(catalog) } } });
 
 const unlinked = prods.filter(p => !(p.web && p.web.ok) && !links.some(c => c.p.pid === p.pid));
@@ -136,7 +183,11 @@ const report = {
   onlineFilled: links.filter(c => (c.p.online === null || c.p.online === undefined) && c.w.price !== null).length,
   saleFilled: links.filter(c => (c.p.onlineSale === null || c.p.onlineSale === undefined) && c.w.sale !== null).length,
   linkedOutOfStockOnWebsite: links.filter(c => c.w.stock === 'outofstock').length,
-  linkedVariable: links.filter(c => c.w.type !== 'simple').map(c => c.p.name + ' => ' + c.w.name),
+  websiteWithOptions: W.filter(w => w.type === 'variable').length,
+  optionsRead: Object.values(optsOf).reduce((n, l) => n + l.length, 0),
+  linkedVariable: links.filter(c => c.w.type !== 'simple').map(c => { const o = optionFor(c.p.name, c.w); return c.p.name + ' => ' + c.w.name + ' [' + (o ? o.name : 'NO OPTION FITS: ' + c.w.options.map(x => x.name).join(' / ')) + ']'; }),
+  confirmedOptionSet: optionSet,
+  renames: Object.entries(RENAME).map(([id, n]) => id + ' -> ' + n),
   stockToOut: stockChanges.filter(x => x.w.stock === 'outofstock').map(x => x.p.name),
   stockToIn: stockChanges.filter(x => x.w.stock !== 'outofstock').map(x => x.p.name),
   noMatch: unlinked.length,
