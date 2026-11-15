@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -31,7 +31,7 @@ service cloud.firestore {
       return role == 'owner' ? allPerms()
         : exists(rolePath(role)) ? get(rolePath(role)).data.perms
         : role == 'admin' ? allPerms()
-        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit']
+        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit']
         : [];
     }
     // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
@@ -316,11 +316,11 @@ service cloud.firestore {
         && request.resource.data.at == request.time;
       allow delete: if isMember() && (uid == request.auth.uid || can('quotes.discount'));
     }
-    // Products and styles come from the engine. People who make or check posts may change the caption templates.
+    // Products and styles come from the engine. Roles with 'Edit caption templates' may change the caption templates.
     match /catalog/{id} {
       allow read: if isMember();
       allow create, update: if id == 'templates'
-        && (can('offers.create') || can('designs.approve') || can('fix'))
+        && can('templates.edit')
         && request.resource.data.keys().hasOnly(['items', 'appEditedAt'])
         && request.resource.data.items is list && request.resource.data.items.size() <= 50;
     }

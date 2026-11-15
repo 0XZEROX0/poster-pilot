@@ -26,7 +26,7 @@
   background: var(--bg);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0a0e17;
     --surface: #141a27;
     --surface-2: #1c2434;
@@ -47,6 +47,27 @@
     --shadow: none;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0e17;
+  --surface: #141a27;
+  --surface-2: #1c2434;
+  --text: #eef1f6;
+  --text-2: #b8c0cf;
+  --muted: #8590a5;
+  --border: rgba(255, 255, 255, 0.1);
+  --accent: #8d9dff;
+  --accent-soft: #1e2552;
+  --on-accent: #06101f;
+  --orange: #ff7a45;
+  --good: #4cc27a;
+  --good-soft: #12301f;
+  --warn: #f0b24a;
+  --warn-soft: #382a10;
+  --bad: #ff7b72;
+  --bad-soft: #3a1917;
+  --shadow: none;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -701,8 +722,9 @@ button.stock:hover { filter: brightness(1.15); }
 .brand b { color: var(--orange); font-weight: 800; }
 .splash-logo { width: min(260px, 70vw); height: auto; margin-bottom: 6px; }
 @media (prefers-color-scheme: dark) {
-  .splash-logo { background: #fff; padding: 12px 18px; border-radius: 14px; }
+  :root:not([data-theme="light"]) .splash-logo { background: #fff; padding: 12px 18px; border-radius: 14px; }
 }
+:root[data-theme="dark"] .splash-logo { background: #fff; padding: 12px 18px; border-radius: 14px; }
 .side-section { margin: 14px 12px 4px; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 
 /* Settings: tabs, then cards */
