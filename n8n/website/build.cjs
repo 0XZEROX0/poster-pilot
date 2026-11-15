@@ -1,0 +1,19 @@
+// Prints n8n Workflow SDK code for "Static OS - Website link": node n8n/website/build.cjs
+const fs = require('fs');
+const J = JSON.stringify;
+const src = fs.readFileSync(__dirname + '/link.js', 'utf8');
+const FB = "{ googleApi: { id: 'P1HrSWrwsJZy44Ur', name: 'PosterPilot Firebase' } }";
+const WOO = "{ wooCommerceApi: { id: 'coKsvik1ximz06rn', name: 'Static website' } }";
+const FS = "https://firestore.googleapis.com/v1/projects/{{ $('Settings').first().json.projectId }}/databases/(default)/documents";
+const FIELDS = 'id,name,type,status,sku,permalink,regular_price,sale_price,stock_status,manage_stock,stock_quantity,attributes';
+console.log(`import { workflow, node, trigger, ifElse, expr } from '@n8n/workflow-sdk';
+const start = trigger({ type: 'n8n-nodes-base.manualTrigger', version: 1, config: { name: 'Run by hand' } });
+const settings = node({ type: 'n8n-nodes-base.set', version: 3.4, config: { name: 'Settings', parameters: { mode: 'manual', assignments: { assignments: [ { id: 'cfg-project', name: 'projectId', value: 'poster-pilot-8d35e', type: 'string' }, { id: 'cfg-dry', name: 'dryRun', value: true, type: 'boolean' } ] } } } });
+const woo = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Read website products', executeOnce: true, retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, credentials: ${WOO}, parameters: { method: 'GET', url: 'https://static-eg.com/wp-json/wc/v3/products', authentication: 'predefinedCredentialType', nodeCredentialType: 'wooCommerceApi', sendQuery: true, queryParameters: { parameters: [ { name: 'per_page', value: '100' }, { name: 'status', value: 'any' }, { name: '_fields', value: ${J(FIELDS)} } ] }, options: { timeout: 60000, pagination: { pagination: { parameters: { parameters: [ { type: 'qs', name: 'page', value: '={{ $pageCount + 1 }}' } ] }, paginationCompleteWhen: 'responseIsEmpty', limitPagesFetched: true, maxRequests: 60, requestInterval: 500 } } } } } });
+const list = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Read price list', executeOnce: true, retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, credentials: ${FB}, parameters: { method: 'GET', url: expr(${J(FS + '/prices?pageSize=100')}), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', options: { timeout: 60000 } } } });
+const match = node({ type: 'n8n-nodes-base.code', version: 2, config: { name: 'Match website products', parameters: { mode: 'runOnceForAllItems', language: 'javaScript', jsCode: ${J(src)} } } });
+const save = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Save links to the app', retryOnFail: true, maxTries: 2, waitBetweenTries: 3000, credentials: ${FB}, parameters: { method: 'POST', url: expr(${J(FS + ':batchWrite')}), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', sendBody: true, contentType: 'json', specifyBody: 'json', jsonBody: expr('{{ { writes: $json.writes } }}'), options: { timeout: 60000 } } } });
+const has = ifElse({ version: 2.2, config: { name: 'Anything to save?', parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 }, conditions: [ { id: 'c1', leftValue: expr('{{ $json.writes.length }}'), rightValue: 0, operator: { type: 'number', operation: 'gt' } } ], combinator: 'and' }, options: {} } } });
+export default workflow('website-link', 'Static OS - Website link')
+  .add(start).to(settings).to(woo).to(list).to(match).to(has.onTrue(save));
+`);

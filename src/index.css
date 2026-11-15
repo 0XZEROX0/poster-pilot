@@ -555,7 +555,7 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 
 /* Prices as a table */
 .ptable { display: flex; flex-direction: column; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); overflow: clip; }
-.ptable-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 170px) 120px 100px 100px 100px; align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid var(--border); }
+.ptable-row { display: grid; grid-template-columns: minmax(150px, 1.6fr) minmax(0, 1fr) 110px repeat(4, 84px); align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid var(--border); }
 .ptable-row:hover { background: var(--surface-2); }
 .ptable-head { position: sticky; top: 0; z-index: 1; border-top: 0; background: var(--surface); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding-block: 10px; }
 .ptable-head:hover { background: var(--surface); }
@@ -568,7 +568,11 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .ptable-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.75rem; color: var(--muted); }
 .ptable-specs { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 @media (max-width: 640px) {
-  .ptable-row { grid-template-columns: minmax(0, 1fr) 30px 72px 72px 72px; gap: 4px; padding-inline: 10px; }
+  /* Phone: the name on its own line, then stock and the four prices under it */
+  .ptable-row { grid-template-columns: 30px repeat(4, minmax(0, 1fr)); gap: 0 4px; padding-inline: 10px; }
+  .ptable-row > :first-child { grid-column: 1 / -1; }
+  .ptable-head > :first-child { display: none; }
+  .ptable-row .price-cell { font-size: 0.875rem; }
   .ptable-specs { display: none; }
   .ptable-head .ptable-stock { visibility: hidden; }
   .ptable-stock .stock > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -604,13 +608,14 @@ button.stock:hover { filter: brightness(1.15); }
 .pcard-top .row-title { font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
 .pcard-company { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .pcard-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
-.pcard-prices { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 1px solid var(--border); }
+.pcard-prices { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--border); }
 .pcard-prices label { display: flex; flex-direction: column; gap: 0; padding: 6px 8px 8px; min-width: 0; }
-.pcard-prices label + label { border-inline-start: 1px solid var(--border); }
+.pcard-prices label:nth-child(even) { border-inline-start: 1px solid var(--border); }
+.pcard-prices label:nth-child(n + 3) { border-top: 1px solid var(--border); }
 .pcard-prices label > span { font-size: 0.6875rem; font-weight: 600; color: var(--muted); padding-inline: 8px; }
 .pcard-prices .price-cell { text-align: start; font-size: 1.0625rem; }
 .pcard-prices span.price-cell { padding: 4px 8px; }
-@media (max-width: 520px) { .pgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .pcard-prices { grid-template-columns: 1fr; } .pcard-prices label + label { border-inline-start: 0; border-top: 1px solid var(--border); } }
+@media (max-width: 520px) { .pgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .pcard-prices label { padding-inline: 4px; } .pcard-prices .price-cell { font-size: 0.9375rem; } }
 .check-line { display: inline-flex; align-items: center; gap: 8px; font-size: 0.875rem; color: var(--text-2); }
 .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .changes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -892,3 +897,17 @@ button.stock:hover { filter: brightness(1.15); }
 .bx-head .builder-who label { min-width: 0; }
 .bx-links { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .bx-links .chip-btn { flex: none; white-space: nowrap; }
+
+/* A product's link to the website (product sheet) */
+.web-link { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.web-link h3 { margin: 0; font-size: 0.9375rem; }
+.web-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); }
+.web-name { font-weight: 700; overflow-wrap: anywhere; }
+.web-name a { color: inherit; text-decoration: underline; text-decoration-color: var(--border); }
+.web-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.web-picker { display: flex; flex-direction: column; gap: 8px; }
+.web-picker ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; max-height: 320px; overflow-y: auto; }
+.web-picker li + li { border-top: 1px solid var(--border); }
+.web-picker li button { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 8px 12px; text-align: start; }
+.web-picker li button:hover { background: var(--surface-2); }
+.web-picker li .muted { font-size: 0.8125rem; }

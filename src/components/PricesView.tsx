@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { bulkPatches, casePsu, fieldLabel, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, usePrices, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem } from '../data/prices'
+import { bulkPatches, casePsu, fieldLabel, loadWebProducts, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, usePrices, webPending, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem, type WebProduct } from '../data/prices'
 import { allowed } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -28,6 +28,7 @@ export function PricesView() {
   const [search, setSearch] = useState('')
   const [hidden, setHidden] = useState(false)
   const [stock, setStock] = useState<'' | 'in' | 'out'>('')
+  const [webF, setWebF] = useState<'' | 'check' | 'linked' | 'none'>('')
   const [view, setView] = useState<ViewMode>(savedView)
   // "Show all" counts for the list it was pressed on; another category or search starts short again.
   const [allFor, setAllFor] = useState<string | null>(null)
@@ -38,9 +39,10 @@ export function PricesView() {
   const current = cats.find((c) => c.id === cat)
   const rows = useMemo(() => {
     const out: { cat: PriceCategory; item: PriceItem }[] = []
-    for (const c of current ? [current] : cats) for (const item of c.items) if ((hidden || !item.hidden) && (!stock || (stock === 'out') === Boolean(item.out)) && matches(item, search)) out.push({ cat: c, item })
+    for (const c of current ? [current] : cats) for (const item of c.items) if ((hidden || !item.hidden) && (!stock || (stock === 'out') === Boolean(item.out)) && webOk(item, webF) && matches(item, search)) out.push({ cat: c, item })
     return out
-  }, [cats, current, search, hidden, stock])
+  }, [cats, current, search, hidden, stock, webF])
+  const toCheck = useMemo(() => cats.reduce((n, c) => n + c.items.filter((i) => i.web && !i.web.ok).length, 0), [cats])
 
   if (!loaded) return <div className="splash">{t('Loading…')}</div>
   if (error) return <p className="banner banner-bad" dir="ltr">{error}</p>
@@ -85,6 +87,12 @@ export function PricesView() {
               <option value="in">{t('In stock')}</option>
               <option value="out">{t('Out of stock')}</option>
             </select>
+            <select className="sort-pick" value={webF} aria-label={t('Website')} onChange={(e) => setWebF(e.target.value as typeof webF)}>
+              <option value="">{t('Website: all')}</option>
+              <option value="check">{t('Website link to check')}{toCheck ? ` (${toCheck})` : ''}</option>
+              <option value="linked">{t('On the website')}</option>
+              <option value="none">{t('Not on the website')}</option>
+            </select>
             <div className="seg" role="group" aria-label={t('View')}>
               <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} title={t('List')} onClick={() => pickView('list')}><Icon name="rows" size={18} /></button>
               <button className={view === 'grid' ? 'on' : ''} aria-pressed={view === 'grid'} title={t('Cards')} onClick={() => pickView('grid')}><Icon name="cards" size={18} /></button>
@@ -105,6 +113,7 @@ export function PricesView() {
                 <span role="columnheader" className="ptable-num">{t('In build')}</span>
                 <span role="columnheader" className="ptable-num">{t('Alone')}</span>
                 <span role="columnheader" className="ptable-num">{t('Online')}</span>
+                <span role="columnheader" className="ptable-num">{t('Online sale')}</span>
               </div>
               {shown.map(({ cat: c, item }, i) => (
                 <ListRow key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} {...heads[i]} onOpen={() => setOpen({ cat: c.id, item })} />
@@ -130,7 +139,20 @@ export function PricesView() {
 type RowProps = { cat: PriceCategory; item: PriceItem; canEdit: boolean; catHead: string; groupHead: string; onOpen: () => void }
 
 const specsOf = (item: PriceItem) => specChips(item)
-const saver = (cat: PriceCategory, item: PriceItem) => (field: 'in' | 'alone' | 'online', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
+
+const webOk = (item: PriceItem, f: '' | 'check' | 'linked' | 'none') =>
+  !f || (f === 'check' ? Boolean(item.web && !item.web.ok) : f === 'linked' ? Boolean(item.web?.ok) : !item.web?.ok)
+
+/** Where the product stands with the website, as a small chip next to its name. */
+function WebChip({ item }: { item: PriceItem }) {
+  const w = item.web
+  if (!w) return null
+  if (!w.ok) return <Chip tone="warn">{t('Check website link')}</Chip>
+  if (w.error) return <Chip tone="bad">{t('Website error')}</Chip>
+  if (webPending(item).length) return <Chip tone="info">{t('Sending to website…')}</Chip>
+  return <Chip tone="good">{t('Website')}</Chip>
+}
+const saver = (cat: PriceCategory, item: PriceItem) => (field: 'in' | 'alone' | 'online' | 'onlineSale', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
 
 /** One line of the table: name and company, specs, then the two prices you can type into. */
 function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
@@ -146,6 +168,7 @@ function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
             {item.company && <span dir="auto">{item.company}</span>}
             {item.warranty ? <span>{tn('%n y', { n: item.warranty })}</span> : null}
             {item.hidden && <Chip tone="warn">{t('Hidden')}</Chip>}
+            <WebChip item={item} />
           </span>
         </button>
         <span className="ptable-specs" role="cell">{specsOf(item).map((s) => <Chip key={s} tone="info">{s}</Chip>)}</span>
@@ -153,6 +176,7 @@ function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
         <PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} />
         <PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} />
         <PriceCell value={item.online ?? null} label={t('Online')} canEdit={canEdit} onSave={(v) => save('online', v)} />
+        <PriceCell value={item.onlineSale ?? null} label={t('Online sale')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} />
       </div>
     </>
   )
@@ -174,12 +198,14 @@ function PriceCard({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps)
             {specsOf(item).map((s) => <Chip key={s} tone="info">{s}</Chip>)}
             {item.warranty ? <Chip>{tn('%n y', { n: item.warranty })}</Chip> : null}
             {item.hidden && <Chip tone="warn">{t('Hidden')}</Chip>}
+            <WebChip item={item} />
           </span>
         </button>
         <div className="pcard-prices">
           <label><span>{t('In build')}</span><PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} /></label>
           <label><span>{t('Alone')}</span><PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} /></label>
           <label><span>{t('Online')}</span><PriceCell value={item.online ?? null} label={t('Online')} canEdit={canEdit} onSave={(v) => save('online', v)} /></label>
+          <label><span>{t('Online sale')}</span><PriceCell value={item.onlineSale ?? null} label={t('Online sale')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} /></label>
         </div>
       </article>
     </>
@@ -241,6 +267,10 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
   const [inb, setIn] = useState(item?.in === null || item?.in === undefined ? '' : String(item.in))
   const [alone, setAlone] = useState(item?.alone === null || item?.alone === undefined ? '' : String(item.alone))
   const [online, setOnline] = useState(item?.online === null || item?.online === undefined ? '' : String(item.online))
+  const [onlineSale, setOnlineSale] = useState(item?.onlineSale === null || item?.onlineSale === undefined ? '' : String(item.onlineSale))
+  // The online prices can also change while this is open (linking to the website fills them), so Save only
+  // writes them when they were typed here.
+  const [online0, onlineSale0] = useState(() => [online, onlineSale])[0]
   const [warranty, setWarranty] = useState(item?.warranty === null || item?.warranty === undefined ? '' : String(item.warranty))
   const [group, setGroup] = useState(item?.group ?? '')
   const [specs, setSpecs] = useState<Record<string, string>>(item?.specs ?? {})
@@ -261,17 +291,20 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
   const otherCompanies = [...new Set(cats.flatMap((c) => c.items.map((i) => i.company.trim())).filter((c) => c && !companies.includes(c)))].sort((a, b) => a.localeCompare(b))
 
   const save = async () => {
-    const nums = [inb, alone, warranty, online].map(parseMoney)
+    const nums = [inb, alone, warranty, online, onlineSale].map(parseMoney)
     if (nums.some((n) => n === undefined)) return showToast(t('Not a number.'))
     if (!name.trim()) return showToast(t('Give the product a name.'))
-    const patch: ItemPatch = { name: name.trim(), company: company.trim(), in: nums[0]!, alone: nums[1]!, warranty: nums[2]!, online: nums[3] ?? undefined, group: group.trim() || undefined, hidden: hiddenOn || undefined, out: outOn || undefined }
+    const patch: ItemPatch = { name: name.trim(), company: company.trim(), in: nums[0]!, alone: nums[1]!, warranty: nums[2]!, group: group.trim() || undefined, hidden: hiddenOn || undefined, out: outOn || undefined }
+    if (online !== online0) patch.online = nums[3] ?? undefined
+    if (onlineSale !== onlineSale0) patch.onlineSale = nums[4] ?? undefined
     const cleanSpecs = Object.fromEntries(specFields.map((k) => [k, (specs[k] ?? '').trim()]))
     if (specFields.length) patch.specs = cleanSpecs
     setBusy(true)
     try {
       if (item && cat !== startCat) {
         // Moving to another category: add it there, then take it out of the old one.
-        await prices.save(cat, newProductId(), patch, null)
+        const keep = live(cats, startCat, item)
+        await prices.save(cat, newProductId(), { online: keep.online, onlineSale: keep.onlineSale, web: keep.web && (JSON.parse(JSON.stringify(keep.web)) as typeof keep.web), ...patch }, null)
         await prices.remove(startCat, item)
       } else await prices.save(cat, item?.id ?? newProductId(), patch, item)
       showToast(t('Saved'))
@@ -314,8 +347,9 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
           <label><span>{t('In build')}</span><input inputMode="numeric" value={inb} readOnly={ro} onChange={(e) => setIn(e.target.value)} /></label>
           <label><span>{t('Alone')}</span><input inputMode="numeric" value={alone} readOnly={ro} onChange={(e) => setAlone(e.target.value)} /></label>
           <label><span>{t('Online')}</span><input inputMode="numeric" value={online} readOnly={ro} placeholder={t('Website price')} onChange={(e) => setOnline(e.target.value)} /></label>
-          <label><span>{t('Warranty (years)')}</span><input inputMode="numeric" value={warranty} readOnly={ro} onChange={(e) => setWarranty(e.target.value)} /></label>
+          <label><span>{t('Online sale')}</span><input inputMode="numeric" value={onlineSale} readOnly={ro} placeholder={t('Empty = no sale')} onChange={(e) => setOnlineSale(e.target.value)} /></label>
         </div>
+        <label><span>{t('Warranty (years)')}</span><input inputMode="numeric" value={warranty} readOnly={ro} onChange={(e) => setWarranty(e.target.value)} /></label>
         <ChoiceField label={t('Company')} value={company} options={companies} more={otherCompanies} moreLabel={t('Other companies')} readOnly={ro} onChange={setCompany} />
         {specFields.length > 0 && (
           <div className="form-row two">
@@ -330,6 +364,7 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
         <label className="check"><input type="checkbox" checked={hiddenOn} disabled={ro} onChange={(e) => setHidden(e.target.checked)} /> {t('Hidden (not offered in builds)')}</label>
         {sure && <p className="hint bad">{t('Deleting removes the product from the price list. Builds and posts that already use it keep their copy.')}</p>}
       </div>
+      {item && <WebSection cat={startCat} item={live(cats, startCat, item)} canEdit={canEdit} />}
       {item && (
         <section className="price-history">
           <h3>{t('History')}</h3>
@@ -338,6 +373,95 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
         </section>
       )}
     </Sheet>
+  )
+}
+
+/** The product as it is now in the live list (the sheet was opened with a copy). */
+const live = (cats: PriceCategory[], cat: string, item: PriceItem) => cats.find((c) => c.id === cat)?.items.find((i) => i.id === item.id) ?? item
+
+/**
+ * The website product this one is linked to. A suggested link must be confirmed before anything is sent;
+ * a confirmed one gets Online price, Online sale and stock sent to static-eg.com within a minute of a change.
+ */
+function WebSection({ cat, item, canEdit }: { cat: string; item: PriceItem; canEdit: boolean }) {
+  const [picking, setPicking] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const w = item.web
+  const save = async (web: PriceItem['web']) => {
+    setBusy(true)
+    try {
+      // Firestore takes no undefined inside a map, so the link is copied without empty fields.
+      const patch: ItemPatch = { web: web && (JSON.parse(JSON.stringify(web)) as typeof web) }
+      // Online prices still empty start from what the website has, so linking never wipes a website price or sale.
+      if (web && (item.online === undefined || item.online === null) && web.price != null) patch.online = web.price
+      if (web && (item.onlineSale === undefined || item.onlineSale === null) && web.sale != null) patch.onlineSale = web.sale
+      await prices.save(cat, item.id, patch, item)
+      setPicking(false)
+    } catch (e) {
+      fail(e)
+    }
+    setBusy(false)
+  }
+  const pick = (p: WebProduct) => save({ id: p.id, name: p.name, ok: true, url: p.url, type: p.type, price: p.price, sale: p.sale, stock: p.stock })
+  const pending = webPending(item)
+  // What confirming would change on the website (the app's prices and stock win).
+  const onConfirm = w && !w.ok ? webPending({ ...item, online: item.online ?? w.price, onlineSale: item.onlineSale ?? w.sale }, true) : []
+  const what = (x: string) => t(x === 'price' ? 'Online' : x === 'sale' ? 'Online sale' : 'Stock')
+  return (
+    <section className="web-link">
+      <h3>{t('Website')}</h3>
+      {!w ? <p className="muted">{t('Not linked to a website product. Nothing is sent to the website for it.')}</p> : (
+        <div className="web-card">
+          <div className="row-sub">
+            {w.ok ? <Chip tone="good">{t('Linked')}</Chip> : <Chip tone="warn">{tn('Suggested by name (%n% sure)', { n: w.score ?? 0 })}</Chip>}
+            {w.type === 'variable' && <Chip tone="info">{t('Has options')}</Chip>}
+          </div>
+          <div dir="auto" className="web-name">{w.url ? <a href={w.url} target="_blank" rel="noreferrer">{w.name}</a> : w.name}</div>
+          <div className="muted">
+            {t('On the website')}: {money(w.price ?? null)}{w.sale != null ? ` · ${t('Sale')} ${money(w.sale)}` : ''} · {w.stock === 'outofstock' ? t('Out of stock') : w.stock ? t('In stock') : '—'}
+          </div>
+          {w.ok && w.error && <p className="hint bad">{t('Last send failed')}: {w.error}</p>}
+          {w.ok && !w.error && pending.length > 0 && <p className="hint">{t('Waiting to send to the website')}: {pending.map(what).join(', ')}</p>}
+          {w.ok && w.sentAt && <p className="hint">{t('Last sent')}: {new Date(w.sentAt).toLocaleString(locale())}</p>}
+          {!w.ok && <p className="hint">{t('Check that this is the same product. Nothing is sent to the website until you confirm.')}</p>}
+          {!w.ok && onConfirm.length > 0 && <p className="hint bad">{t('Confirming will change on the website')}: {onConfirm.map(what).join(', ')}{onConfirm.includes('stock') ? ` (${item.out ? t('Out of stock') : t('In stock')})` : ''}</p>}
+        </div>
+      )}
+      {canEdit && (
+        <div className="web-actions">
+          {w && !w.ok && <button className="btn btn-primary" disabled={busy} onClick={() => save({ ...w, ok: true, score: undefined })}><Icon name="check" size={18} />{t('Confirm link')}</button>}
+          <button className="btn btn-ghost" disabled={busy} onClick={() => setPicking((x) => !x)}><Icon name="link" size={18} />{w ? t('Change') : t('Link to a website product')}</button>
+          {w && <button className="btn btn-ghost" disabled={busy} onClick={() => save(undefined)}><Icon name="close" size={18} />{t('Unlink')}</button>}
+        </div>
+      )}
+      {picking && <WebPicker start={item.name} onPick={pick} />}
+    </section>
+  )
+}
+
+/** Search the website's products and pick one. */
+function WebPicker({ start, onPick }: { start: string; onPick: (p: WebProduct) => void }) {
+  const [list, setList] = useState<WebProduct[] | null>(null)
+  const [q, setQ] = useState(start.split(' ').slice(0, 3).join(' '))
+  useEffect(() => { loadWebProducts().then(setList, () => setList([])) }, [])
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  const found = (list ?? []).filter((p) => words.every((w) => p.name.toLowerCase().includes(w))).slice(0, 30)
+  return (
+    <div className="web-picker">
+      <SearchBox value={q} onChange={setQ} placeholder={t('Search the website products…')} />
+      {list === null ? <p className="muted">{t('Loading…')}</p> : list.length === 0 ? <p className="muted">{t('The website product list has not been read yet.')}</p> : found.length === 0 ? <p className="muted">{t('Nothing matches.')}</p> : (
+        <ul>
+          {found.map((p) => (
+            <li key={p.id}>
+              <button onClick={() => onPick(p)}>
+                <span dir="auto">{p.name}</span>
+                <span className="muted">{money(p.price)}{p.sale != null ? ` · ${t('Sale')} ${money(p.sale)}` : ''} · {p.stock === 'outofstock' ? t('Out of stock') : t('In stock')}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
