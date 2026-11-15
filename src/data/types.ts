@@ -1,4 +1,4 @@
-/** One product on a poster. A post holds 1 to 3 of them (the sheet's Item 1 to 3 columns). */
+/** One product on a poster. A post holds 1 to 3 of them (the sheet's Item 1 to 3 columns), or up to 4 versions of one product. */
 export type PostItem = {
   category: string
   name: string
@@ -19,6 +19,10 @@ export type Post = {
   /** Position in the list, lowest first. */
   order: number
   items: PostItem[]
+  /** The items are versions (colours, switches...) of one product: one name and one price on the poster, up to 4 items. */
+  variants?: boolean
+  /** With variants: the product name shown once on the poster and in the caption. */
+  title?: string
   company: string
   priceBefore: string
   priceAfter: string
@@ -107,7 +111,7 @@ export type Data = {
   health: Health | null
 }
 
-export type NewPost = Pick<Post, 'items' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime'>
+export type NewPost = Pick<Post, 'items' | 'variants' | 'title' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime'>
 
 export const emptyData: Data = { loaded: false, posts: [], products: [], styles: [], templates: [], health: null }
 

@@ -38,12 +38,12 @@ for (const d of docs) {
   if (f.appNew === true) {
     g.order = ++maxOrder; mask.add('order');
     g.offer = clean(f.offer) === 'Approved' ? 'Approved' : ''; mask.add('offer');
-    g.items = (Array.isArray(f.items) ? f.items : []).filter(it => it && clean(it.name)).slice(0, 3).map((it, i) => ({ slot: i + 1, category: clean(it.category), name: clean(it.name), manualPhoto: clean(it.manualPhoto), nextPhoto: it.nextPhoto === true })); mask.add('items');
+    g.items = (Array.isArray(f.items) ? f.items : []).filter(it => it && clean(it.name)).slice(0, f.variants === true ? 4 : 3).map((it, i) => ({ slot: i + 1, category: clean(it.category), name: clean(it.name), manualPhoto: clean(it.manualPhoto), nextPhoto: it.nextPhoto === true })); mask.add('items');
     if (!clean(g.style)) { g.style = 'Static'; mask.add('style'); }
     if (!g.ex || typeof g.ex !== 'object') { g.ex = {}; mask.add('ex'); }
   }
   if (f.appNew === true || 'items' in edits) {
-    const p = pricesFrom(g.items, products);
+    const p = pricesFrom(g.items, products, g.variants === true);
     if (products.length) { g.priceBefore = p.priceBefore; g.company = p.company; mask.add('priceBefore'); mask.add('company'); }
   }
   g.zone = zoneOf(g); g.q = queuesOf(g); mask.add('zone'); mask.add('q');

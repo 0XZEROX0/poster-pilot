@@ -30,12 +30,13 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     const out: Partial<Post> = {}
     for (const key of ['priceBefore', 'priceAfter', 'style', 'details', 'postDate', 'postTime', 'caption', 'captionStyle'] as const) if (draft[key] !== post[key]) out[key] = draft[key]
     if (JSON.stringify(draft.items) !== JSON.stringify(post.items)) out.items = draft.items
+    if (post.variants && (draft.title ?? '') !== (post.title ?? '')) out.title = draft.title ?? ''
     return out
   }
   async function save(extra: Partial<Post>, message: string) {
     const patch = { ...changes(), ...extra }
     // A new price or style means a new poster, as in the sheet.
-    if (!extra.feedback && !posted && stage !== 'offer' && ('priceBefore' in patch || 'priceAfter' in patch || 'style' in patch || 'items' in patch)) patch.feedback = 'Redo'
+    if (!extra.feedback && !posted && stage !== 'offer' && ('priceBefore' in patch || 'priceAfter' in patch || 'style' in patch || 'items' in patch || 'title' in patch)) patch.feedback = 'Redo'
     if (Object.keys(patch).length) await backend.updatePost(post.id, patch)
     showToast(t(message))
     onClose()
@@ -122,6 +123,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               <b><Icon name="fix" size={18} />{problem.title}</b>
               <p>{problem.advice}</p>
             </div>
+          )}
+          {!posted && post.variants && (
+            <label><span>{t('Name on the poster')}</span><input dir="auto" value={draft.title ?? ''} onChange={(e) => set({ title: e.target.value })} /></label>
           )}
           {!posted && draft.items.map((it, i) => (
             <fieldset key={i} className={`item-box${it.photoMissing && problem ? ' item-missing' : ''}`}>
