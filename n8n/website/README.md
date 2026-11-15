@@ -27,3 +27,18 @@ static-eg.com is WordPress + WooCommerce. n8n reads and writes it with the REST 
   (`sentAt`, or `error`). `Settings.dryRun` = true works everything out and sends nothing; `testNames` treats
   those suggested links as confirmed in a dry run.
 - `node n8n/website/build-sync.cjs` prints the workflow.
+
+## Website to app (n8n `fHuULHd2qUV5IMAn` "Static OS - Website to app", every minute)
+- The other direction: changes made on the website come back into the app, for confirmed links only, including the
+  chosen option of a product with options (Box/Tray, colours).
+- `pull-gate.js` / `pull-links.js`: the confirmed links and the app's values are kept in the workflow's static data and
+  refreshed only when `prices/_meta` version moves (or every 30 minutes). Website: one `products?include=` request
+  (up to 100 ids) plus one `variations` request per product with options.
+- `pull-find.js`: a link goes on only when the website's price / sale / stock / name differs from the app and that
+  website state was not already looked at. Then its category is read fresh (`pull-decide.js`):
+  website = app → only `web.*` is brought up to date; app has an unsent change (app ≠ `web.*`) → the app wins and the
+  sync sends it; otherwise the website changed → `online` / `onlineSale` / `out` and `web.*` take the website value
+  (so nothing echoes back), a `priceLog` line by "Website" is written and `_meta.version` goes up. A name change on the
+  website only updates `web.name`; the app then asks which name to keep.
+- One Firestore commit per category with an `updateTime` precondition; if the app changed it meanwhile it is retried.
+- `node n8n/website/build-pull.cjs` prints the workflow. Successful runs are not saved.
