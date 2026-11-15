@@ -10,6 +10,9 @@ static-eg.com is WordPress + WooCommerce. n8n reads and writes it with the REST 
   `web/products` for the app's picker. Empty Online price / Online sale are filled from the website once.
   Confirmed links (`ok: true`) are never touched. `Settings.dryRun` = true only reports.
 - Nothing is written to the website by this workflow.
+- It also runs every 15 minutes on its own (schedule, light mode): `web/products` is rewritten from the website (new or
+  removed pages and options, prices, stock) and confirmed links follow moved pages or removed options. No suggestions
+  are made in that mode and `dryRun` does not apply. Manual runs work as before.
 
 ## Fields (app)
 - `online` = website regular price, `onlineSale` = website sale price (empty = no sale), `out` = stock.

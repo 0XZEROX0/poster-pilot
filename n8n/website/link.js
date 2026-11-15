@@ -13,9 +13,13 @@
 // Settings.renames ("websiteId=New name; ...") puts a new name on the website products listed (sent by the sync once
 // the link is confirmed in the app).
 // Settings.dryRun = true only reports. Nothing is ever written to the website here.
+// Every 15 minutes (schedule) it runs on its own in a light mode: web/products is refreshed (new or removed pages and
+// options, prices, stock) and confirmed links follow their page (moved pages, removed options). No new suggestions are
+// made and dryRun does not apply, so the app's picker always shows what the website has now.
 const S = $('Settings').first().json;
 const DRY = S.dryRun !== false;
-const PULL = S.pullStock === true;
+const AUTO = $execution.mode !== 'manual';
+const PULL = S.pullStock === true && !AUTO;
 const NOW = new Date().toISOString();
 
 const dv = v => { if (!v || typeof v !== 'object') return null; if ('stringValue' in v) return v.stringValue; if ('booleanValue' in v) return v.booleanValue; if ('integerValue' in v) return Number(v.integerValue); if ('doubleValue' in v) return Number(v.doubleValue); if ('timestampValue' in v) return v.timestampValue; if ('nullValue' in v) return null; if ('mapValue' in v) { const o = {}; const f = (v.mapValue && v.mapValue.fields) || {}; for (const k of Object.keys(f)) o[k] = dv(f[k]); return o; } if ('arrayValue' in v) return ((v.arrayValue && v.arrayValue.values) || []).map(dv); return null; };
@@ -105,7 +109,7 @@ const taken = new Map();
 // A simple website product goes to one app product only; a product with options can serve several (one per option).
 for (const c of cand.sort((a, b) => b.s - a.s)) { const key = c.w.type === 'variable' ? 'v' + c.p.pid : c.w.id; if (!taken.has(key)) taken.set(key, c); }
 for (const p of prods) if (p.web && p.web.ok) taken.set('ok' + p.pid, null);
-const links = [...taken.values()].filter(Boolean);
+const links = AUTO ? [] : [...taken.values()].filter(Boolean);
 
 // ---------- stock from the website (Settings.pullStock) ----------
 const stockSet = [];
@@ -162,7 +166,13 @@ for (const p of prods) {
     const o = optionFor(p.name, w);
     if (o) { Object.assign(f, { variation: o.id, option: o.name, price: o.price, sale: o.sale, stock: o.stock }); paths.push('variation', 'option', 'price', 'sale', 'stock'); optionSet.push(p.name + ' => ' + o.name); }
   }
-  if (RENAME[w.id] && RENAME[w.id] !== w.name && !p.web.rename) { f.rename = RENAME[w.id]; paths.push('rename'); }
+  // The option this was linked to is gone from the website: the option that fits the name, else the app asks again.
+  if (w.type === 'variable' && p.web.variation && !paths.includes('variation') && w.options.length && !w.options.some(o => o.id === Number(p.web.variation))) {
+    const o = optionFor(p.name, w);
+    if (o) { Object.assign(f, { variation: o.id, option: o.name, price: o.price, sale: o.sale, stock: o.stock, error: undefined }); paths.push('variation', 'option', 'price', 'sale', 'stock', 'error'); optionSet.push(p.name + ' => ' + o.name + ' (old option removed)'); }
+    else { Object.assign(f, { variation: undefined, option: undefined, error: 'The website option this was linked to was removed; choose the option again' }); paths.push('variation', 'option', 'error'); optionSet.push(p.name + ' => option removed, choose again'); }
+  }
+  if (!AUTO && RENAME[w.id] && RENAME[w.id] !== w.name && !p.web.rename) { f.rename = RENAME[w.id]; paths.push('rename'); }
   if (!paths.length) continue;
   const b = (byCat[p.cat] = byCat[p.cat] || { fields: {}, paths: [] });
   b.fields[p.pid] = Object.assign(b.fields[p.pid] || {}, { web: f });
@@ -189,7 +199,8 @@ writes.push({ update: { name: `${base}/web/products`, fields: { at: { timestampV
 
 const unlinked = prods.filter(p => !(p.web && p.web.ok) && !links.some(c => c.p.pid === p.pid));
 const report = {
-  dryRun: DRY,
+  dryRun: DRY && !AUTO,
+  auto: AUTO,
   websiteProducts: W.length,
   websiteByType: W.reduce((o, w) => (o[w.type] = (o[w.type] || 0) + 1, o), {}),
   websiteOnSale: W.filter(w => w.sale !== null).length,
@@ -213,4 +224,4 @@ const report = {
   weak: links.filter(c => c.s < 80).slice(0, 40).map(c => `${c.s} | ${c.p.name} => ${c.w.name}`),
   noMatchNames: unlinked.slice(0, 80).map(p => `${p.catName}: ${p.name}`),
 };
-return [{ json: { report, writes: DRY ? [] : writes, writeCount: writes.length } }];
+return [{ json: { report, writes: DRY && !AUTO ? [] : writes, writeCount: writes.length } }];
