@@ -56,7 +56,7 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
   }
 
   return (
-    <Sheet title={t('New post')} onClose={onClose} footer={<button className="btn btn-primary" onClick={create}><Icon name="plus" size={18} />{t(dup.same.length ? 'Create anyway' : 'Create post')}</button>}>
+    <Sheet title={t('New offer')} onClose={onClose} footer={<button className="btn btn-primary" onClick={create}><Icon name="plus" size={18} />{t(dup.same.length ? 'Create anyway' : 'Create offer')}</button>}>
       <div className="form narrow">
         <label>
           <span>{t('Products')}</span>
