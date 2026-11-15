@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { resetDemo } from '../data/localBackend'
+import { setTheme, useTheme, type Theme } from '../theme'
 import { allowed, backend, editsTemplates, postWork, restartDemo, signOutNow, type Session } from '../data/store'
 import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
@@ -17,6 +18,7 @@ export function agoLabel(ms: number): string {
 
 type Tab = 'general' | 'people' | 'roles' | 'posters'
 const TAB_KEY = 'posterpilot.settings.tab'
+const THEME_LABEL: Record<Theme, string> = { light: 'Light', dark: 'Dark', auto: 'Auto' }
 
 export function SettingsSheet({ session, onClose }: { session: Session; onClose: () => void }) {
   const cloudIn = session.mode === 'cloud' && session.access === 'in'
@@ -71,6 +73,7 @@ function useTeamWhen(needed: boolean) {
 
 function General({ session, onClose }: { session: Session; onClose: () => void }) {
   const lang = useLang()
+  const theme = useTheme()
   const health = session.data.health
   const name = session.user?.displayName || session.user?.email || t('Demo mode')
   return (
@@ -99,6 +102,15 @@ function General({ session, onClose }: { session: Session; onClose: () => void }
           <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>English</button>
           <button className={lang === 'ar' ? 'on' : ''} onClick={() => setLang('ar')}>العربية</button>
         </div>
+      </section>
+      <section className="set-card">
+        <header className="set-card-head"><h3>{t('Theme')}</h3></header>
+        <div className="seg">
+          {(['light', 'dark', 'auto'] as Theme[]).map((x) => (
+            <button key={x} className={theme === x ? 'on' : ''} onClick={() => setTheme(x)}>{t(THEME_LABEL[x])}</button>
+          ))}
+        </div>
+        <p className="hint">{t('Auto follows your device. Saved on this device.')}</p>
       </section>
       {session.mode === 'cloud' && postWork() && (
         <section className="set-card">

@@ -106,7 +106,7 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
 /** Permissions and pages grouped by the part of the app they belong to. */
 const GROUPS: { title: string; hint: string; pages: Page[]; perms: Perm[] }[] = [
   { title: 'Shop', hint: 'Prices and the PC builder.', pages: ['prices', 'builder'], perms: ['prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit'] },
-  { title: 'Posters', hint: 'Offers, posters, the schedule and Facebook.', pages: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'], perms: ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete'] },
+  { title: 'Posters', hint: 'Offers, posters, the schedule and Facebook.', pages: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'], perms: ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'templates.edit'] },
   { title: 'People', hint: 'Who is in the system.', pages: [], perms: ['people'] },
 ]
 

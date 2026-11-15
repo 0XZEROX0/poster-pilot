@@ -160,5 +160,5 @@ export const seesPage = (page: string) => state.mode === 'demo' || state.access 
 
 /** Whether the person's role works with posts at all (a role with only Prices and Builder does not). */
 export const postWork = () => POST_PAGES.some((p) => seesPage(p))
-/** Whether the person may change the caption templates: people who make or check posts. */
-export const editsTemplates = () => allowed('offers.create') || allowed('designs.approve') || allowed('fix')
+/** Whether the person may see and change the caption templates (its own permission; the owner always may). */
+export const editsTemplates = () => allowed('templates.edit')
