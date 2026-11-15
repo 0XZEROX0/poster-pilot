@@ -1,6 +1,9 @@
 /** Arabic for every text in the app, keyed by the English text. A missing key shows the English. */
 export const ar: Record<string, string> = {
   'Static OS': 'Static OS',
+  Apps: 'التطبيقات',
+  'Edit bar': 'تعديل الشريط',
+  'Pick up to 3 apps for the bottom bar. Home and Apps are always there.': 'اختر حتى 3 تطبيقات للشريط السفلي. الرئيسية والتطبيقات موجودتان دائمًا.',
   'Shop': 'المحل',
   'General': 'عام',
   'New role': 'دور جديد',

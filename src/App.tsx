@@ -12,6 +12,7 @@ import { PostSheet } from './components/PostSheet'
 import { ReviewView } from './components/ReviewView'
 import { agoLabel, SettingsSheet } from './components/SettingsSheet'
 import { Icon, Toast } from './components/ui'
+import { AppsMenu, usePins } from './components/AppsMenu'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
 import { DatabaseView } from './components/DatabaseView'
@@ -34,7 +35,7 @@ const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'database', label: 'Database', icon: 'database' },
 ]
 
-type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'settings' } | null
+type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'settings' } | { kind: 'apps' } | null
 
 const tabFromHash = (): Tab => ALL_TABS.find((x) => `#/${x.id}` === location.hash)?.id ?? 'home'
 
@@ -53,6 +54,7 @@ export default function App() {
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
   const desktop = useDesktop()
+  const { pins, toggle: togglePin } = usePins(TABS.map((x) => x.id))
 
   // The tab lives in the address, so the phone's back button moves between screens.
   useEffect(() => {
@@ -194,6 +196,14 @@ export default function App() {
     )
   }
 
+  // Phone bar: Home, the pinned apps, then Apps for everything else. On an app that is not in the bar,
+  // the Apps button shows that app, so the person always sees where they are.
+  const bar = TABS.filter((x) => x.id === 'home' || pins.includes(x.id))
+  const current = TABS.find((x) => x.id === tab)!
+  const inBar = bar.some((x) => x.id === tab)
+  const appsOpen = overlay?.kind === 'apps'
+  const hiddenCount = TABS.filter((x) => !bar.includes(x)).reduce((n, x) => n + (counts[x.id] ?? 0), 0)
+
   return (
     <div className="app">
       <header className="top">
@@ -204,18 +214,37 @@ export default function App() {
       </header>
       {banners}
       <main>{page}</main>
-      {canAdd && (tab === 'home' || tab === 'offers') && <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New post')}><Icon name="plus" size={26} /></button>}
+      {canAdd && !appsOpen && (tab === 'home' || tab === 'offers') && <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New post')}><Icon name="plus" size={26} /></button>}
       <nav className="tabs">
-        {TABS.map((x) => (
+        {bar.map((x) => (
           <button key={x.id} className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>
             <span className="tab-icon">
               <Icon name={x.icon} />
               {counts[x.id] ? <i className={x.id === 'fix' ? 'badge badge-bad' : 'badge'}>{counts[x.id]}</i> : null}
             </span>
-            <span>{t(x.label)}</span>
+            <span className="tab-label">{t(x.label)}</span>
           </button>
         ))}
+        <button className={appsOpen || !inBar ? 'on' : ''} onClick={() => setOverlay(appsOpen ? null : { kind: 'apps' })} aria-expanded={appsOpen} aria-haspopup="dialog">
+          <span className="tab-icon">
+            <Icon name={inBar || appsOpen ? 'cards' : current.icon} />
+            {hiddenCount ? <i className="badge">{hiddenCount}</i> : null}
+          </span>
+          <span className="tab-label">{t(inBar || appsOpen ? 'Apps' : current.label)}</span>
+        </button>
       </nav>
+      {appsOpen && (
+        <AppsMenu
+          items={TABS.filter((x) => x.id !== 'home')}
+          current={tab}
+          counts={counts}
+          pins={pins}
+          onToggle={togglePin}
+          onGo={(id) => { setOverlay(null); go(id as Tab) }}
+          onSettings={() => setOverlay({ kind: 'settings' })}
+          onClose={close}
+        />
+      )}
       {overlays}
     </div>
   )
