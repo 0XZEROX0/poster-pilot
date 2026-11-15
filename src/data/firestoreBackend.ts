@@ -1,5 +1,6 @@
 import { getAuth } from 'firebase/auth'
 import { collection, deleteField, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch, type DocumentData, type Firestore, type WriteBatch } from 'firebase/firestore'
+import { track } from './activity'
 import type { Backend } from './backend'
 import { describe, describeDelete, describeNew } from './history'
 import { engineReachable, nudgeEngine, runEngineNow, type EngineJob } from './nudge'
@@ -121,10 +122,17 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
     },
     async saveTemplates(templates) {
       await setDoc(doc(db, 'catalog', 'templates'), { items: templates, appEditedAt: serverTimestamp() })
+      track('settings', 'templates.saved', { note: templates.map((x) => x.name).join(', ') })
       // New captions, and scheduled posts whose caption changed, are handled at once.
       nudgeEngine(getAuth(db.app), ['captions', 'changes'])
     },
-    ...(engineReachable() ? { runNow: (jobs: EngineJob[]) => runEngineNow(getAuth(db.app), jobs) } : {}),
+    ...(engineReachable() ? {
+      runNow: async (jobs: EngineJob[]) => {
+        const ok = await runEngineNow(getAuth(db.app), jobs)
+        if (ok) track('settings', 'engine.run', { note: jobs.join(', ') })
+        return ok
+      },
+    } : {}),
     watchLog(postId, onLog, onError) {
       // Read only while the history is open: a few reads per post, nothing in the background.
       return onSnapshot(query(collection(db, 'log'), where('postId', '==', postId), limit(300)),
