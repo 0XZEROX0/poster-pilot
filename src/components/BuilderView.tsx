@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
-import { matches, money, parseMoney, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
+import { casePsu, matches, money, parseMoney, specChips, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
 import { allowed, isOwner, myId, myName } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -222,7 +222,22 @@ export function BuilderView() {
     setTheirGrant(0)
   }
   const misfits = lines.filter((l) => { const p = parts.find((x) => x.line === l.id); return p && misfit(p.cat, p.item, parts.filter((x) => x.line !== l.id)) }).length
-  const coreDone = CORE.filter((k) => lines.some((l) => l.slot === k && l.name)).length
+  // A case that comes with a power supply: the PSU row says so and counts as done.
+  const boxPsu = casePsu(parts.find((p) => p.cat === 'case')?.item)
+  const coreDone = CORE.filter((k) => lines.some((l) => l.slot === k && l.name) || (k === 'psu' && boxPsu)).length
+  /** Picking a case that comes with a power supply takes a picked PSU off the quote. */
+  const choose = (line: Line, cat: string, item: PriceItem) => {
+    const drop = cat === 'case' && casePsu(item) && build.lines.some((l) => l.slot === 'psu' && l.name)
+    setBuild((b) => {
+      let next = b.lines.map((l) => (l.id === line.id ? pick(l, cat, item) : l))
+      if (drop) {
+        const firstPsu = next.find((l) => l.slot === 'psu')
+        next = next.filter((l) => l.slot !== 'psu' || l === firstPsu).map((l) => (l === firstPsu ? emptyLine('psu') : l))
+      }
+      return { ...b, lines: next }
+    })
+    if (drop) showToast(t('Took the PSU off: this case comes with its own.'))
+  }
   const pickingLine = lines.find((l) => l.id === picking)
   const unused = SLOTS.filter((s) => !build.lines.some((l) => l.slot === s.key))
 
@@ -267,7 +282,7 @@ export function BuilderView() {
           {PART_GROUPS.map((g) => {
             const rows = lines.filter((l) => g.slots.includes(slotOf(l.slot).key))
             if (!rows.length) return null
-            const done = rows.filter((l) => l.name).length
+            const done = rows.filter((l) => l.name || (l.slot === 'psu' && boxPsu)).length
             return (
               <section key={g.title} className="bx-group">
                 <h3 className="bx-group-title"><span>{t(g.title)}</span><span className="muted small">{tn('%a of %b chosen', { a: done, b: rows.length })}</span></h3>
@@ -277,7 +292,22 @@ export function BuilderView() {
                   const others = parts.filter((p) => p.line !== line.id)
                   const bad = live ? misfit(live.cat, live.item, others) : ''
                   const gone = line.name && line.pid && !live
-                  const specs = live ? [live.item.company, ...Object.values(live.item.specs ?? {})].filter(Boolean) : []
+                  const specs = live ? [live.item.company, ...specChips(live.item)].filter(Boolean) : []
+                  if (!line.name && slot.key === 'psu' && boxPsu) {
+                    return (
+                      <div key={line.id} className="bx-part bx-included">
+                        <button className="bx-pick" onClick={() => setPicking(line.id)} title={t('Pick a separate PSU')}>
+                          <span className="bx-tile on">{SHORT[slot.key] ?? '•'}</span>
+                          <span className="bx-what">
+                            <span className="bx-label">{t(slot.label)}</span>
+                            <span className="bx-name">{boxPsu === 'Yes' ? t('Comes with the case') : tn('Comes with the case (%w)', { w: boxPsu })}</span>
+                            <span className="bx-specs"><span className="spec">{t('Nothing to add')}</span></span>
+                          </span>
+                        </button>
+                        <span className="bx-side-of-part"><Icon name="check" size={18} /></span>
+                      </div>
+                    )
+                  }
                   if (!line.name) {
                     return (
                       <div key={line.id} className="bx-part bx-empty">
@@ -365,7 +395,7 @@ export function BuilderView() {
         <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print')}</button>
       </div>
 
-      {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { setLine(pickingLine.id, (l) => pick(l, cat, item)); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
+      {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { choose(pickingLine, cat, item); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
       {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra + b.grant, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false); void grants.clearMine() }} onEdit={startEditing} onClose={() => setWatching(false)} />}
       {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false); void grants.clearMine() }} onClose={() => setSaved(false)} />}
       {createPortal(<QuotePrint build={build} lines={filled} sum={sum} />, document.body)}
@@ -411,7 +441,7 @@ function PickSheet({ cats, line, others, onPick, onClear, onClose }: { cats: Pri
                   <span className="pick-tags">
                     {!cat && pool.length > 1 && <Chip>{c.name}</Chip>}
                     {item.company && <span className="muted" dir="auto">{item.company}</span>}
-                    {Object.values(item.specs ?? {}).filter(Boolean).map((s) => <Chip key={s} tone="info">{s}</Chip>)}
+                    {specChips(item).map((s) => <Chip key={s} tone="info">{s}</Chip>)}
                     {item.out && <Chip tone="warn">{t('Out of stock')}</Chip>}
                     {bad && <Chip tone="bad">{bad}</Chip>}
                   </span>
