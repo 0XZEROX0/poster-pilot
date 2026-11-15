@@ -11,3 +11,15 @@ n8n workflow `7WRJVybLkYgJh0Nh` "PosterPilot - Website photos". Every 30 seconds
   maker rebuilds with it. The poster workflow itself is not changed.
 - Firestore cost: one query read per run when nobody asked (about 2,900 reads a day), plus one write per answer.
 - `node n8n/photos/build.cjs` prints the workflow as n8n Workflow SDK code.
+
+## Versions picker (New offer)
+
+- With "Versions of one product" ticked and one product picked, New offer's `VersionPicker` writes
+  `photoAsks/{uid}` `{ name, ask, by }` (rules: own document, `offers.create`) and starts the `photos` job.
+- "Find version requests" reads `photoAsks` where `ask > 0`. `choices.js` answers with `choice` (one
+  `PhotoChoiceItem`: every photo of the product, each option's own photo first with `label` = the option, e.g.
+  "Jungle Panda"; option kinds that are the same for every option are left out; plus `near` = other website products
+  of the same family, labelled with the words their name adds, e.g. "White Blue") and `answered` = ask, and removes `ask`.
+- Each tapped photo becomes an item: `name` = the price list product (so the price check works), `label` = the
+  version name, `manualPhoto` = the photo. The Posts store shows `name + label` in the Item N columns.
+- One more Firestore read per run (about 2,900 a day).

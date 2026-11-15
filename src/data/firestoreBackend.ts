@@ -4,7 +4,7 @@ import { track } from './activity'
 import type { Backend } from './backend'
 import { describe, describeDelete, describeNew } from './history'
 import { engineReachable, nudgeEngine, runEngineNow, type EngineJob } from './nudge'
-import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product } from './types'
+import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product, type VersionPhotos } from './types'
 
 // Firestore layout (the engine, n8n, reads and writes the same documents with a service account):
 //   posts/{id}          one post; see Post in types.ts
@@ -133,6 +133,28 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
         return ok
       },
     } : {}),
+    versionPhotos(name, onData, onError) {
+      // photoAsks/{uid}: one request per person, overwritten by the next one. The engine (Website photos workflow)
+      // adds `choice` and `answered` and removes `ask`. Read only while the picker is open.
+      const uid = getAuth(db.app).currentUser?.uid
+      if (!uid) { onError('Not signed in'); return () => {} }
+      const ref = doc(db, 'photoAsks', uid)
+      const asked = Date.now()
+      let stop = () => {}
+      let stopped = false
+      setDoc(ref, { name: name.slice(0, 300), ask: asked, by: uid })
+        .then(() => {
+          nudgeEngine(getAuth(db.app), ['photos'])
+          if (stopped) return
+          stop = onSnapshot(ref, (snap) => {
+            const d = snap.data()
+            if (!d || d.name !== name.slice(0, 300)) return onData(null)
+            onData({ name, asked, answered: Number(d.answered) || 0, choice: (d.choice as VersionPhotos['choice']) ?? null })
+          }, (e) => onError(e.message))
+        })
+        .catch((e: Error) => onError(e.message))
+      return () => { stopped = true; stop() }
+    },
     watchLog(postId, onLog, onError) {
       // Read only while the history is open: a few reads per post, nothing in the background.
       return onSnapshot(query(collection(db, 'log'), where('postId', '==', postId), limit(300)),

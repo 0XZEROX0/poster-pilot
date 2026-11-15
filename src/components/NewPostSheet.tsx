@@ -5,6 +5,7 @@ import type { Data, NewPost, Post, PostItem, Product } from '../data/types'
 import { t } from '../i18n'
 import { Sheet } from './Sheet'
 import { Icon, dayLabel, showToast } from './ui'
+import { VersionPicker, type PickedVersion } from './VersionPicker'
 
 /** Start a post: pick 1 to 3 products (or up to 4 versions of one product) by searching the product list, then price, style and time. */
 export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => void }) {
@@ -13,6 +14,8 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
   // Versions of one product (colours, switches...): one name and one price on the poster, up to 4 items.
   const [variants, setVariants] = useState(false)
   const [title, setTitle] = useState('')
+  // Versions tapped on the website photos of the first picked product. When there are any, they are the post's items.
+  const [versions, setVersions] = useState<PickedVersion[]>([])
   const max = maxItems(variants)
   const [priceAfter, setPriceAfter] = useState('')
   const [priceBefore, setPriceBefore] = useState('')
@@ -31,7 +34,8 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
 
   /** The list price follows the picked products until the person types their own. */
   // Versions: the poster shows one price, the highest of them (same rule as the engine).
-  const autoBefore = variants ? Math.max(0, ...picked.map((p) => toNumber(p.price))) : picked.reduce((sum, p) => sum + toNumber(p.price), 0)
+  const fromPhotos = variants && versions.length > 0 && picked.length > 0
+  const autoBefore = fromPhotos ? toNumber(picked[0].price) : variants ? Math.max(0, ...picked.map((p) => toNumber(p.price))) : picked.reduce((sum, p) => sum + toNumber(p.price), 0)
   const before = priceBefore || (autoBefore ? String(autoBefore) : '')
   function add(p: Product) {
     if (picked.length >= max) return
@@ -39,10 +43,14 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
     setQuery('')
     setError('')
   }
+  // From photos: every version keeps the price list name (so the price check finds it), its own photo and its version name.
+  const items: PostItem[] = fromPhotos
+    ? versions.map((v) => ({ category: picked[0].category, name: picked[0].name, manualPhoto: v.src, nextPhoto: false, ...(v.label.trim() ? { label: v.label.trim() } : {}) }))
+    : picked.map((p): PostItem => ({ category: p.category, name: p.name, manualPhoto: '', nextPhoto: false }))
   const draft: NewPost = {
-    items: picked.map((p): PostItem => ({ category: p.category, name: p.name, manualPhoto: '', nextPhoto: false })),
-    ...(variants ? { variants: true, title: title.trim() || commonTitle(picked.map((p) => p.name)) } : {}),
-    company: [...new Set(picked.map((p) => p.company).filter(Boolean))].join(' + '),
+    items,
+    ...(variants ? { variants: true, title: title.trim() || (fromPhotos ? picked[0].name : commonTitle(picked.map((p) => p.name))) } : {}),
+    company: [...new Set((fromPhotos ? picked.slice(0, 1) : picked).map((p) => p.company).filter(Boolean))].join(' + '),
     priceBefore: before, priceAfter, style, details, captionStyle, postDate, postTime,
   }
   // Posts that already use these products, so the same offer is not made twice by accident.
@@ -56,7 +64,7 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
   }
   async function create() {
     if (!picked.length) return setError(t('Pick at least one product.'))
-    if (variants && picked.length < 2) return setError(t('Pick at least 2 versions.'))
+    if (variants && items.length < 2) return setError(t(picked.length === 1 ? 'Tap at least 2 versions on the website photos.' : 'Pick at least 2 versions.'))
     if (picked.length > max) return setError(t('Up to 3 products. Tick "Versions of one product" for 4.'))
     await backend.addPost(draft)
     showToast(t('Post created'))
@@ -73,14 +81,14 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
               {picked.map((p) => (
                 <span key={p.name} className="pick" dir="auto">
                   {p.name}
-                  <button onClick={() => setPicked(picked.filter((x) => x !== p))} aria-label={t('Delete')}><Icon name="close" size={14} /></button>
+                  <button onClick={() => { setPicked(picked.filter((x) => x !== p)); if (p === picked[0]) setVersions([]) }} aria-label={t('Delete')}><Icon name="close" size={14} /></button>
                 </span>
               ))}
             </div>
           )}
-          {picked.length < max && <input type="search" placeholder={t('Search products…')} value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />}
+          {picked.length < max && !fromPhotos && <input type="search" placeholder={t('Search products…')} value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />}
         </label>
-        {query.trim() && picked.length < max && (
+        {query.trim() && picked.length < max && !fromPhotos && (
           <div className="results">
             {matches.map((p) => (
               <button key={`${p.category}${p.name}`} onClick={() => add(p)}>
@@ -96,13 +104,16 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
             )}
           </div>
         )}
-        <p className="hint">{error ? <b className="bad">{error}</b> : t(variants ? 'Add up to 4 versions of the same product, such as its colours.' : 'Add up to 3 products.')}</p>
+        <p className="hint">{error ? <b className="bad">{error}</b> : t(variants ? 'Pick the product, then tap its versions on the website photos. Or add up to 4 products from the list.' : 'Add up to 3 products.')}</p>
         <label className="check">
           <input type="checkbox" checked={variants} onChange={(e) => { setVariants(e.target.checked); setError('') }} />
           <span>{t('Versions of one product (colours, switches…): one name and one price, up to 4')}</span>
         </label>
+        {variants && picked.length > 0 && (picked.length === 1 || fromPhotos) && (
+          <VersionPicker product={picked[0].name} max={max} value={versions} onChange={(v) => { setVersions(v); setError('') }} />
+        )}
         {variants && (
-          <label><span>{t('Name on the poster')}</span><input dir="auto" value={title} placeholder={commonTitle(picked.map((p) => p.name)) || t('Product name')} onChange={(e) => setTitle(e.target.value)} /></label>
+          <label><span>{t('Name on the poster')}</span><input dir="auto" value={title} placeholder={(fromPhotos ? picked[0].name : commonTitle(picked.map((p) => p.name))) || t('Product name')} onChange={(e) => setTitle(e.target.value)} /></label>
         )}
         {(dup.same.length > 0 || dup.partly.length > 0) && (
           <div className={dup.same.length ? 'alert' : 'alert alert-info'}>
