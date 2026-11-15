@@ -107,7 +107,7 @@ export function webNameDiff(item: PriceItem): string | null {
 export type PriceCategory = { id: string; name: string; order: number; items: PriceItem[] }
 
 export type FieldChange = { f: string; from: string; to: string }
-export type PriceChange = { id: string; cat: string; pid: string; name: string; act: 'edit' | 'add' | 'remove' | 'bulk'; changes: FieldChange[]; at: number; by: string; byName: string }
+export type PriceChange = { id: string; cat: string; pid: string; name: string; act: 'edit' | 'add' | 'remove' | 'bulk' | 'cost'; changes: FieldChange[]; at: number; by: string; byName: string }
 
 /** What can be changed on a product. */
 export type ItemPatch = Partial<Omit<PriceItem, 'id' | 'at' | 'byName'>>
@@ -137,7 +137,7 @@ export function casePsu(item: PriceItem | undefined): string {
 export const specChips = (item: PriceItem): string[] =>
   Object.entries(item.specs ?? {}).flatMap(([k, v]) => (!v ? [] : k === 'psu' ? (NO.test(v) ? [] : [`PSU ${v}`]) : [v]))
 
-const FIELD_LABEL: Record<string, string> = { in: 'In build', alone: 'Alone', online: 'Online', onlineSale: 'Online sale', web: 'Website product', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', out: 'Stock', specs: 'Specs' }
+const FIELD_LABEL: Record<string, string> = { cost: 'Cost', in: 'In build', alone: 'Alone', online: 'Online', onlineSale: 'Online sale', web: 'Website product', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', out: 'Stock', specs: 'Specs' }
 export const fieldLabel = (f: string) => FIELD_LABEL[f] ?? SPEC_LABEL[f.replace(/^specs\./, '')] ?? f
 
 /** "5,500", or a dash when there is no price. Western digits in both languages, like the price list. */
