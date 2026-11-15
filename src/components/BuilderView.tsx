@@ -649,7 +649,7 @@ const PRINT_PRICES_KEY = 'posterpilot.builder.printPrices'
 
 function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean }) {
   const logo = `${import.meta.env.BASE_URL}static-logo.png`
-  // Without prices: its own four-column layout (type, product, quantity, warranty), no money anywhere on the paper.
+  // Without prices: its own four-column layout (type, product, quantity, warranty), only the totals show money.
   const cols = prices ? 6 : 4
   return (
     <div className={`quote-print${prices ? '' : ' q-plain'}`} dir="ltr" lang="en">
@@ -683,6 +683,9 @@ function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]
           ))}
           {prices && <tr className="q-sum"><th colSpan={5}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>}
           {prices && <tr className="q-sum"><th colSpan={5}>TOTAL</th><td className="q-c">{money(sum.total)}</td></tr>}
+          {!prices && <tr className="q-sum"><th colSpan={3}>Price before discount</th><td className="q-c">{money(sum.subtotal)}</td></tr>}
+          {!prices && <tr className="q-sum"><th colSpan={3}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>}
+          {!prices && <tr className="q-sum"><th colSpan={3}>Price after discount</th><td className="q-c">{money(sum.total)}</td></tr>}
           <tr className="q-info"><td className="q-c"><b>Location</b></td><td colSpan={cols - 1} className="q-c" dir="rtl" lang="ar"><b>{SHOP.location}</b></td></tr>
           <tr className="q-info"><td className="q-c"><b>Website</b></td><td colSpan={cols - 1} className="q-c"><b className="q-link">{SHOP.website}</b></td></tr>
           <tr className="q-info"><td className="q-c"><b>Phone</b></td><td colSpan={cols - 1} className="q-c"><b>{SHOP.phone}</b></td></tr>
