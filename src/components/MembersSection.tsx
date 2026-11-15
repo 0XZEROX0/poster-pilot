@@ -104,9 +104,10 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
 }
 
 /** Permissions and pages grouped by the part of the app they belong to. */
-const GROUPS: { title: string; hint: string; pages: Page[]; perms: Perm[] }[] = [
+/** permPages: pages that are switched on by a permission alone; they show among the page pills and tick that permission. */
+const GROUPS: { title: string; hint: string; pages: Page[]; perms: Perm[]; permPages?: { perm: Perm; label: string }[] }[] = [
   { title: 'Shop', hint: 'Prices and the PC builder.', pages: ['prices', 'builder'], perms: ['prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit'] },
-  { title: 'Posters', hint: 'Offers, posters, the schedule and Facebook.', pages: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'], perms: ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'brainstorm', 'delete', 'templates.edit'] },
+  { title: 'Posters', hint: 'Offers, posters, the schedule and Facebook.', pages: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'], perms: ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'brainstorm', 'delete', 'templates.edit'], permPages: [{ perm: 'brainstorm', label: 'Brainstorm' }] },
   { title: 'People', hint: 'Who is in the system, and what everyone did.', pages: [], perms: ['people', 'activity.view'] },
 ]
 
@@ -172,6 +173,12 @@ export function RolesPanel({ state }: { state: TeamState }) {
                           <label key={p} className={`page-pill${r.pages.includes(p) ? ' on' : ''}`}>
                             <input type="checkbox" checked={r.pages.includes(p)} onChange={(e) => page(r, p, e.target.checked)} />
                             {r.pages.includes(p) && <Icon name="check" size={14} />}{t(PAGE_LABEL[p])}
+                          </label>
+                        ))}
+                        {g.permPages?.map((x) => (
+                          <label key={x.perm} className={`page-pill${r.perms.includes(x.perm) ? ' on' : ''}`}>
+                            <input type="checkbox" checked={r.perms.includes(x.perm)} onChange={(e) => tick(r, x.perm, e.target.checked)} />
+                            {r.perms.includes(x.perm) && <Icon name="check" size={14} />}{t(x.label)}
                           </label>
                         ))}
                       </div>
