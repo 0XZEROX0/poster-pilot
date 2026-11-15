@@ -2,7 +2,8 @@
 // - A post deleted in the app is removed, unless it is on Facebook's schedule (then it is refused with a note).
 // - A post made in the app gets its place in the list, its Price before and Company from the product list.
 // - Any other change: Price before / Company again if the items changed, and the post's zone and queues.
-// The poster and scheduling workflows then find the post in their queue.
+// The poster and scheduling workflows then find the post in their queue; when a post needs a poster now,
+// the engine also starts the poster workflow at once ('Build now?').
 const PROJECT = 'poster-pilot-8d35e';
 const docs = $('Find app changes').all().map(i => i.json).filter(j => j && j.document).map(j => docOf(j.document));
 const cat = $('Read product list').all().map(i => i.json).find(j => j && j.found);
@@ -13,6 +14,7 @@ const at = new Date().toISOString();
 const FLAGS = ['appDirty', 'appEdits', 'appNew', 'appNote'];
 const fileIdOf = v => { const m = str(v).match(/\/d\/([\w-]+)/) || str(v).match(/[?&]id=([\w-]+)/); return m ? m[1] : (/^[\w-]{20,}$/.test(clean(v)) ? clean(v) : ''); };
 const writes = []; const bin = []; const notes = [];
+let build = false;
 for (const d of docs) {
   const f = d.f;
   if (f.appDeleted === true) {
@@ -43,8 +45,11 @@ for (const d of docs) {
     if (products.length) { g.priceBefore = p.priceBefore; g.company = p.company; mask.add('priceBefore'); mask.add('company'); }
   }
   g.zone = zoneOf(g); g.q = queuesOf(g); mask.add('zone'); mask.add('q');
+  // Starts the poster workflow right away (instead of at its next 3-minute check) when this post now needs a poster:
+  // just approved, a Redo, or a missing photo to try again.
+  if (g.q.includes('poster') && (!/\/d\//.test(str(g.posterUrl)) || /^redo/i.test(clean(g.feedback)) || /^MISSING/i.test(clean(g.photoStatus)))) build = true;
   const fields = { appDirty: false, appNote: '' };
   for (const k of mask) if (!FLAGS.includes(k)) fields[k] = g[k];
   writes.push({ update: { name: d.name, fields: fieldsOf(fields) }, updateMask: { fieldPaths: [...mask] }, currentDocument: { updateTime: d.updateTime } });
 }
-return [{ json: { writes, bin, notes, count: docs.length } }];
+return [{ json: { writes, bin, notes, build, count: docs.length } }];

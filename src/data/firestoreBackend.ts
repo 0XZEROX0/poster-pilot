@@ -2,6 +2,7 @@ import { getAuth } from 'firebase/auth'
 import { collection, deleteField, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch, type DocumentData, type Firestore, type WriteBatch } from 'firebase/firestore'
 import type { Backend } from './backend'
 import { describe, describeDelete, describeNew } from './history'
+import { nudgeEngine } from './nudge'
 import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product } from './types'
 
 // Firestore layout (the engine, n8n, reads and writes the same documents with a service account):
@@ -93,6 +94,7 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       const ref = doc(collection(db, 'posts'))
       const me = getAuth(db.app).currentUser
       await commit((b) => b.set(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), zone: 'offer', createdBy: me?.uid ?? '', createdByName: me?.displayName || me?.email || '', appNew: true, appDirty: true, appEditedAt: serverTimestamp() }), ref.id, describeNew(post))
+      nudgeEngine(getAuth(db.app))
     },
     async updatePost(id, patch) {
       const edits: Record<string, unknown> = {}
@@ -104,10 +106,12 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       if (typeof patch.feedback === 'string' && /^redo/i.test(patch.feedback)) edits.retriedAt = Date.now()
       if (Object.keys(edits).some((k) => k.startsWith('appEdits.'))) Object.assign(edits, { appDirty: true, appEditedAt: serverTimestamp() })
       await commit((b) => b.update(doc(db, 'posts', id), edits), id, describe(known.get(id), patch))
+      if (edits.appDirty) nudgeEngine(getAuth(db.app))
     },
     async removePost(id) {
       // The engine removes the document after it has cancelled anything already scheduled.
       await commit((b) => b.update(doc(db, 'posts', id), { appDeleted: true, appDirty: true, appEditedAt: serverTimestamp(), appEdits: deleteField() }), id, describeDelete(known.get(id)))
+      nudgeEngine(getAuth(db.app))
     },
     async saveTemplates(templates) {
       await setDoc(doc(db, 'catalog', 'templates'), { items: templates, appEditedAt: serverTimestamp() })
