@@ -78,7 +78,38 @@ export function stageOf(p: Post): Stage {
   return 'review'
 }
 
-export const titleOf = (p: Post) => p.items.map((i) => i.name.trim()).filter(Boolean).join(' + ')
+export const titleOf = (p: Pick<Post, 'items' | 'variants' | 'title'>) => p.variants ? variantsName(p) : p.items.map((i) => i.name.trim()).filter(Boolean).join(' + ')
+
+/** Most items a post can hold: 3 products, or 4 versions of one product. */
+export const maxItems = (variants?: boolean) => (variants ? 4 : 3)
+
+/** The words all the names start with, e.g. "Metapanda PD98" for "Metapanda PD98 Jungle Panda" and "Metapanda PD98 Hurricane Panda". */
+export function commonTitle(names: string[]): string {
+  const lists = names.map((n) => n.trim().split(/\s+/).filter(Boolean)).filter((w) => w.length)
+  if (!lists.length) return ''
+  const out: string[] = []
+  for (let i = 0; i < lists[0].length; i++) {
+    const w = lists[0][i]
+    if (lists.every((l) => (l[i] ?? '').toLowerCase() === w.toLowerCase())) out.push(w)
+    else break
+  }
+  return (out.length ? out : lists[0]).join(' ')
+}
+
+/** What tells a version apart: its name without the words of the shared title ("Jungle Panda"). Same rule as the engine. */
+export function optionOf(title: string, name: string): string {
+  const drop = new Set(title.toLowerCase().split(/\s+/).filter(Boolean))
+  const rest = name.trim().split(/\s+/).filter((w) => w && !drop.has(w.toLowerCase())).join(' ')
+  return rest || name.trim()
+}
+
+/** A versions post's name for captions and lists: "Metapanda PD98 (Jungle Panda / Hurricane Panda)". */
+export function variantsName(p: Pick<Post, 'items' | 'title'>): string {
+  const names = p.items.map((i) => i.name.trim()).filter(Boolean)
+  const title = (p.title ?? '').trim() || commonTitle(names)
+  const opts = names.map((n) => optionOf(title, n)).filter((o) => o.toLowerCase() !== title.toLowerCase())
+  return opts.length ? `${title} (${opts.join(' / ')})` : title
+}
 
 /** The price shown on the poster: the offer price when there is one. */
 export const priceOf = (p: Pick<Post, 'priceBefore' | 'priceAfter'>) => p.priceAfter.trim() || p.priceBefore.trim()
@@ -124,12 +155,12 @@ export const formatPrice = (s: string) => {
  * Fills a caption template the way the engine does: {name} {price} {before} {category} {company}
  * {details}. A line whose placeholder has no value is dropped.
  */
-export function buildCaption(p: Pick<Post, 'items' | 'company' | 'priceBefore' | 'priceAfter' | 'details' | 'captionStyle'>, templates: CaptionTemplate[]): string {
+export function buildCaption(p: Pick<Post, 'items' | 'variants' | 'title' | 'company' | 'priceBefore' | 'priceAfter' | 'details' | 'captionStyle'>, templates: CaptionTemplate[]): string {
   const wanted = p.captionStyle.trim().toLowerCase()
   const tpl = templates.find((t) => t.name.trim().toLowerCase() === wanted) ?? templates.find((t) => t.name.trim().toLowerCase() === 'default') ?? templates[0]
   if (!tpl) return ''
   const values: Record<string, string> = {
-    name: p.items.map((i) => i.name.trim()).filter(Boolean).join(' + '),
+    name: titleOf(p),
     price: formatPrice(priceOf(p)),
     before: hasOffer(p) ? formatPrice(p.priceBefore) : '',
     category: [...new Set(p.items.map((i) => i.category.trim()).filter(Boolean))].join(' + '),

@@ -57,17 +57,18 @@ const logWrite = (project, postId, act, note, title, at) => {
   fields.at = { timestampValue: at };
   return { update: { name: 'projects/' + project + '/databases/(default)/documents/log/' + randomId(20), fields }, currentDocument: { exists: false } };
 };
-function pricesFrom(items, products) {
+function pricesFrom(items, products, variants) {
   const list = (Array.isArray(items) ? items : []).filter(it => it && clean(it.name));
   if (!list.length) return { priceBefore: '', company: '' };
-  let sum = 0, bad = false; const companies = [];
+  let sum = 0, top = 0, bad = false; const companies = [];
   for (const it of list) {
     const p = products.find(x => x.category === clean(it.category) && clean(x.name).toLowerCase() === clean(it.name).toLowerCase()); // like the sheet: same category, any case
     if (!p || (clean(p.price) !== '' && !isNum(p.price))) { bad = true; continue; }
-    sum += clean(p.price) === '' ? 0 : toNum(p.price);
+    const one = clean(p.price) === '' ? 0 : toNum(p.price); sum += one; top = Math.max(top, one);
     if (clean(p.company) && !companies.includes(clean(p.company))) companies.push(clean(p.company));
   }
-  return { priceBefore: bad ? 'Check item' : sum.toLocaleString('en-US'), company: companies.join(' + ') };
+  // Versions of one product (post.variants) show one price: the highest of them.
+  return { priceBefore: bad ? 'Check item' : (variants ? top : sum).toLocaleString('en-US'), company: companies.join(' + ') };
 }
 // App engine: carries out what people did in the app that needs the engine (runs every minute).
 // - A post deleted in the app is removed, unless it is on Facebook's schedule (then it is refused with a note).
@@ -109,12 +110,12 @@ for (const d of docs) {
   if (f.appNew === true) {
     g.order = ++maxOrder; mask.add('order');
     g.offer = clean(f.offer) === 'Approved' ? 'Approved' : ''; mask.add('offer');
-    g.items = (Array.isArray(f.items) ? f.items : []).filter(it => it && clean(it.name)).slice(0, 3).map((it, i) => ({ slot: i + 1, category: clean(it.category), name: clean(it.name), manualPhoto: clean(it.manualPhoto), nextPhoto: it.nextPhoto === true })); mask.add('items');
+    g.items = (Array.isArray(f.items) ? f.items : []).filter(it => it && clean(it.name)).slice(0, f.variants === true ? 4 : 3).map((it, i) => ({ slot: i + 1, category: clean(it.category), name: clean(it.name), manualPhoto: clean(it.manualPhoto), nextPhoto: it.nextPhoto === true })); mask.add('items');
     if (!clean(g.style)) { g.style = 'Static'; mask.add('style'); }
     if (!g.ex || typeof g.ex !== 'object') { g.ex = {}; mask.add('ex'); }
   }
   if (f.appNew === true || 'items' in edits) {
-    const p = pricesFrom(g.items, products);
+    const p = pricesFrom(g.items, products, g.variants === true);
     if (products.length) { g.priceBefore = p.priceBefore; g.company = p.company; mask.add('priceBefore'); mask.add('company'); }
   }
   g.zone = zoneOf(g); g.q = queuesOf(g); mask.add('zone'); mask.add('q');

@@ -6,12 +6,12 @@
 // rowOf() turns a post into an object with the sheet's column names (row_number = the post id), and
 // applyCols() does the opposite for a write. That way their own logic did not have to change.
 
-const HEADERS = ['Category 1', 'Category 2', 'Category 3', 'Item 1', 'Next photo 1', 'Manual photo 1', 'Item 2', 'Next photo 2', 'Manual photo 2', 'Item 3', 'Next photo 3', 'Manual photo 3', 'Company', 'Price before', 'Price after', 'Style', 'Details', 'Image link', 'Product image', 'Photo status', 'Feedback', 'Preview', 'Photo #', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'Cached from', 'FB photo id', 'FB post id', 'Scheduled price', 'Scheduled image', 'Auto reschedule', 'Reschedule slot', 'Poster price', 'Offer approval', 'Post now'];
+const HEADERS = ['Category 1', 'Category 2', 'Category 3', 'Item 1', 'Next photo 1', 'Manual photo 1', 'Item 2', 'Next photo 2', 'Manual photo 2', 'Item 3', 'Next photo 3', 'Manual photo 3', 'Category 4', 'Item 4', 'Next photo 4', 'Manual photo 4', 'Company', 'Price before', 'Price after', 'Style', 'Details', 'Image link', 'Product image', 'Photo status', 'Feedback', 'Preview', 'Photo #', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'Cached from', 'FB photo id', 'FB post id', 'Scheduled price', 'Scheduled image', 'Auto reschedule', 'Reschedule slot', 'Poster price', 'Offer approval', 'Post now'];
 // Sheet column -> post field.
 const TYPED = { 'Company': 'company', 'Price before': 'priceBefore', 'Price after': 'priceAfter', 'Style': 'style', 'Details': 'details', 'Image link': 'posterUrl', 'Photo status': 'photoStatus', 'Feedback': 'feedback', 'Post date': 'postDate', 'Post time': 'postTime', 'Scheduled for': 'scheduledFor', 'Caption': 'caption', 'Caption style': 'captionStyle', 'FB status': 'fbStatus', 'IG status': 'igStatus', 'FB post id': 'fbPostId', 'Offer approval': 'offer', 'Post now': 'postNow' };
 // Sheet column -> key in the post's `ex` map (columns the app does not show).
 const EX = { 'Product image': 'productImage', 'Photo #': 'photoNo', 'Cached from': 'cachedFrom', 'FB photo id': 'fbPhotoId', 'Scheduled price': 'scheduledPrice', 'Scheduled image': 'scheduledImage', 'Auto reschedule': 'autoReschedule', 'Reschedule slot': 'rescheduleSlot', 'Poster price': 'posterPrice' };
-const ITEM_COL = /^(Category|Item|Manual photo|Next photo) ([123])$/;
+const ITEM_COL = /^(Category|Item|Manual photo|Next photo) ([1234])$/;
 const ITEM_KEY = { 'Category': 'category', 'Item': 'name', 'Manual photo': 'manualPhoto', 'Next photo': 'nextPhoto' };
 
 const str = v => (v === undefined || v === null) ? '' : String(v);
@@ -43,11 +43,11 @@ const fieldsOf = o => enc(o).mapValue.fields;
 const docOf = d => ({ id: d.name.split('/').pop(), name: d.name, updateTime: d.updateTime, f: dec({ mapValue: { fields: d.fields || {} } }) || {} });
 
 // ---------- items ----------
-// Each item remembers its sheet column (slot 1-3). Posts made in the app have none; their order counts.
+// Each item remembers its sheet column (slot 1-4; 4 only for versions of one product). Posts made in the app have none; their order counts.
 const slotted = items => {
-  const out = [null, null, null];
+  const out = [null, null, null, null];
   const list = Array.isArray(items) ? items.filter(it => it && typeof it === 'object') : [];
-  for (const it of list) { const s = Number(it.slot); if (s >= 1 && s <= 3 && !out[s - 1]) out[s - 1] = it; }
+  for (const it of list) { const s = Number(it.slot); if (s >= 1 && s <= 4 && !out[s - 1]) out[s - 1] = it; }
   for (const it of list) { if (out.includes(it)) continue; const free = out.indexOf(null); if (free >= 0) out[free] = it; }
   return out;
 };
@@ -82,8 +82,25 @@ function rowOf(doc, raw) {
     }
     row[h] = v;
   }
+  // Versions of one product (post.variants): the shared name, what tells each version apart, and both together
+  // for captions ("Metapanda PD98 (Jungle Panda / Hurricane Panda)"). Empty for other posts. Read-only columns.
+  const v = variantsOf(f);
+  row['Title'] = v ? v.title : ''; row['Options'] = v ? v.options.join(' / ') : ''; row['Variants'] = v ? v.name : '';
   row.row_number = doc.id;
   return row;
+}
+/** Same rule as the app (src/data/logic.ts commonTitle / optionOf / variantsName). */
+function variantsOf(f) {
+  if (!f || f.variants !== true) return null;
+  const names = (Array.isArray(f.items) ? f.items : []).map(it => clean(it && it.name)).filter(Boolean);
+  if (!names.length) return null;
+  const lists = names.map(n => n.split(/\s+/).filter(Boolean));
+  const common = [];
+  for (let i = 0; i < lists[0].length; i++) { const w = lists[0][i]; if (lists.every(l => low(l[i]) === low(w))) common.push(w); else break; }
+  const title = clean(f.title) || (common.length ? common : lists[0]).join(' ');
+  const drop = new Set(low(title).split(/\s+/).filter(Boolean));
+  const options = names.map(n => n.split(/\s+/).filter(w => w && !drop.has(w.toLowerCase())).join(' ') || n).filter(o => low(o) !== low(title));
+  return { title, options, name: options.length ? title + ' (' + options.join(' / ') + ')' : title };
 }
 
 // ---------- where a post stands ----------
@@ -204,19 +221,20 @@ const titleOf = f => (Array.isArray(f.items) ? f.items : []).map(it => clean(it 
 
 // ---------- the product list ----------
 /** Price before and Company, worked out from the product list like the sheet's formulas did. */
-function pricesFrom(items, products) {
+function pricesFrom(items, products, variants) {
   const list = (Array.isArray(items) ? items : []).filter(it => it && clean(it.name));
   if (!list.length) return { priceBefore: '', company: '' };
-  let sum = 0, bad = false; const companies = [];
+  let sum = 0, top = 0, bad = false; const companies = [];
   for (const it of list) {
     // Same category, any case, and any kind or number of spaces (names copied from the web carry no-break spaces).
     const same = (a, b) => clean(a).replace(/\s+/g, ' ').toLowerCase() === clean(b).replace(/\s+/g, ' ').toLowerCase();
     const p = products.find(x => x.category === clean(it.category) && same(x.name, it.name));
     if (!p || (clean(p.price) !== '' && !isNum(p.price))) { bad = true; continue; }
-    sum += clean(p.price) === '' ? 0 : toNum(p.price);
+    const one = clean(p.price) === '' ? 0 : toNum(p.price); sum += one; top = Math.max(top, one);
     if (clean(p.company) && !companies.includes(clean(p.company))) companies.push(clean(p.company));
   }
-  return { priceBefore: bad ? 'Check item' : sum.toLocaleString('en-US'), company: companies.join(' + ') };
+  // Versions of one product (post.variants) show one price: the highest of them.
+  return { priceBefore: bad ? 'Check item' : (variants ? top : sum).toLocaleString('en-US'), company: companies.join(' + ') };
 }
 
 if (typeof module !== 'undefined') module.exports = { HEADERS, TYPED, EX, dec, enc, fieldsOf, docOf, slotted, rowOf, zoneOf, queuesOf, applyCols, historyOf, logWrite, titleOf, pricesFrom, isNum, toNum, grouped, clean, randomId };

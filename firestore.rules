@@ -87,7 +87,7 @@ service cloud.firestore {
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
         // Asking for the website photos of the items, for the photo picker.
         && (!keys.hasAny(['photoAsk']) || can('offers.create') || can('fix') || can('designs.approve'))
-        && (!keys.hasAny(['items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle']) || can('offers.create') || can('fix') || can('designs.approve'))
+        && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle']) || can('offers.create') || can('fix') || can('designs.approve'))
         // An offer is approved by someone other than the person who made it. The owner always may.
         && (!keys.hasAny(['offer', 'offerNote', 'offerBy'])
           || (can('offers.approve') && (isOwner() || isAdmin() || was.get('createdBy', '') != request.auth.uid))
