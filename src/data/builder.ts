@@ -4,18 +4,19 @@ import { firestore } from './firebase'
 import type { PriceCategory, PriceItem } from './prices'
 
 /** A kind of part in a build. `cats` are the price-list categories it is picked from; empty means any. */
-export type Slot = { key: string; label: string; cats: string[] }
+/** `single`: a build has only one of these (one motherboard, one CPU...), so no second row and no quantity. */
+export type Slot = { key: string; label: string; cats: string[]; single?: boolean }
 
 /** The quotation's rows, in the order of the sheet. */
 export const SLOTS: Slot[] = [
-  { key: 'mb', label: 'Motherboard', cats: ['mb'] },
-  { key: 'cpu', label: 'CPU', cats: ['cpu'] },
+  { key: 'mb', label: 'Motherboard', cats: ['mb'], single: true },
+  { key: 'cpu', label: 'CPU', cats: ['cpu'], single: true },
   { key: 'ram', label: 'RAM', cats: ['ram'] },
   { key: 'gpu', label: 'GPU', cats: ['vga'] },
   { key: 'ssd', label: 'SSD / HDD', cats: ['ssd'] },
-  { key: 'case', label: 'Case', cats: ['case'] },
-  { key: 'psu', label: 'PSU', cats: ['psu'] },
-  { key: 'cooler', label: 'Cooler', cats: ['cooler'] },
+  { key: 'case', label: 'Case', cats: ['case'], single: true },
+  { key: 'psu', label: 'PSU', cats: ['psu'], single: true },
+  { key: 'cooler', label: 'Cooler', cats: ['cooler'], single: true },
   { key: 'fans', label: 'Case fans', cats: ['fans', 'accfan'] },
   { key: 'monitor', label: 'Monitor', cats: ['monitor'] },
   { key: 'keyboard', label: 'Keyboard', cats: ['keyboard'] },
@@ -331,4 +332,26 @@ export const edits = {
     const me = getAuth(firestore.app).currentUser
     if (me) await deleteDoc(doc(firestore, 'edits', me.uid)).catch(() => {})
   },
+  /** For the editor: whether the change sent to this person is still waiting for their builder to take it in. */
+  watchWaiting(uid: string, onData: (waiting: boolean) => void): () => void {
+    if (!firestore) return () => {}
+    return onSnapshot(doc(firestore, 'edits', uid), (snap) => onData(snap.exists() && !snap.metadata.hasPendingWrites), () => {})
+  },
+}
+
+/** The open quote is kept in this browser under this key. */
+export const DRAFT_KEY = 'posterpilot.builder.draft'
+/** True while the Builder page is on screen; it then takes changes from others in itself. */
+export const builderOpen = { current: false }
+/** A change someone made to this person's quote while their Builder page was closed: written into the kept quote. */
+export function applyEditToStored(e: QuoteEdit): boolean {
+  if (e.at && Date.now() - e.at > LIVE_IDLE_MS) return false
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    const b = raw ? (JSON.parse(raw) as Build) : newBuild('')
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...b, customer: e.customer, lines: complete(e.lines), extra: e.extra, buildDiscount: e.buildDiscount }))
+    return true
+  } catch {
+    return false
+  }
 }

@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { chosen, complete, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
+import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { matches, money, parseMoney, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
 import { allowed, isOwner, myId, myName } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
 import { Chip, Empty, Icon, SearchBox, showToast } from './ui'
 
-const DRAFT_KEY = 'posterpilot.builder.draft'
 const loadDraft = (): Build => {
   try {
     const raw = localStorage.getItem(DRAFT_KEY)
@@ -50,10 +49,27 @@ export function BuilderView() {
   const mine = useRef<Build | null>(null)
   const [theirGrant, setTheirGrant] = useState(0)
   const sent = useRef<string[]>([])
+  // How the editor's changes are getting to the other person: '' nothing sent yet, then sending, waiting (their builder has not taken it in), done, or an error.
+  const [sync, setSync] = useState<'' | 'sending' | 'waiting' | 'done' | 'late' | 'denied' | 'offline'>('')
+  useEffect(() => {
+    if (!editing) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const stop = edits.watchWaiting(editing.uid, (waiting) => {
+      clearTimeout(timer)
+      setSync((s) => (waiting ? 'waiting' : s === 'waiting' || s === 'late' || s === 'sending' ? 'done' : s))
+      // Their builder normally takes a change in within a second or two.
+      if (waiting) timer = setTimeout(() => setSync((s) => (s === 'waiting' ? 'late' : s)), 8000)
+    })
+    return () => { clearTimeout(timer); stop() }
+  }, [editing])
   const seen = useRef('')
   const given = editing ? theirGrant : grant?.amount ?? 0
 
   // Changes someone made to this person's quote come in here.
+  useEffect(() => {
+    builderOpen.current = true
+    return () => { builderOpen.current = false }
+  }, [])
   useEffect(() => edits.watchMine((e) => {
     void edits.clearMine()
     if (e.at && Date.now() - e.at > LIVE_IDLE_MS) return
@@ -86,7 +102,7 @@ export function BuilderView() {
   }, [build, editing])
 
   // Lines always show today's names and prices from the price list.
-  const lines = useMemo(() => build.lines.map((l) => fresh(cats, l)), [build.lines, cats])
+  const lines = useMemo(() => build.lines.map((l) => fresh(cats, slotOf(l.slot).single && l.qty !== 1 ? { ...l, qty: 1 } : l)), [build.lines, cats])
   const parts = useMemo(() => chosen(cats, lines), [cats, lines])
   const sum = totals(lines, build.extra + given, build.buildDiscount)
 
@@ -99,9 +115,10 @@ export function BuilderView() {
       if (now === seen.current || sent.current.includes(now)) return
       const id = setTimeout(() => {
         sent.current = [...sent.current.slice(-9), now]
+        setSync('sending')
         edits.send(editing.uid, { ...build, lines }).catch((e) => {
           sent.current = sent.current.filter((s) => s !== now)
-          showToast((e as { code?: string }).code === 'permission-denied' ? t('Your role does not allow this.') : t('Could not save. Check the connection.'))
+          setSync((e as { code?: string }).code === 'permission-denied' ? 'denied' : 'offline')
         })
       }, 800)
       return () => clearTimeout(id)
@@ -181,7 +198,14 @@ export function BuilderView() {
     setSure(false)
   }
   const stopEditing = () => {
-    if (editing && now !== seen.current && !sent.current.includes(now)) void edits.send(editing.uid, { ...build, lines }).catch(() => {})
+    if (editing && now !== seen.current && !sent.current.includes(now)) {
+      const name = editing.name
+      edits.send(editing.uid, { ...build, lines }).then(
+        () => showToast(tn('Sent to %name', { name })),
+        (e) => showToast((e as { code?: string }).code === 'permission-denied' ? t('Your last change was not sent: the database refused it.') : t('Your last change was not sent. Check the connection.')),
+      )
+    }
+    setSync('')
     setBuild(mine.current ?? loadDraft())
     mine.current = null
     setEditing(null)
@@ -200,6 +224,14 @@ export function BuilderView() {
         {editing ? (
           <>
             <p className="edit-banner"><span className="live-dot" aria-hidden="true" />{tn("You're editing %name's quote. They see each change.", { name: editing.name })}</p>
+            {sync && <p className={`edit-sync edit-sync-${sync}`}>{{
+              sending: t('Sending…'),
+              waiting: t('Sent. Waiting for their builder…'),
+              done: tn('%name has your changes.', { name: editing.name }),
+              late: tn("%name's builder has not taken your changes in yet. They need the Builder page open, and may need to close and reopen the app to get the latest version.", { name: editing.name }),
+              denied: t('The database refused your change. Make sure the latest rules are published in Firebase and that your role has Edit live quotes.'),
+              offline: t('Your change could not be sent. Check the connection.'),
+            }[sync]}</p>}
             <button className="btn btn-primary" onClick={stopEditing}>{t('Done editing')}</button>
           </>
         ) : <>
@@ -239,16 +271,16 @@ export function BuilderView() {
                   </span>
                 )}
               </button>
-              <span className="bl-qty">
+              {slot.single ? <span className="bl-qty bl-qty-one"><b>1</b></span> : <span className="bl-qty">
                 <button className="icon-btn" aria-label={t('Less')} disabled={line.qty <= 1} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.max(1, l.qty - 1) }))}><Icon name="minus" size={16} /></button>
                 <b>{line.qty}</b>
                 <button className="icon-btn" aria-label={t('More')} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.min(99, l.qty + 1) }))}><Icon name="plus" size={16} /></button>
-              </span>
+              </span>}
               <span className="num bl-war">{line.name && line.warranty ? tn('%n y', { n: line.warranty }) : ''}</span>
               <span className="num bl-price">{line.name ? money(line.alone ?? line.in) : ''}</span>
               <span className="num bl-total">{line.name ? money((line.alone ?? line.in ?? 0) * line.qty) : ''}</span>
               <span className="bl-acts">
-                <button className="icon-btn" title={tn('Another %s', { s: t(slot.label) })} aria-label={tn('Another %s', { s: t(slot.label) })} onClick={() => addAfter(line)}><Icon name="plus" size={16} /></button>
+                {!slot.single && <button className="icon-btn" title={tn('Another %s', { s: t(slot.label) })} aria-label={tn('Another %s', { s: t(slot.label) })} onClick={() => addAfter(line)}><Icon name="plus" size={16} /></button>}
                 {keeps(line) ? (
                   <button className="icon-btn" title={t('Empty this row')} aria-label={t('Empty this row')} disabled={!line.name} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>
                 ) : (
