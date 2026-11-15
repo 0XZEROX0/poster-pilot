@@ -122,6 +122,9 @@ export function BuilderView() {
   // What the build costs the shop: only for roles with 'See and edit cost', and only after the eye is pressed.
   // It stays on this screen: it is never part of the shared live quote, a saved quote or the printed quotation.
   const seeCost = allowed('cost')
+  // Whether the printed quotation shows each part's price. Off: only the parts, the discount and the total.
+  const [printPrices, setPrintPricesState] = useState(() => { try { return localStorage.getItem(PRINT_PRICES_KEY) !== 'off' } catch { return true } })
+  const setPrintPrices = (on: boolean) => { setPrintPricesState(on); try { localStorage.setItem(PRINT_PRICES_KEY, on ? 'on' : 'off') } catch { /* lasts while the page is open */ } }
   const { costs: costMap } = useCosts()
   const costOn = useCostShown() && seeCost
   const bc = buildCost(lines, costMap)
@@ -409,6 +412,7 @@ export function BuilderView() {
                 )}
               </div>
             )}
+            <label className="bx-switch bx-print-prices"><input type="checkbox" checked={printPrices} onChange={(e) => setPrintPrices(e.target.checked)} /><i aria-hidden="true" /><span>{t('Prices on the printed quotation')}</span><b>{printPrices ? t('On') : t('Off')}</b></label>
             <div className="actions">
               <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print quotation')}</button>
               {!editing && <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>}
@@ -426,7 +430,7 @@ export function BuilderView() {
       {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { choose(pickingLine, cat, item); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
       {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra + b.grant, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false); void grants.clearMine() }} onEdit={startEditing} onClose={() => setWatching(false)} />}
       {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false); void grants.clearMine() }} onClose={() => setSaved(false)} />}
-      {createPortal(<QuotePrint build={build} lines={filled} sum={sum} />, document.body)}
+      {createPortal(<QuotePrint build={build} lines={filled} sum={sum} prices={printPrices} />, document.body)}
     </div>
   )
 }
@@ -641,16 +645,20 @@ function GiveDiscount({ uid, whose }: { uid: string; whose: string }) {
 }
 
 /** The paper the customer gets, laid out like the sheet's quotation. Only shown when printing. */
-function QuotePrint({ build, lines, sum }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals> }) {
+const PRINT_PRICES_KEY = 'posterpilot.builder.printPrices'
+
+function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean }) {
+  // Without prices the table has 4 columns instead of 6.
+  const wide = prices ? 5 : 3
   const logo = `${import.meta.env.BASE_URL}static-logo.png`
   return (
     <div className="quote-print" dir="ltr" lang="en">
       <table>
-        <colgroup><col className="q-type" /><col /><col className="q-n" /><col className="q-n" /><col className="q-n" /><col className="q-n2" /></colgroup>
+        <colgroup><col className="q-type" /><col /><col className="q-n" /><col className="q-n" />{prices && <><col className="q-n" /><col className="q-n2" /></>}</colgroup>
         <tbody>
           <tr className="q-top">
             <td><img src={logo} alt="Static" /></td>
-            <td colSpan={3} className="q-title">
+            <td colSpan={prices ? 3 : 1} className="q-title">
               {build.sales.trim() && <div>Sales Man: {build.sales.trim()}</div>}
               <div>Quotation</div>
               {build.customer.trim() && <div className="q-customer" dir="auto">{build.customer.trim()}</div>}
@@ -659,7 +667,7 @@ function QuotePrint({ build, lines, sum }: { build: Build; lines: Line[]; sum: R
             <td className="q-c"><b>{today()}</b></td>
           </tr>
           <tr className="q-head">
-            <th>Type</th><th>Product</th><th>QTY</th><th>Warranty</th><th>Price</th><th>Total Price</th>
+            <th>Type</th><th>Product</th><th>QTY</th><th>Warranty</th>{prices && <><th>Price</th><th>Total Price</th></>}
           </tr>
           {lines.map((l) => (
             <tr key={l.id}>
@@ -667,16 +675,16 @@ function QuotePrint({ build, lines, sum }: { build: Build; lines: Line[]; sum: R
               <td className="q-c" dir="auto">{l.name}</td>
               <td className="q-c">{l.qty}</td>
               <td className="q-c">{l.warranty ?? ''}</td>
-              <td className="q-c">{money(l.alone ?? l.in)}</td>
-              <td className="q-c">{money((l.alone ?? l.in ?? 0) * l.qty)}</td>
+              {prices && <td className="q-c">{money(l.alone ?? l.in)}</td>}
+              {prices && <td className="q-c">{money((l.alone ?? l.in ?? 0) * l.qty)}</td>}
             </tr>
           ))}
-          <tr className="q-sum"><th colSpan={5}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>
-          <tr className="q-sum"><th colSpan={5}>TOTAL</th><td className="q-c">{money(sum.total)}</td></tr>
-          <tr><td className="q-c"><b>Location</b></td><td colSpan={5} className="q-c" dir="rtl" lang="ar"><b>{SHOP.location}</b></td></tr>
-          <tr><td className="q-c"><b>Website</b></td><td colSpan={5} className="q-c"><b className="q-link">{SHOP.website}</b></td></tr>
-          <tr><td className="q-c"><b>Phone</b></td><td colSpan={5} className="q-c"><b>{SHOP.phone}</b></td></tr>
-          <tr><td colSpan={6} className="q-c q-foot" dir="rtl" lang="ar"><b>{SHOP.footer}</b></td></tr>
+          <tr className="q-sum"><th colSpan={wide}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>
+          <tr className="q-sum"><th colSpan={wide}>TOTAL</th><td className="q-c">{money(sum.total)}</td></tr>
+          <tr><td className="q-c"><b>Location</b></td><td colSpan={wide} className="q-c" dir="rtl" lang="ar"><b>{SHOP.location}</b></td></tr>
+          <tr><td className="q-c"><b>Website</b></td><td colSpan={wide} className="q-c"><b className="q-link">{SHOP.website}</b></td></tr>
+          <tr><td className="q-c"><b>Phone</b></td><td colSpan={wide} className="q-c"><b>{SHOP.phone}</b></td></tr>
+          <tr><td colSpan={wide + 1} className="q-c q-foot" dir="rtl" lang="ar"><b>{SHOP.footer}</b></td></tr>
         </tbody>
       </table>
     </div>
