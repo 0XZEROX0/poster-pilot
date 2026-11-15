@@ -749,6 +749,7 @@ button.stock:hover { filter: brightness(1.15); }
 .set-card .person { border-top: 1px solid var(--border); padding: 10px 0 0; }
 .set-card .person.me { border-top: 0; padding: 0; }
 .person .avatar { flex: none; }
+.person-main > .run-hint { white-space: normal; }
 .person-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-inline-start: auto; }
 .role-card { padding: 0; gap: 0; overflow: hidden; }
 .role-sum { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; text-align: start; }

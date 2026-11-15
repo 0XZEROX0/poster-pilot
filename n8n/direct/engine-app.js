@@ -15,6 +15,8 @@ const FLAGS = ['appDirty', 'appEdits', 'appNew', 'appNote'];
 const fileIdOf = v => { const m = str(v).match(/\/d\/([\w-]+)/) || str(v).match(/[?&]id=([\w-]+)/); return m ? m[1] : (/^[\w-]{20,}$/.test(clean(v)) ? clean(v) : ''); };
 const writes = []; const bin = []; const notes = [];
 let build = false;
+// Parts of the scheduling workflow to start at once, instead of at their next 5-15 minute check.
+const sched = new Set();
 for (const d of docs) {
   const f = d.f;
   if (f.appDeleted === true) {
@@ -48,8 +50,13 @@ for (const d of docs) {
   // Starts the poster workflow right away (instead of at its next 3-minute check) when this post now needs a poster:
   // just approved, a Redo, or a missing photo to try again.
   if (g.q.includes('poster') && (!/\/d\//.test(str(g.posterUrl)) || /^redo/i.test(clean(g.feedback)) || /^MISSING/i.test(clean(g.photoStatus)))) build = true;
+  // Scheduling: a Done post that now has its Post date and Post time is scheduled at once; a cancel or a change
+  // to a scheduled post is carried out at once; a post without a caption gets one at once.
+  if (g.q.includes('queue') && clean(g.postDate) && clean(g.postTime)) sched.add('queue');
+  if (low(g.feedback) === 'cancel' || (clean(g.scheduledFor) && g.q.includes('changes'))) sched.add('changes');
+  if (g.q.includes('caption') && !clean(g.caption)) sched.add('captions');
   const fields = { appDirty: false, appNote: '' };
   for (const k of mask) if (!FLAGS.includes(k)) fields[k] = g[k];
   writes.push({ update: { name: d.name, fields: fieldsOf(fields) }, updateMask: { fieldPaths: [...mask] }, currentDocument: { updateTime: d.updateTime } });
 }
-return [{ json: { writes, bin, notes, build, count: docs.length } }];
+return [{ json: { writes, bin, notes, build, sched: [...sched], count: docs.length } }];

@@ -2,6 +2,7 @@ import { getAuth } from 'firebase/auth'
 import { collection, deleteField, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch, type DocumentData, type Firestore } from 'firebase/firestore'
 import { useEffect, useSyncExternalStore } from 'react'
 import { firestore } from './firebase'
+import { nudgeEngine } from './nudge'
 
 // The price list, kept in the app's database only (no sheet). Firestore layout:
 //   prices/{category}  { name, order, items: { [productId]: PriceItem without id } }   one document per category
@@ -271,6 +272,8 @@ function firestorePrices(db: Firestore): PriceBackend {
       batch.set(doc(db, 'prices', '_meta'), { version: increment(1), at: serverTimestamp() }, { merge: true })
       await batch.commit()
     }
+    // The product list, the prices of open posts and the website follow at once, not at their next timed check.
+    nudgeEngine(getAuth(db.app), ['lists', 'website'])
   }
   return {
     watch(onData, onError) {

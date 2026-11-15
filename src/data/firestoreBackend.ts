@@ -2,7 +2,7 @@ import { getAuth } from 'firebase/auth'
 import { collection, deleteField, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch, type DocumentData, type Firestore, type WriteBatch } from 'firebase/firestore'
 import type { Backend } from './backend'
 import { describe, describeDelete, describeNew } from './history'
-import { nudgeEngine } from './nudge'
+import { engineReachable, nudgeEngine, runEngineNow, type EngineJob } from './nudge'
 import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product } from './types'
 
 // Firestore layout (the engine, n8n, reads and writes the same documents with a service account):
@@ -106,7 +106,13 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       if (typeof patch.feedback === 'string' && /^redo/i.test(patch.feedback)) edits.retriedAt = Date.now()
       if (Object.keys(edits).some((k) => k.startsWith('appEdits.'))) Object.assign(edits, { appDirty: true, appEditedAt: serverTimestamp() })
       await commit((b) => b.update(doc(db, 'posts', id), edits), id, describe(known.get(id), patch))
-      if (edits.appDirty) nudgeEngine(getAuth(db.app))
+      // Start what this change needs at once: the engine for post changes, the competitor price check for
+      // "Check prices again", the website photo reader for the photo picker.
+      const jobs: EngineJob[] = []
+      if (edits.appDirty) jobs.push('app')
+      if (patch.marketAsk) jobs.push('market')
+      if (patch.photoAsk) jobs.push('photos')
+      if (jobs.length) nudgeEngine(getAuth(db.app), jobs)
     },
     async removePost(id) {
       // The engine removes the document after it has cancelled anything already scheduled.
@@ -115,7 +121,10 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
     },
     async saveTemplates(templates) {
       await setDoc(doc(db, 'catalog', 'templates'), { items: templates, appEditedAt: serverTimestamp() })
+      // New captions, and scheduled posts whose caption changed, are handled at once.
+      nudgeEngine(getAuth(db.app), ['captions', 'changes'])
     },
+    ...(engineReachable() ? { runNow: (jobs: EngineJob[]) => runEngineNow(getAuth(db.app), jobs) } : {}),
     watchLog(postId, onLog, onError) {
       // Read only while the history is open: a few reads per post, nothing in the background.
       return onSnapshot(query(collection(db, 'log'), where('postId', '==', postId), limit(300)),
