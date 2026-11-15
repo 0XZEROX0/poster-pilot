@@ -26,7 +26,7 @@ for (let i = 0; i < items.length; i++) {
   else if (r.error || !r.id) w.error = 'The website refused the change: ' + String((r.error && (r.error.message || r.error.description)) || r.message || 'no answer').slice(0, 300);
   else if (p.part === 'name') { w.name = decode(r.name); w.rename = undefined; w.sentAt = NOW; }
   else {
-    w.price = num(r.regular_price); w.sale = num(r.sale_price); w.stock = r.stock_status === 'outofstock' ? 'outofstock' : 'instock'; w.sentAt = NOW; if (p.variation) w.variation = p.variation;
+    w.price = num(r.regular_price); w.sale = num(r.sale_price); w.stock = r.stock_status === 'outofstock' ? 'outofstock' : 'instock'; w.sentAt = NOW; if (p.variation) { w.variation = p.variation; if (p.option) w.option = p.option; }
     if (p.body && p.body.name) { w.name = decode(r.name); w.rename = undefined; } // the website has the new name now (rename is in the mask with no value, so it is removed)
   }
   w.triedAt = NOW;
@@ -39,7 +39,7 @@ for (let i = 0; i < items.length; i++) {
   const keep = { ...had, ...w };
   if (had.error && !w.error) keep.error = had.error;
   b.fields[p.pid] = { web: keep };
-  const keys = w.error ? ['error', 'triedAt'] : (p.part === 'name' ? ['name', 'rename', 'sentAt', 'triedAt'] : ['price', 'sale', 'stock', 'sentAt', 'error', 'triedAt'].concat(p.variation ? ['variation'] : [], p.body && p.body.name ? ['name', 'rename'] : []));
+  const keys = w.error ? ['error', 'triedAt'] : (p.part === 'name' ? ['name', 'rename', 'sentAt', 'triedAt'] : ['price', 'sale', 'stock', 'sentAt', 'error', 'triedAt'].concat(p.variation ? ['variation', 'option'] : [], p.body && p.body.name ? ['name', 'rename'] : []));
   for (const k of keys) if (!b.paths.includes(`items.${p.pid}.web.${k}`)) b.paths.push(`items.${p.pid}.web.${k}`);
 }
 const writes = Object.entries(byCat).map(([cat, b]) => ({ update: { name: `${base}/prices/${cat}`, fields: { items: ev(b.fields) } }, updateMask: { fieldPaths: b.paths }, currentDocument: { exists: true } })).concat(activity);

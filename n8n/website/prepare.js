@@ -20,8 +20,11 @@ plans.forEach((p, i) => {
   if (p.type === 'variable') {
     const words = new Set(tok(p.name));
     const fits = rows.filter(v => v && v.id && (v.attributes || []).length && (v.attributes || []).every(a => tok(a.option).every(t => words.has(t))));
-    const chosen = p.variation ? rows.find(v => v.id === p.variation) : (fits.length === 1 ? fits[0] : null);
-    if (!chosen) return fail(fits.length > 1 ? 'More than one option of the website product fits this name' : 'No option of the website product fits this name (' + rows.map(v => (v.attributes || []).map(a => a.option).join(' ')).join(', ').slice(0, 200) + ')');
+    // The chosen option; when it is gone from the website (options edited there get new ids), the option that fits the name.
+    const picked = p.variation ? rows.find(v => v.id === p.variation) : null;
+    const chosen = picked || (fits.length === 1 ? fits[0] : null);
+    const names = rows.map(v => (v.attributes || []).map(a => a.option).join(' ')).join(', ').slice(0, 200);
+    if (!chosen) return fail(p.variation ? 'The chosen website option is no longer on the website; choose the option again (' + names + ')' : fits.length > 1 ? 'More than one option of the website product fits this name' : 'No option of the website product fits this name (' + names + ')');
     target = chosen;
     url = `https://static-eg.com/wp-json/wc/v3/products/${p.id}/variations/${chosen.id}`;
   }
@@ -36,7 +39,7 @@ plans.forEach((p, i) => {
   // A new name belongs to the product itself; for a product with options that is a second change, to the main product.
   if (p.want.name && p.type !== 'variable') body.name = p.want.name;
   // Settings.dryRun: everything is worked out, but nothing goes to "Send to website".
-  out.push({ json: { ...p, variation: p.type === 'variable' ? target.id : null, method: DRY ? '' : 'PUT', url, body, dry: DRY, error: '' } });
+  out.push({ json: { ...p, variation: p.type === 'variable' ? target.id : null, option: p.type === 'variable' ? decode((target.attributes || []).map(a => a.option).join(' ')).replace(/\s+/g, ' ').trim() : null, method: DRY ? '' : 'PUT', url, body, dry: DRY, error: '' } });
   if (p.want.name && p.type === 'variable') out.push({ json: { ...p, part: 'name', variation: null, method: DRY ? '' : 'PUT', url: `https://static-eg.com/wp-json/wc/v3/products/${p.id}`, body: { name: p.want.name }, dry: DRY, error: '' } });
 });
 return out;
