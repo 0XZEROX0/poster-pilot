@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { bulkPatches, casePsu, fieldLabel, loadWebProducts, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, sameName as sameNameLoose, usePrices, webNameDiff, webNeedsOption, webPending, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem, type WebOption, type WebProduct } from '../data/prices'
+import { costKey, costs, profitOf, profitText, setCostShown, useCosts, useCostShown, type CostMap } from '../data/costs'
 import { allowed } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -24,6 +25,10 @@ const savedView = (): ViewMode => {
 export function PricesView() {
   const { loaded, cats, error } = usePrices()
   const canEdit = allowed('prices.edit')
+  // What each product costs: only for roles that may edit prices (the database refuses everyone else), and
+  // only on screen after the eye is pressed.
+  const { costs: costMap } = useCosts()
+  const showCost = useCostShown() && canEdit
   const [cat, setCat] = useState('')
   const [search, setSearch] = useState('')
   const [hidden, setHidden] = useState(false)
@@ -99,6 +104,7 @@ export function PricesView() {
               <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} title={t('List')} onClick={() => pickView('list')}><Icon name="rows" size={18} /></button>
               <button className={view === 'grid' ? 'on' : ''} aria-pressed={view === 'grid'} title={t('Cards')} onClick={() => pickView('grid')}><Icon name="cards" size={18} /></button>
             </div>
+            {canEdit && <CostEye />}
             <button className="link" onClick={() => setChanges(true)}><Icon name="clock" size={16} />{t('Changes')}</button>
             {canEdit && current && <button className="link" onClick={() => setBulk(true)}><Icon name="edit" size={16} />{t('Change all by %')}</button>}
             {canEdit && <button className="btn btn-primary" onClick={() => setOpen({ cat: current?.id ?? cats[0].id, item: null })}><Icon name="plus" size={18} />{t('Product')}</button>}
@@ -107,7 +113,7 @@ export function PricesView() {
             <label className="check-line"><input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> {t('Show hidden products')} ({hiddenCount})</label>
           )}
           {rows.length === 0 ? <Empty icon="search" text={t('Nothing matches.')} /> : view === 'list' ? (
-            <div className="ptable" role="table">
+            <div className={`ptable${showCost ? ' with-cost' : ''}`} role="table">
               <div className="ptable-row ptable-head" role="row">
                 <span role="columnheader">{t('Product')}</span>
                 <span role="columnheader" className="ptable-specs">{t('Specs')}</span>
@@ -116,29 +122,53 @@ export function PricesView() {
                 <span role="columnheader" className="ptable-num">{t('Alone')}</span>
                 <span role="columnheader" className="ptable-num">{t('Online')}</span>
                 <span role="columnheader" className="ptable-num">{t('Online sale')}</span>
+                {showCost && <span role="columnheader" className="ptable-num ptable-cost">{t('Cost')}</span>}
               </div>
               {shown.map(({ cat: c, item }, i) => (
-                <ListRow key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} {...heads[i]} onOpen={() => setOpen({ cat: c.id, item })} />
+                <ListRow key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} cost={showCost ? costMap : null} {...heads[i]} onOpen={() => setOpen({ cat: c.id, item })} />
               ))}
             </div>
           ) : (
             <div className="pgrid">
               {shown.map(({ cat: c, item }, i) => (
-                <PriceCard key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} {...heads[i]} onOpen={() => setOpen({ cat: c.id, item })} />
+                <PriceCard key={`${c.id}/${item.id}`} cat={c} item={item} canEdit={canEdit} cost={showCost ? costMap : null} {...heads[i]} onOpen={() => setOpen({ cat: c.id, item })} />
               ))}
             </div>
           )}
           {!all && rows.length > PAGE && <button className="btn" onClick={() => setAllFor(`${cat}|${search}`)}>{t('Show all')} ({rows.length})</button>}
         </div>
       </div>
-      {open && <ProductSheet cats={cats} cat={open.cat} item={open.item} canEdit={canEdit} onClose={() => setOpen(null)} />}
-      {changes && <ChangesSheet cats={cats} onClose={() => setChanges(false)} />}
+      {open && <ProductSheet cats={cats} cat={open.cat} item={open.item} canEdit={canEdit} costMap={canEdit ? costMap : null} onClose={() => setOpen(null)} />}
+      {changes && <ChangesSheet cats={cats} withCost={canEdit} onClose={() => setChanges(false)} />}
       {bulk && current && <BulkSheet cat={current} onClose={() => setBulk(false)} />}
     </div>
   )
 }
 
-type RowProps = { cat: PriceCategory; item: PriceItem; canEdit: boolean; catHead: string; groupHead: string; onOpen: () => void }
+/** cost: the costs when they are on screen, else null. */
+type RowProps = { cat: PriceCategory; item: PriceItem; canEdit: boolean; cost: CostMap | null; catHead: string; groupHead: string; onOpen: () => void }
+
+/** The eye that shows or hides what products cost, on the Prices page and in the Builder. Hidden each time the app opens. */
+export function CostEye({ compact }: { compact?: boolean }) {
+  const on = useCostShown()
+  const label = on ? t('Hide cost') : t('Show cost')
+  return (
+    <button className={`cost-eye${on ? ' on' : ''}`} aria-pressed={on} title={label} aria-label={label} onClick={() => setCostShown(!on)}>
+      <Icon name={on ? 'eye' : 'eyeOff'} size={18} />{!compact && <span>{t('Cost')}</span>}
+    </button>
+  )
+}
+
+/** The cost of one product as its own edit box, with the profit on the alone price as a tooltip. */
+function CostCell({ cat, item, cost }: { cat: PriceCategory; item: PriceItem; cost: CostMap }) {
+  const value = cost[costKey(cat.id, item.id)] ?? null
+  const p = profitOf(item.alone ?? item.in, value)
+  return (
+    <span className="cost-cell" title={p ? `${t('Profit')}: ${profitText(p)}` : undefined}>
+      <PriceCell value={value} label={t('Cost')} canEdit onSave={(v) => costs.save(cat.id, item.id, item.name, v, value).catch(fail)} />
+    </span>
+  )
+}
 
 const specsOf = (item: PriceItem) => specChips(item)
 
@@ -159,7 +189,7 @@ function WebChip({ item }: { item: PriceItem }) {
 const saver = (cat: PriceCategory, item: PriceItem) => (field: 'in' | 'alone' | 'online' | 'onlineSale', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
 
 /** One line of the table: name and company, specs, then the two prices you can type into. */
-function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
+function ListRow({ cat, item, canEdit, cost, catHead, groupHead, onOpen }: RowProps) {
   const save = saver(cat, item)
   return (
     <>
@@ -181,13 +211,14 @@ function ListRow({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
         <PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} />
         <PriceCell value={item.online ?? null} label={t('Online')} canEdit={canEdit} onSave={(v) => save('online', v)} />
         <PriceCell value={item.onlineSale ?? null} label={t('Online sale')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} />
+        {cost && <CostCell cat={cat} item={item} cost={cost} />}
       </div>
     </>
   )
 }
 
 /** The same product as a card: tap the top to open it, type into either price at the bottom. */
-function PriceCard({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps) {
+function PriceCard({ cat, item, canEdit, cost, catHead, groupHead, onOpen }: RowProps) {
   const save = saver(cat, item)
   return (
     <>
@@ -210,6 +241,8 @@ function PriceCard({ cat, item, canEdit, catHead, groupHead, onOpen }: RowProps)
           <label><span>{t('Alone')}</span><PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} /></label>
           <label><span>{t('Online')}</span><PriceCell value={item.online ?? null} label={t('Online')} canEdit={canEdit} onSave={(v) => save('online', v)} /></label>
           <label><span>{t('Online sale')}</span><PriceCell value={item.onlineSale ?? null} label={t('Online sale')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} /></label>
+          {cost && <label className="pcard-cost"><span>{t('Cost')}</span><CostCell cat={cat} item={item} cost={cost} /></label>}
+          {cost && <div className="pcard-profit"><span>{t('Profit')}</span><b>{profitText(profitOf(item.alone ?? item.in, cost[costKey(cat.id, item.id)]))}</b></div>}
         </div>
       </article>
     </>
@@ -264,7 +297,7 @@ function PriceCell({ value, label, canEdit, onSave }: { value: number | null; la
 }
 
 /** One product: every field, its history, hide or delete. Also used to add a product. */
-function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: PriceCategory[]; cat: string; item: PriceItem | null; canEdit: boolean; onClose: () => void }) {
+function ProductSheet({ cats, cat: startCat, item, canEdit, costMap, onClose }: { cats: PriceCategory[]; cat: string; item: PriceItem | null; canEdit: boolean; costMap: CostMap | null; onClose: () => void }) {
   const [cat, setCat] = useState(startCat)
   const [name, setName] = useState(item?.name ?? '')
   const [company, setCompany] = useState(item?.company ?? '')
@@ -272,6 +305,10 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
   const [alone, setAlone] = useState(item?.alone === null || item?.alone === undefined ? '' : String(item.alone))
   const [online, setOnline] = useState(item?.online === null || item?.online === undefined ? '' : String(item.online))
   const [onlineSale, setOnlineSale] = useState(item?.onlineSale === null || item?.onlineSale === undefined ? '' : String(item.onlineSale))
+  // The cost as it was when the sheet opened, and as typed. Only for roles that may edit prices.
+  const cost0 = item && costMap ? costMap[costKey(startCat, item.id)] ?? null : null
+  const [cost, setCost] = useState(cost0 === null ? '' : String(cost0))
+  const costOn = useCostShown()
   // The online prices can also change while this is open (linking to the website fills them), so Save only
   // writes them when they were typed here.
   const [online0, onlineSale0] = useState(() => [online, onlineSale])[0]
@@ -284,8 +321,12 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
   const [sure, setSure] = useState(false)
   const [log, setLog] = useState<PriceChange[] | null>(null)
   useEffect(() => {
-    if (item) prices.history(20, { cat: startCat, pid: item.id }).then(setLog, () => setLog([]))
-  }, [item, startCat])
+    if (!item) return
+    const one = { cat: startCat, pid: item.id }
+    // Cost changes are in their own log that only roles that may edit prices can read.
+    Promise.all([prices.history(20, one), canEdit ? costs.history(20, one).catch(() => []) : Promise.resolve([])])
+      .then(([a, b]) => setLog([...a, ...b].sort((x, y) => y.at - x.at).slice(0, 20)), () => setLog([]))
+  }, [item, startCat, canEdit])
   const specFields = SPEC_FIELDS[cat] ?? []
   const guessedPsu = cat === 'case' ? casePsu({ id: '', name, in: null, alone: null, warranty: null, company: '' }) : ''
   // Suggestions for specs and companies come from what the list already uses.
@@ -296,7 +337,8 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
 
   const save = async () => {
     const nums = [inb, alone, warranty, online, onlineSale].map(parseMoney)
-    if (nums.some((n) => n === undefined)) return showToast(t('Not a number.'))
+    const costNow = canEdit ? parseMoney(cost) : cost0
+    if (nums.some((n) => n === undefined) || costNow === undefined) return showToast(t('Not a number.'))
     if (!name.trim()) return showToast(t('Give the product a name.'))
     const patch: ItemPatch = { name: name.trim(), company: company.trim(), in: nums[0]!, alone: nums[1]!, warranty: nums[2]!, group: group.trim() || undefined, hidden: hiddenOn || undefined, out: outOn || undefined }
     if (online !== online0) patch.online = nums[3] ?? undefined
@@ -306,11 +348,18 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
     setBusy(true)
     try {
       if (item && cat !== startCat) {
-        // Moving to another category: add it there, then take it out of the old one.
+        // Moving to another category: add it there, then take it out of the old one. Its cost follows.
         const keep = live(cats, startCat, item)
-        await prices.save(cat, newProductId(), { online: keep.online, onlineSale: keep.onlineSale, web: keep.web && (JSON.parse(JSON.stringify(keep.web)) as typeof keep.web), ...patch }, null)
+        const id = newProductId()
+        await prices.save(cat, id, { online: keep.online, onlineSale: keep.onlineSale, web: keep.web && (JSON.parse(JSON.stringify(keep.web)) as typeof keep.web), ...patch }, null)
         await prices.remove(startCat, item)
-      } else await prices.save(cat, item?.id ?? newProductId(), patch, item)
+        if (cost0 !== null) await costs.move({ cat: startCat, pid: item.id }, { cat, pid: id }, cost0)
+        if (canEdit && costNow !== cost0) await costs.save(cat, id, patch.name!, costNow, cost0)
+      } else {
+        const id = item?.id ?? newProductId()
+        await prices.save(cat, id, patch, item)
+        if (canEdit && costNow !== cost0) await costs.save(cat, id, patch.name!, costNow, cost0)
+      }
       showToast(t('Saved'))
       onClose()
     } catch (e) {
@@ -323,6 +372,7 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
     setBusy(true)
     try {
       await prices.remove(startCat, item)
+      if (cost0 !== null) await costs.remove(startCat, item.id).catch(() => {})
       showToast(t('Deleted'))
       onClose()
     } catch (e) {
@@ -353,6 +403,23 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
           <label><span>{t('Online')}</span><input inputMode="numeric" value={online} readOnly={ro} placeholder={t('Website price')} onChange={(e) => setOnline(e.target.value)} /></label>
           <label><span>{t('Online sale')}</span><input inputMode="numeric" value={onlineSale} readOnly={ro} placeholder={t('Empty = no sale')} onChange={(e) => setOnlineSale(e.target.value)} /></label>
         </div>
+        {canEdit && (
+          <div className="cost-field">
+            <label><span>{t('Cost')} <small className="muted">({t('only people who can edit prices see this')})</small></span>
+              <span className="cost-input">
+                {costOn
+                  ? <input inputMode="numeric" value={cost} placeholder={t('What it costs the shop')} onChange={(e) => setCost(e.target.value)} />
+                  : <input readOnly value={cost ? '•••••' : ''} placeholder="—" aria-label={t('Cost (hidden)')} onFocus={() => setCostShown(true)} />}
+                <CostEye compact />
+              </span>
+            </label>
+            {costOn && (() => {
+              const c = parseMoney(cost) ?? null
+              const a = profitOf(parseMoney(alone) ?? null, c), b = profitOf(parseMoney(inb) ?? null, c)
+              return (a || b) ? <p className="hint">{t('Profit')}: {t('Alone')} {profitText(a)} · {t('In build')} {profitText(b)}</p> : null
+            })()}
+          </div>
+        )}
         <label><span>{t('Warranty (years)')}</span><input inputMode="numeric" value={warranty} readOnly={ro} onChange={(e) => setWarranty(e.target.value)} /></label>
         <ChoiceField label={t('Company')} value={company} options={companies} more={otherCompanies} moreLabel={t('Other companies')} readOnly={ro} onChange={setCompany} />
         {specFields.length > 0 && (
@@ -606,7 +673,9 @@ function ChoiceField({ label, value, options, more = [], moreLabel, readOnly, on
 }
 
 function ChangeList({ log, cats }: { log: PriceChange[]; cats?: PriceCategory[] }) {
-  const ACT: Record<string, string> = { add: 'Added', remove: 'Deleted', bulk: 'Changed all by %' }
+  // Cost lines only show the numbers while the cost eye is open.
+  const costOn = useCostShown()
+  const ACT: Record<string, string> = { add: 'Added', remove: 'Deleted', bulk: 'Changed all by %', cost: 'Cost' }
   return (
     <ul className="changes">
       {log.map((l) => (
@@ -619,7 +688,7 @@ function ChangeList({ log, cats }: { log: PriceChange[]; cats?: PriceCategory[] 
           </div>
           {cats && <div dir="auto">{l.name}</div>}
           {l.act !== 'remove' && l.act !== 'add' && (
-            <div className="muted">{l.changes.map((c) => { const v = (x: string) => (c.f === 'out' ? t(x) : x) || '—'; return `${t(fieldLabel(c.f))}: ${v(c.from)} → ${v(c.to)}` }).join(' · ')}</div>
+            <div className="muted">{l.changes.map((c) => { const v = (x: string) => (c.f === 'cost' && !costOn ? (x ? '•••••' : '—') : (c.f === 'out' ? t(x) : x) || '—'); return `${t(fieldLabel(c.f))}: ${v(c.from)} → ${v(c.to)}` }).join(' · ')}</div>
           )}
         </li>
       ))}
@@ -628,12 +697,14 @@ function ChangeList({ log, cats }: { log: PriceChange[]; cats?: PriceCategory[] 
 }
 
 /** The latest changes to the whole list, newest first. */
-function ChangesSheet({ cats, onClose }: { cats: PriceCategory[]; onClose: () => void }) {
+function ChangesSheet({ cats, withCost, onClose }: { cats: PriceCategory[]; withCost: boolean; onClose: () => void }) {
   const [log, setLog] = useState<PriceChange[] | null>(null)
   const [max, setMax] = useState(40)
   useEffect(() => {
-    prices.history(max).then(setLog, () => setLog([]))
-  }, [max])
+    // Cost changes come from their own log, for those who may see cost.
+    Promise.all([prices.history(max), withCost ? costs.history(max).catch(() => []) : Promise.resolve([])])
+      .then(([a, b]) => setLog([...a, ...b].sort((x, y) => y.at - x.at).slice(0, max)), () => setLog([]))
+  }, [max, withCost])
   return (
     <Sheet title={t('Price changes')} onClose={onClose}>
       {log === null ? <p className="muted">{t('Loading…')}</p> : log.length === 0 ? <Empty icon="clock" text={t('No changes yet.')} /> : <ChangeList log={log} cats={cats} />}

@@ -2,7 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quoteLabel, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { casePsu, matches, money, parseMoney, specChips, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
+import { buildCost, costKey, profitOf, profitText, useCosts, useCostShown } from '../data/costs'
 import { allowed, isOwner, myId, myName } from '../data/store'
+import { CostEye } from './PricesView'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
 import { Chip, Empty, Icon, SearchBox, showToast } from './ui'
@@ -117,6 +119,12 @@ export function BuilderView() {
   const lines = useMemo(() => build.lines.map((l) => fresh(cats, slotOf(l.slot).single && l.qty !== 1 ? { ...l, qty: 1 } : l)), [build.lines, cats])
   const parts = useMemo(() => chosen(cats, lines), [cats, lines])
   const sum = totals(lines, build.extra + given, build.buildDiscount)
+  // What the build costs the shop: only for roles that may edit prices, and only after the eye is pressed.
+  // It stays on this screen: it is never part of the shared live quote, a saved quote or the printed quotation.
+  const seeCost = allowed('prices.edit')
+  const { costs: costMap } = useCosts()
+  const costOn = useCostShown() && seeCost
+  const bc = buildCost(lines, costMap)
 
   // Share the build a moment after each change, so it can be watched live (one write per pause).
   const shared = JSON.stringify([build.customer, build.sales, build.extra, given, build.buildDiscount, lines.filter((l) => l.name).map((l) => [l.slot, l.name, l.qty, l.alone, l.in, l.warranty])])
@@ -344,6 +352,7 @@ export function BuilderView() {
                       </button>
                       <div className="bx-side-of-part">
                         <b className="bx-price">{money(unit * line.qty)}</b>
+                        {costOn && line.cat && line.pid && <span className="bx-cost-line">{t('Cost')} {money(costMap[costKey(line.cat, line.pid)] === undefined ? null : costMap[costKey(line.cat, line.pid)] * line.qty)}</span>}
                         {!slot.single && (
                           <span className="bl-qty">
                             <button className="icon-btn" aria-label={t('Less')} disabled={line.qty <= 1} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.max(1, l.qty - 1) }))}><Icon name="minus" size={14} /></button>
@@ -386,6 +395,18 @@ export function BuilderView() {
             {given > 0 && <div className="bl-grant"><span>{!editing && grant ? tn('Extra discount from %name', { name: grant.byName || t('Someone') }) : t('Extra discount given')}</span><b>−{money(given)}</b></div>}
             <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)} <small>EGP</small></b></div>
             {sum.discount > 0 && <p className="bx-saved">{tn('The customer saves %n', { n: money(sum.discount) })}</p>}
+            {seeCost && filled.length > 0 && (
+              <div className={`bx-cost${costOn ? ' on' : ''}`}>
+                <div className="bx-cost-head"><span>{t('Cost and profit')}</span><CostEye compact /></div>
+                {costOn && (
+                  <>
+                    <div><span>{t('Cost')}</span><b>{money(bc.cost)}</b></div>
+                    <div><span>{t('Profit')}</span><b className={sum.total - bc.cost < 0 ? 'bad' : 'good'}>{profitText(profitOf(sum.total, bc.cost))}</b></div>
+                    {bc.missing > 0 && <p className="hint">{tn('%n parts have no cost yet, so the profit is higher than it really is.', { n: bc.missing })}</p>}
+                  </>
+                )}
+              </div>
+            )}
             <div className="actions">
               <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print quotation')}</button>
               {!editing && <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>}

@@ -24,7 +24,7 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   'templates.edit': ['Edit caption templates', 'See and change the caption templates in Settings, Posters.'],
   delete: ['Delete posts', 'Delete posts that are not on the schedule.'],
   people: ['Manage people', 'See the system code, accept and remove people.'],
-  'prices.edit': ['Edit prices', 'Change prices, add, hide and delete products in the price list.'],
+  'prices.edit': ['Edit prices', 'Change prices, add, hide and delete products in the price list, and see and change what each product costs.'],
   'quotes.all': ["See everyone's quotes", "Watch the quote each person is building, live, and see everyone's saved quotes with who made them. Without it, people see only their own."],
   'quotes.discount': ['Give extra discount', "Add an extra discount to someone's quote while they build it (from Live quotes). It shows in their quote at once, with your name."],
   'activity.view': ['See the activity log', 'Open Activity: everything everyone did in the app (offers, prices, quotes, people, settings, engine and website), with filters. Nobody can change or remove a line. The owner always sees it.'],

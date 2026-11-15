@@ -997,3 +997,35 @@ button.stock:hover { filter: brightness(1.15); }
 .act-meta { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .act-what { font-weight: 600; font-size: 0.875rem; overflow-wrap: anywhere; text-align: start; }
 .act-more { align-self: center; }
+
+/* Cost: only for roles that may edit prices, and only after the eye is pressed. */
+.cost-eye { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-weight: 600; font-size: 0.875rem; cursor: pointer; }
+.cost-eye:hover { color: var(--text); }
+.cost-eye.on { color: var(--accent); border-color: var(--accent); }
+.ptable.with-cost .ptable-row { grid-template-columns: minmax(150px, 1.6fr) minmax(0, 1fr) 110px repeat(5, 84px); }
+.ptable-cost { color: var(--accent); }
+.cost-cell { display: block; min-width: 0; }
+.cost-cell .price-cell { color: var(--accent); font-weight: 700; }
+.pcard-prices .pcard-cost, .pcard-prices .pcard-profit { border-top: 1px solid var(--border); background: var(--surface-2); }
+.pcard-profit { display: flex; flex-direction: column; justify-content: center; padding: 6px 16px 8px; border-inline-start: 1px solid var(--border); min-width: 0; }
+.pcard-profit > span { font-size: 0.6875rem; font-weight: 600; color: var(--muted); }
+.pcard-profit b { font-variant-numeric: tabular-nums; direction: ltr; text-align: start; font-size: 0.9375rem; }
+.cost-field { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface-2); }
+.cost-field label { display: flex; flex-direction: column; gap: 4px; }
+.cost-field .cost-input { display: flex; gap: 8px; align-items: center; }
+.cost-field .cost-input input { flex: 1; min-width: 0; }
+.cost-field .hint { margin: 0; }
+.bx-cost-line { font-size: 0.75rem; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; direction: ltr; text-align: end; }
+.bx-cost { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--border); }
+.bx-cost.on { background: var(--surface-2); }
+.bx-cost > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.9375rem; }
+.bx-cost-head { font-weight: 600; color: var(--muted); font-size: 0.8125rem !important; }
+.bx-cost b.good { color: var(--good); }
+.bx-cost b.bad { color: var(--bad); }
+.bx-cost .hint { margin: 0; }
+.activity .act-search { display: flex; gap: 8px; align-items: center; }
+.activity .act-search > :first-child { flex: 1; min-width: 0; }
+@media (max-width: 640px) {
+  .ptable.with-cost .ptable-row { grid-template-columns: 30px repeat(5, minmax(0, 1fr)); }
+}
+.bl-sum > .bx-cost { align-items: stretch; }

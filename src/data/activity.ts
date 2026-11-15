@@ -9,6 +9,7 @@ import { fieldLabel } from './prices'
 // It is read from three places, newest first:
 //   log/{id}       what happened to each offer and post (app, engine and Facebook lines; see history.ts)
 //   priceLog/{id}  every price list change (app, and the website sync as "Website")
+//   costLog/{id}   every cost change (see costs.ts); read only by roles that may edit prices
 //   activity/{id}  everything else: Builder quotes, discounts and live edits, people and roles, settings,
 //                  engine runs asked from the app, and what the website sync sent
 // Lines are only ever added. The database rules refuse any change or removal, also for the owner.
@@ -53,6 +54,7 @@ export const ACTIVITY_TEXT: Record<string, string> = {
   'price.add': 'Product added',
   'price.remove': 'Product deleted',
   'price.bulk': 'Changed by %',
+  'cost.edit': 'Cost changed',
 }
 
 export const actText = (act: string) => ACTIVITY_TEXT[act] ?? ACT_TEXT[act] ?? act
@@ -84,7 +86,7 @@ const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…
 const changesOf = (v: unknown, label: (f: string) => string) =>
   Array.isArray(v) ? v.slice(0, 12).map((c: Record<string, unknown>) => ({ f: label(str(c.f)), from: String(c.from ?? ''), to: String(c.to ?? '') })) : undefined
 
-export type Source = 'activity' | 'log' | 'priceLog'
+export type Source = 'activity' | 'log' | 'priceLog' | 'costLog'
 
 /** One stored line as a row of the Activity page. */
 export function toRow(src: Source, id: string, d: DocumentData): ActivityRow {
@@ -93,6 +95,9 @@ export function toRow(src: Source, id: string, d: DocumentData): ActivityRow {
   if (src === 'log') {
     const engine = by === 'system' && /^prices\.checked$/.test(str(d.act))
     return { ...base, app: engine ? 'engine' : 'posters', act: str(d.act), what: str(d.title), note: str(d.note) || undefined, changes: changesOf(d.changes, (f) => FIELD_TEXT[f] ?? f), postId: str(d.postId) || undefined }
+  }
+  if (src === 'costLog') {
+    return { ...base, app: 'prices', act: 'cost.edit', what: str(d.name), note: str(d.cat) || undefined, changes: changesOf(d.changes, fieldLabel) }
   }
   if (src === 'priceLog') {
     return { ...base, app: 'prices', act: `price.${str(d.act)}`, what: str(d.name), note: str(d.cat) || undefined, changes: changesOf(d.changes, fieldLabel) }

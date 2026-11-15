@@ -3,6 +3,9 @@ import { ActivityFeed, actText, APP_LABEL, APPS, matches, type ActivityRow } fro
 import { addDays, cairoNow } from '../data/logic'
 import type { Data } from '../data/types'
 import { locale, t, tn, useLang } from '../i18n'
+import { useCostShown } from '../data/costs'
+import { allowed } from '../data/store'
+import { CostEye } from './PricesView'
 import { Chip, Empty, Icon, SearchBox } from './ui'
 
 /** How many lines one "Load more" adds. Each line is about one database read. */
@@ -44,6 +47,8 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
   const feed = useRef<ActivityFeed | null>(null)
+  const seeCost = allowed('prices.edit')
+  const costOn = useCostShown()
 
   const pick = (id: Range) => {
     setRange(id)
@@ -58,7 +63,8 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
   const from = cairoMidnight(fromDay <= toDay ? fromDay : toDay)
   const to = cairoMidnight(addDays(fromDay <= toDay ? toDay : fromDay, 1))
   useEffect(() => {
-    const f = new ActivityFeed(from, to)
+    // Cost changes are only readable (and only read) for roles that may edit prices.
+    const f = new ActivityFeed(from, to, allowed('prices.edit') ? ['activity', 'log', 'priceLog', 'costLog'] : undefined)
     feed.current = f
     setRows(null)
     setErrors([])
@@ -130,7 +136,10 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
           </select>
         </label>
       </div>
-      <SearchBox value={search} onChange={setSearch} placeholder={t('Search names, products, notes')} />
+      <div className="act-search">
+        <SearchBox value={search} onChange={setSearch} placeholder={t('Search names, products, notes')} />
+        {seeCost && <CostEye />}
+      </div>
       <p className="hint">
         {rows === null ? t('Loading…') : filtered ? tn('%shown of %n loaded lines match.', { shown: shown.length, n: all.length }) : tn('%n lines loaded.', { n: all.length })}
         {' '}{t('Cairo time. Nobody can change or remove a line.')}
@@ -163,7 +172,7 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
                   {r.note && <p className="small" dir="auto">{r.note}</p>}
                   {r.changes?.map((c, i) => (
                     <p key={i} className="small log-change" dir="auto">
-                      <span className="muted">{t(c.f)}:</span> {c.from && <><s dir="auto">{c.from}</s> → </>}<span dir="auto">{c.to || '-'}</span>
+                      <span className="muted">{t(c.f)}:</span> {r.act === 'cost.edit' && !costOn ? <span>{t('Hidden. Press the eye to see it.')}</span> : <>{c.from && <><s dir="auto">{c.from}</s> → </>}<span dir="auto">{c.to || '-'}</span></>}
                     </p>
                   ))}
                 </li>

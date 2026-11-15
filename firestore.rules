@@ -273,6 +273,31 @@ service cloud.firestore {
         : request.resource.data.keys().hasOnly(['name', 'order', 'items', 'importedAt']) && request.resource.data.items is map);
       allow delete: if false;
     }
+    // What each product costs the shop. Kept apart from prices/* (which everyone inside, the engine and the website
+    // sync read) so that only 'Edit prices' can read it at all. costs/{category} { items: { [productId]: { cost, at, byName } } }.
+    match /costs/{cat} {
+      allow read: if can('prices.edit');
+      allow create, update: if can('prices.edit')
+        && cat.size() <= 40 && cat != '_meta'
+        && request.resource.data.keys().hasOnly(['items'])
+        && request.resource.data.items is map;
+      allow delete: if false;
+    }
+    // Every cost change, like priceLog but only for those who may see cost. Nobody changes or removes a line.
+    match /costLog/{id} {
+      allow read: if can('prices.edit');
+      allow create: if can('prices.edit')
+        && request.resource.data.keys().hasOnly(['cat', 'pid', 'name', 'act', 'changes', 'at', 'by', 'byName'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.act == 'cost'
+        && request.resource.data.cat is string && request.resource.data.cat.size() <= 40
+        && request.resource.data.pid is string && request.resource.data.pid.size() <= 40
+        && request.resource.data.name is string && request.resource.data.name.size() <= 400
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.changes is list && request.resource.data.changes.size() <= 2;
+      allow update, delete: if false;
+    }
     // New offer, "Versions of one product": a person asks for every website photo of one product (one request each,
     // overwritten by the next). The engine answers in the same document with its service account.
     match /photoAsks/{uid} {
