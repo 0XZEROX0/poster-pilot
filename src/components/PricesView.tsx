@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { bulkPatches, fieldLabel, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, usePrices, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem } from '../data/prices'
+import { bulkPatches, casePsu, fieldLabel, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, usePrices, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem } from '../data/prices'
 import { allowed } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -128,7 +128,7 @@ export function PricesView() {
 
 type RowProps = { cat: PriceCategory; item: PriceItem; canEdit: boolean; catHead: string; groupHead: string; onOpen: () => void }
 
-const specsOf = (item: PriceItem) => Object.values(item.specs ?? {}).filter(Boolean)
+const specsOf = (item: PriceItem) => specChips(item)
 const saver = (cat: PriceCategory, item: PriceItem) => (field: 'in' | 'alone', value: number | null) => prices.save(cat.id, item.id, { [field]: value }, item).catch(fail)
 
 /** One line of the table: name and company, specs, then the two prices you can type into. */
@@ -249,6 +249,7 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
     if (item) prices.history(20, { cat: startCat, pid: item.id }).then(setLog, () => setLog([]))
   }, [item, startCat])
   const specFields = SPEC_FIELDS[cat] ?? []
+  const guessedPsu = cat === 'case' ? casePsu({ id: '', name, in: null, alone: null, warranty: null, company: '' }) : ''
   // Suggestions for specs and companies come from what the list already uses.
   const known = (key: string) => [...new Set(cats.flatMap((c) => c.items.map((i) => i.specs?.[key] ?? '')).filter(Boolean))].sort()
   // Companies of this category first, then the ones used elsewhere in the list.
@@ -314,10 +315,11 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, onClose }: { cats: P
         {specFields.length > 0 && (
           <div className="form-row two">
             {specFields.map((k) => (
-              <ChoiceField key={k} label={t(SPEC_LABEL[k])} value={specs[k] ?? ''} options={known(k)} readOnly={ro} onChange={(v) => setSpecs({ ...specs, [k]: v })} />
+              <ChoiceField key={k} label={t(SPEC_LABEL[k])} value={specs[k] ?? ''} options={k === 'psu' ? [...new Set(['No', ...known(k)])] : known(k)} readOnly={ro} onChange={(v) => setSpecs({ ...specs, [k]: v })} />
             ))}
           </div>
         )}
+        {cat === 'case' && !(specs.psu ?? '').trim() && <p className="hint">{guessedPsu ? tn('Comes with a %w power supply, going by the name. The Builder will not ask for another one.', { w: guessedPsu }) : t('No power supply, going by the name. Pick a wattage above if this case comes with one.')}</p>}
         <label><span>{t('Group')}</span><input dir="auto" value={group} readOnly={ro} placeholder={t('Optional, for example AIR or Liquid')} onChange={(e) => setGroup(e.target.value)} /></label>
         <label className="check"><input type="checkbox" checked={outOn} disabled={ro} onChange={(e) => setOut(e.target.checked)} /> {t('Out of stock')}</label>
         <label className="check"><input type="checkbox" checked={hiddenOn} disabled={ro} onChange={(e) => setHidden(e.target.checked)} /> {t('Hidden (not offered in builds)')}</label>

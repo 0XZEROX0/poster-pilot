@@ -1,7 +1,7 @@
 import { getAuth } from 'firebase/auth'
 import { addDoc, collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
 import { firestore } from './firebase'
-import type { PriceCategory, PriceItem } from './prices'
+import { casePsu, type PriceCategory, type PriceItem } from './prices'
 
 /** A kind of part in a build. `cats` are the price-list categories it is picked from; empty means any. */
 /** `single`: a build has only one of these (one motherboard, one CPU...), so no second row and no quantity. */
@@ -79,6 +79,9 @@ export function totals(lines: Line[], extra: number, buildDiscount: boolean) {
   return { subtotal, saved, discount, total: subtotal - discount }
 }
 
+/** "a 750W power supply", or "a power supply" when the wattage is unknown. */
+export const psuWords = (w: string) => (w && w !== 'Yes' ? `a ${w} power supply` : 'a power supply')
+
 const norm = (s: string | undefined) => (s ?? '').toUpperCase().replace(/[\s-]+/g, '')
 
 /**
@@ -97,6 +100,10 @@ export function misfit(cat: string, item: PriceItem, others: { cat: string; item
     const ram = rams.find((r) => r.specs?.memory && s.memory && norm(r.specs.memory) !== norm(s.memory))
     if (ram) return `${s.memory}, RAM is ${ram.specs!.memory}`
   }
+  // A case that comes with a power supply needs no second one.
+  const box = casePsu(others.find((o) => o.cat === 'case')?.item)
+  if (cat === 'psu' && box) return `The case already comes with ${psuWords(box)}`
+  if (cat === 'case' && casePsu(item) && others.some((o) => o.cat === 'psu')) return `Comes with ${psuWords(casePsu(item))}, so a separate PSU is not needed`
   return ''
 }
 

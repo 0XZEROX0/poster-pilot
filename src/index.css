@@ -838,6 +838,8 @@ button.stock:hover { filter: brightness(1.15); }
 .bx-choose { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 600; }
 .bx-empty { background: transparent; box-shadow: none; border: 1.5px dashed var(--border); }
 .bx-empty:hover { border-color: var(--accent); }
+.bx-included { background: var(--good-soft); border: 1px solid transparent; }
+.bx-included .bx-side-of-part { color: var(--good, #1a7f37); }
 .bx-side-of-part { display: flex; align-items: center; gap: 8px; flex: none; }
 .bx-price { font-size: 1rem; font-variant-numeric: tabular-nums; direction: ltr; min-width: 84px; text-align: end; }
 .bx-acts { display: inline-flex; }

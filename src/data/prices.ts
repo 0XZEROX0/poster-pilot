@@ -44,8 +44,29 @@ export type PriceChange = { id: string; cat: string; pid: string; name: string; 
 export type ItemPatch = Partial<Omit<PriceItem, 'id' | 'at' | 'byName'>>
 
 /** Which spec fields each category has. The builder uses socket and memory to check that parts fit. */
-export const SPEC_FIELDS: Record<string, string[]> = { cpu: ['socket'], mb: ['socket', 'memory'], ram: ['memory'], ssd: ['size'] }
-export const SPEC_LABEL: Record<string, string> = { socket: 'Socket', memory: 'Memory', size: 'Size' }
+export const SPEC_FIELDS: Record<string, string[]> = { cpu: ['socket'], mb: ['socket', 'memory'], ram: ['memory'], ssd: ['size'], case: ['psu'] }
+export const SPEC_LABEL: Record<string, string> = { socket: 'Socket', memory: 'Memory', size: 'Size', psu: 'Power supply in the box' }
+
+const NO = /^(no|none|-|—|لا)$/i
+
+/**
+ * The power supply a case comes with, such as "750W" (or "Yes" when the wattage is unknown), or '' when it has none.
+ * "Power supply in the box" on the Prices page wins ("No" means none); when it is empty, the name tells:
+ * "Xigmatek Osiris II + Valkyrie 750W" or "Darkflash K430 + GS750 ... PSU".
+ */
+export function casePsu(item: PriceItem | undefined): string {
+  if (!item) return ''
+  const set = (item.specs?.psu ?? '').trim()
+  if (set) return NO.test(set) ? '' : set
+  const name = item.name
+  const watt = name.match(/\+.*?\b(\d{3,4})\s*W\b/i)?.[1] ?? (/\bPSU\b/i.test(name) ? name.match(/\+\s*[A-Za-z]{0,4}(\d{3,4})\b/)?.[1] : undefined)
+  if (watt) return `${watt}W`
+  return /\+.*\bPSU\b/i.test(name) ? 'Yes' : ''
+}
+
+/** The specs to show as chips: "AM5", "DDR5", "PSU 750W". */
+export const specChips = (item: PriceItem): string[] =>
+  Object.entries(item.specs ?? {}).flatMap(([k, v]) => (!v ? [] : k === 'psu' ? (NO.test(v) ? [] : [`PSU ${v}`]) : [v]))
 
 const FIELD_LABEL: Record<string, string> = { in: 'In build', alone: 'Alone', warranty: 'Warranty', name: 'Name', company: 'Company', group: 'Group', hidden: 'Hidden', out: 'Stock', specs: 'Specs' }
 export const fieldLabel = (f: string) => FIELD_LABEL[f] ?? SPEC_LABEL[f.replace(/^specs\./, '')] ?? f
@@ -205,6 +226,8 @@ export function demoPrices(): PriceCategory[] {
     { id: 'ram', name: 'RAM', order: 3, items: [P('Lexar DDR4 8GB 3200Mhz CL22', 3000, 3500, 1, 'Lexar', { memory: 'DDR4' }), P('Patriot Viper Steel 16GB 3200Mhz CL16', 7000, 8000, 3, 'Patriot', { memory: 'DDR4' }), P('Twinmos Volt X 16GB 6000Mhz CL36 Black', 14500, 14500, 1, 'Twinmos', { memory: 'DDR5' })] },
     { id: 'vga', name: 'Graphics card', order: 4, items: [P('ASUS Dual RX 7600 8GB OC', 21000, 21000, 3, 'Asus'), P('ASUS Dual RTX 5060 OC Edition 8GB', 29000, 30000, 3, 'Asus'), P('Gigabyte GeForce RTX 5070 GAMING OC 12G', 47500, 49500, 3, 'Gigabyte')] },
     { id: 'ssd', name: 'SSD / HDD', order: 5, items: [P('Hiksemi NVMe 256GB', 2500, 2800, 1, 'HikSemi', { size: '256GB' }), P('HIKSEMI Wave 512GB NVMe M.2 SSD', 3800, 4100, 1, 'HikSemi', { size: '512GB' }), P('WD Blue SN5000 NVMe 1TB Gen4', 7450, 7500, 3, 'Western Digital', { size: '1TB' })] },
+    { id: 'case', name: 'Case', order: 6, items: [P('Xigmatek Osiris II 4 Fan ARGB', 3000, 3000, 1, 'Xigmatek'), P('Xigmatek Osiris II 4 Fan ARGB + Valkyrie 750W ATX3.1 80+ Bronze', 4500, 4500, 1, 'Xigmatek'), P('AeroCool P500C ARGB + 600W 80+', 4500, 4500, 1, 'AeroCool')] },
+    { id: 'psu', name: 'Power supply', order: 7, items: [P('Xigmatek Valkyrie 750W 80+ Bronze', 2600, 2700, 3, 'Xigmatek'), P('MSI MAG A650BN 650W 80+ Bronze', 2400, 2500, 3, 'MSI')] },
     { id: 'cooler', name: 'Cooler', order: 8, items: [P('Thermalright Assassin X 120 Refined SE ARGB Black', 1250, 1250, 3, 'Thermalright', undefined, 'AIR'), P('Darkflash C400 ARGB, Single Tower, 4 Heat Pipes - Black', 800, 800, 1, 'Darkflash', undefined, 'AIR')] },
     { id: 'monitor', name: 'Monitor', order: 10, items: [P('MSI PRO MP276E18 27″ FHD IPS 180Hz 1ms', 6000, 6000, 2, 'MSI'), P('MSI MAG 276QE27 27" WQHD IPS 275Hz 0.5MS', 11500, 11500, 3, 'MSI')] },
   ]
