@@ -686,7 +686,7 @@ function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]
           <tr className="q-info"><td className="q-c"><b>Location</b></td><td colSpan={cols - 1} className="q-c" dir="rtl" lang="ar"><b>{SHOP.location}</b></td></tr>
           <tr className="q-info"><td className="q-c"><b>Website</b></td><td colSpan={cols - 1} className="q-c"><b className="q-link">{SHOP.website}</b></td></tr>
           <tr className="q-info"><td className="q-c"><b>Phone</b></td><td colSpan={cols - 1} className="q-c"><b>{SHOP.phone}</b></td></tr>
-          {prices && <tr><td colSpan={cols} className="q-c q-foot" dir="rtl" lang="ar"><b>{SHOP.footer}</b></td></tr>}
+          <tr><td colSpan={cols} className="q-c q-foot" dir="rtl" lang="ar"><b>{SHOP.footer}</b></td></tr>
         </tbody>
       </table>
     </div>
