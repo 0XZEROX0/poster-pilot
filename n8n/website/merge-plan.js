@@ -29,8 +29,11 @@ function attrsOf(ps) {
 }
 const out = [], problems = [];
 for (const g of String(S.groups || '').split(';').map(x => x.split(',').map(Number).filter(Boolean)).filter(x => x.length)) {
-  const ps = g.map(id => pages[id]).filter(Boolean);
+  let ps = g.map(id => pages[id]).filter(Boolean);
   if (ps.length !== g.length) { problems.push(`${g.join(',')}: a page was not found`); continue; }
+  // A page with options that was never published (Ryzen 7 7700) only lends its details; the shown simple page is kept.
+  const unpublished = ps.filter(p => p.type !== 'simple' && p.status !== 'publish');
+  if (unpublished.length && ps.some(p => p.type === 'simple')) ps = ps.filter(p => !unpublished.includes(p));
   if (ps.some(p => p.type !== 'simple')) {
     // Already merged (an earlier run): only puts back attributes the old pages had.
     const v = ps.find(p => p.type === 'variable'), opt = v && (v.attributes || []).find(a => a.variation);
@@ -43,9 +46,11 @@ for (const g of String(S.groups || '').split(';').map(x => x.split(',').map(Numb
   }
   const byOpt = {};
   for (const p of ps) (byOpt[optionOf(p.name)] = byOpt[optionOf(p.name)] || []).push(p);
-  if (!byOpt.Box || !byOpt.Tray) { problems.push(`${ps.map(p => p.name).join(' + ')}: not one Box and one Tray`); continue; }
+  // An option no page has yet is added out of stock with no price (set it later from the app).
+  if (!byOpt.Box && !byOpt.Tray) { problems.push(`${ps.map(p => p.name).join(' + ')}: no Box or Tray page`); continue; }
   const best = l => l.slice().sort((a, b) => (a.stock_status === 'instock' ? 0 : 1) - (b.stock_status === 'instock' ? 0 : 1) || (b.total_sales || 0) - (a.total_sales || 0))[0];
-  const src = { Box: best(byOpt.Box), Tray: best(byOpt.Tray) };
+  const none = { regular_price: '', sale_price: '', stock_status: 'outofstock', images: [] };
+  const src = { Box: byOpt.Box ? best(byOpt.Box) : none, Tray: byOpt.Tray ? best(byOpt.Tray) : none };
   const keep = ps.slice().sort((a, b) => (b.total_sales || 0) - (a.total_sales || 0) || a.id - b.id)[0];
   const others = ps.filter(p => p.id !== keep.id);
   const name = baseName(keep.name);
@@ -64,7 +69,7 @@ for (const g of String(S.groups || '').split(';').map(x => x.split(',').map(Numb
   out.push({ json: {
     label: `${name}: keep ${keep.id} (${keep.name}, ${keep.total_sales || 0} sold), drafts ${others.map(p => p.id + ' (' + p.name + ', ' + (p.total_sales || 0) + ' sold)').join(', ')}`,
     keep: keep.id, others: others.map(p => p.id), name,
-    put: { type: 'variable', name, attributes: [...attrsOf([keep, ...others]), { ...attrKey, options: ['Box', 'Tray'], variation: true, visible: true, position: attrsOf([keep, ...others]).length }], default_attributes: [{ ...attrKey, option: inStock }], images: imgs },
+    put: { type: 'variable', name, attributes: [...attrsOf([keep, ...others, ...unpublished]), { ...attrKey, options: ['Box', 'Tray'], variation: true, visible: true, position: attrsOf([keep, ...others, ...unpublished]).length }], default_attributes: [{ ...attrKey, option: inStock }], images: imgs },
     variations: { create: ['Box', 'Tray'].map(variation) },
     moved: Object.fromEntries(others.map(p => [p.id, keep.id])),
   } });
