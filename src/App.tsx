@@ -171,7 +171,7 @@ export default function App() {
       <div className="desk">
         <aside className="sidebar">
           <div className="brand"><Logo size={34} /><span>Static <b>OS</b></span></div>
-          {canAdd && postWork() && <button className="btn btn-primary side-add" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New post')}</button>}
+          {canAdd && postWork() && <button className="btn btn-primary side-add" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New offer')}</button>}
           <nav className="side-nav">
             {TABS.map((x, i) => (
               <Fragment key={x.id}>
@@ -226,7 +226,7 @@ export default function App() {
       </header>
       {banners}
       <main>{page}</main>
-      {canAdd && !appsOpen && (tab === 'home' || tab === 'offers') && <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New post')}><Icon name="plus" size={26} /></button>}
+      {canAdd && !appsOpen && (tab === 'home' || tab === 'offers') && <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New offer')}><Icon name="plus" size={26} /></button>}
       <nav className="tabs">
         {bar.map((x) => (
           <button key={x.id} className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>
