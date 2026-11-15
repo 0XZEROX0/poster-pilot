@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
+import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quoteLabel, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { casePsu, matches, money, parseMoney, specChips, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
 import { allowed, isOwner, myId, myName } from '../data/store'
 import { locale, t, tn } from '../i18n'
@@ -128,7 +128,7 @@ export function BuilderView() {
       const id = setTimeout(() => {
         sent.current = [...sent.current.slice(-9), now]
         setSync('sending')
-        edits.send(editing.uid, { ...build, lines }, sum.total).then(() => setSync((s) => (s === 'sending' ? (idle.current ? 'saved' : 'waiting') : s)), (e) => {
+        edits.send(editing.uid, { ...build, lines }, sum.total, editing.name).then(() => setSync((s) => (s === 'sending' ? (idle.current ? 'saved' : 'waiting') : s)), (e) => {
           sent.current = sent.current.filter((s) => s !== now)
           setSync((e as { code?: string }).code === 'permission-denied' ? 'denied' : 'offline')
         })
@@ -213,7 +213,7 @@ export function BuilderView() {
   const stopEditing = () => {
     if (editing && now !== seen.current && !sent.current.includes(now)) {
       const name = editing.name
-      edits.send(editing.uid, { ...build, lines }, sum.total).then(
+      edits.send(editing.uid, { ...build, lines }, sum.total, editing.name).then(
         () => showToast(tn("Saved in %name's quote", { name })),
         (e) => showToast((e as { code?: string }).code === 'permission-denied' ? t('Your last change was not sent: the database refused it.') : t('Your last change was not sent. Check the connection.')),
       )
@@ -476,7 +476,7 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
   }, [max, everyone])
   const remove = async (q: SavedQuote) => {
     try {
-      await quotes.remove(q.id)
+      await quotes.remove(q.id, quoteLabel(q.customer, q.total))
       setList((l) => (l ?? []).filter((x) => x.id !== q.id))
       showToast(t('Deleted'))
     } catch {
@@ -556,7 +556,7 @@ function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void
           <div><span>{t('Discount')}</span><b>{money(sum.discount)}</b></div>
           <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)}</b></div>
         </div>
-        <GiveDiscount uid={one.uid} />
+        <GiveDiscount uid={one.uid} whose={one.byName || one.sales} />
       </Sheet>
     )
   }
@@ -580,7 +580,7 @@ function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void
 }
 
 /** Shows the extra discount given on someone's open quote, and lets people with 'Give extra discount' set it. */
-function GiveDiscount({ uid }: { uid: string }) {
+function GiveDiscount({ uid, whose }: { uid: string; whose: string }) {
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined)
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
@@ -593,7 +593,7 @@ function GiveDiscount({ uid }: { uid: string }) {
   const give = async (amount: number) => {
     setBusy(true)
     try {
-      await grants.give(uid, amount)
+      await grants.give(uid, amount, whose)
       showToast(amount > 0 ? t('Discount sent. It shows in their quote now.') : t('Discount removed.'))
     } catch (e) {
       showToast((e as { code?: string }).code === 'permission-denied' ? t('Your role does not allow this.') : t('Could not save. Check the connection.'))

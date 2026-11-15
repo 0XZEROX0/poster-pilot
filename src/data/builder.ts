@@ -1,5 +1,6 @@
 import { getAuth } from 'firebase/auth'
 import { addDoc, collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { track, trackLiveEdit } from './activity'
 import { firestore } from './firebase'
 import { casePsu, type PriceCategory, type PriceItem } from './prices'
 
@@ -130,7 +131,8 @@ export interface QuoteBackend {
   /** Newest first. `everyone` lists all people's quotes (needs 'See all saved quotes'); otherwise only one's own. */
   list(max: number, everyone: boolean): Promise<SavedQuote[]>
   save(b: Build, total: number): Promise<string>
-  remove(id: string): Promise<void>
+  /** `label` names the quote in the activity log (its customer and total). */
+  remove(id: string, label?: string): Promise<void>
 }
 
 const millis = (v: unknown) => (typeof v === 'number' ? v : (v as { toMillis?: () => number } | null)?.toMillis?.() ?? 0)
@@ -154,6 +156,9 @@ const asQuote = (id: string, d: Record<string, unknown>): SavedQuote => ({
   total: Number(d.total) || 0,
 })
 
+/** How a quote is named in the activity log. */
+export const quoteLabel = (customer: string, total: number) => `${customer.trim() || 'No customer name'} · ${Math.round(total).toLocaleString('en-US')} EGP`
+
 function firestoreQuotes(): QuoteBackend {
   const db = firestore!
   return {
@@ -170,15 +175,19 @@ function firestoreQuotes(): QuoteBackend {
     async save(b, total) {
       const me = getAuth(db.app).currentUser
       const body = { ...clean(b), total, at: serverTimestamp() }
+      const label = quoteLabel(body.customer, total)
       if (b.id) {
         await updateDoc(doc(db, 'quotes', b.id), body)
+        track('builder', 'quote.updated', { what: label, ref: b.id })
         return b.id
       }
       const ref = await addDoc(collection(db, 'quotes'), { ...body, by: me?.uid ?? '', byName: me?.displayName || me?.email || '' })
+      track('builder', 'quote.saved', { what: label, ref: ref.id })
       return ref.id
     },
-    async remove(id) {
+    async remove(id, label) {
       await deleteDoc(doc(db, 'quotes', id))
+      track('builder', 'quote.deleted', { what: label, ref: id })
     },
   }
 }
@@ -207,10 +216,12 @@ function localQuotes(): QuoteBackend {
       const id = b.id ?? `q${Date.now()}`
       const list = load().filter((q) => q.id !== id)
       store([{ ...asQuote(id, clean(b)), id, at: Date.now(), by: 'demo-you', byName: 'You', total }, ...list])
+      track('builder', b.id ? 'quote.updated' : 'quote.saved', { what: quoteLabel(b.customer, total), ref: id })
       return id
     },
-    async remove(id) {
+    async remove(id, label) {
       store(load().filter((q) => q.id !== id))
+      track('builder', 'quote.deleted', { what: label, ref: id })
     },
   }
 }
@@ -288,15 +299,18 @@ export const grants = {
       () => onData(null),
     )
   },
-  async give(uid: string, amount: number): Promise<void> {
+  /** `whose` names the person whose quote it is, for the activity log. */
+  async give(uid: string, amount: number, whose = ''): Promise<void> {
     if (!firestore) return
     const me = getAuth(firestore.app).currentUser
     if (!me) return
     if (amount <= 0) {
       await deleteDoc(doc(firestore, 'grants', uid))
+      track('builder', 'quote.discount_removed', { what: whose, ref: uid })
       return
     }
     await setDoc(doc(firestore, 'grants', uid), { amount, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() })
+    track('builder', 'quote.discount', { what: whose, note: `${amount.toLocaleString('en-US')} EGP`, ref: uid })
   },
   /** Ends the discount given on one's own quote, for example when starting a new quote. */
   async clearMine(): Promise<void> {
@@ -316,7 +330,8 @@ export const grants = {
 export type QuoteEdit = { customer: string; lines: Line[]; extra: number; buildDiscount: boolean; byName: string; at: number }
 
 export const edits = {
-  async send(uid: string, b: Build, total: number): Promise<void> {
+  /** `whose` names the person whose quote it is, for the activity log. */
+  async send(uid: string, b: Build, total: number, whose = ''): Promise<void> {
     if (!firestore) return
     const me = getAuth(firestore.app).currentUser
     if (!me) return
@@ -325,6 +340,7 @@ export const edits = {
     batch.set(doc(firestore, 'edits', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() })
     batch.update(doc(firestore, 'drafts', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, total, at: serverTimestamp() })
     await batch.commit()
+    trackLiveEdit(uid, whose, quoteLabel(body.customer, total))
   },
   /** Changes made to this person's quote by someone else. */
   watchMine(onData: (e: QuoteEdit) => void): () => void {

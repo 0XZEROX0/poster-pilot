@@ -1,4 +1,5 @@
 import { type User } from 'firebase/auth'
+import { track } from './activity'
 import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch, type Firestore } from 'firebase/firestore'
 
 // Who may use the system (see firestore.rules):
@@ -10,7 +11,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'brainstorm'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
@@ -26,6 +27,7 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   'prices.edit': ['Edit prices', 'Change prices, add, hide and delete products in the price list.'],
   'quotes.all': ["See everyone's quotes", "Watch the quote each person is building, live, and see everyone's saved quotes with who made them. Without it, people see only their own."],
   'quotes.discount': ['Give extra discount', "Add an extra discount to someone's quote while they build it (from Live quotes). It shows in their quote at once, with your name."],
+  'activity.view': ['See the activity log', 'Open Activity: everything everyone did in the app (offers, prices, quotes, people, settings, engine and website), with filters. Nobody can change or remove a line. The owner always sees it.'],
   'quotes.edit': ['Edit live quotes', "Change someone's quote while they build it (from Live quotes): parts, quantities, build discount and extra discount. They see each change at once, with your name."],
 }
 /** 'owner', or the id of a role in `roles`. */
@@ -50,7 +52,7 @@ export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
   { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit'), pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }
@@ -166,9 +168,16 @@ export async function accept(db: Firestore, r: JoinRequest) {
   }
   // A database still on the earlier rules knows nothing about changing the code here.
   await run(true).catch((e) => (denied(e) ? run(false) : Promise.reject(e)))
+  track('people', 'join.accepted', { what: personLabel(r), ref: r.uid })
 }
 
-export const decline = (db: Firestore, uid: string) => deleteDoc(doc(db, 'requests', uid))
+/** How a person is named in the activity log. */
+const personLabel = (p: { name?: string; email?: string }) => [p.name, p.email].filter(Boolean).join(' · ')
+
+export async function decline(db: Firestore, r: JoinRequest) {
+  await deleteDoc(doc(db, 'requests', r.uid))
+  track('people', 'join.declined', { what: personLabel(r), ref: r.uid })
+}
 
 /** Removes a person, and takes them off the first list so they cannot walk back in. */
 export async function removeMember(db: Firestore, m: Member) {
@@ -176,16 +185,25 @@ export async function removeMember(db: Firestore, m: Member) {
   const emails = ((await getDoc(list).catch(() => null))?.data()?.emails as string[] | undefined) ?? []
   if (emails.includes(m.email) && emails[0] !== m.email) await updateDoc(list, { emails: emails.filter((e) => e !== m.email) })
   await deleteDoc(doc(db, 'members', m.uid))
+  track('people', 'member.removed', { what: personLabel(m), ref: m.uid })
 }
 
 /** Gives a person a role. The database accepts only a role that exists. */
-export const setRole = (db: Firestore, uid: string, role: Role) => updateDoc(doc(db, 'members', uid), { role })
+export async function setRole(db: Firestore, m: Member, role: Role, names: { from: string; to: string }) {
+  await updateDoc(doc(db, 'members', m.uid), { role })
+  track('people', 'member.role', { what: personLabel(m), note: `${names.from} → ${names.to}`, ref: m.uid })
+}
 
-export const saveRole = (db: Firestore, r: RoleDef) =>
-  setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms, pages: r.pages })
+export async function saveRole(db: Firestore, r: RoleDef) {
+  await setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms, pages: r.pages })
     // Rules published before pages existed refuse the field. A role that hides nothing can still be saved without it.
     .catch((e) => (denied(e) && r.pages.length === PAGES.length ? setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms }) : Promise.reject(e)))
-export const deleteRole = (db: Firestore, id: string) => deleteDoc(doc(db, 'roles', id))
+  track('people', 'role.saved', { what: r.name.trim(), note: `${r.perms.length} permissions: ${r.perms.join(', ') || '-'} · pages: ${r.pages.join(', ') || '-'}`, ref: r.id })
+}
+export async function deleteRole(db: Firestore, r: { id: string; name: string }) {
+  await deleteDoc(doc(db, 'roles', r.id))
+  track('people', 'role.deleted', { what: r.name, ref: r.id })
+}
 /** An id for a new role: short, and never one of the reserved names. */
 export const newRoleId = () => `r${Date.now().toString(36)}`
 
@@ -193,5 +211,7 @@ export const newRoleId = () => `r${Date.now().toString(36)}`
 export async function resetCode(db: Firestore): Promise<string> {
   const code = newCode()
   await setDoc(doc(db, 'secret', 'code'), { code, changedAt: Date.now(), resetAt: serverTimestamp() })
+  // The code itself is never written into the log.
+  track('people', 'code.reset')
   return code
 }

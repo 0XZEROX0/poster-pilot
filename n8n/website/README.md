@@ -24,6 +24,7 @@ static-eg.com is WordPress + WooCommerce. n8n reads and writes it with the REST 
   whose words are all in the app product's name and builds the WooCommerce change (`regular_price`, `sale_price`,
   `stock_status`; a product whose stock the website counts gets `stock_quantity: 0` for out of stock).
 - "Send it?" → "Send to website" (PUT) → `results.js` writes what the website answered back into `web.*`
-  (`sentAt`, or `error`). `Settings.dryRun` = true works everything out and sends nothing; `testNames` treats
+  (`sentAt`, or `error`), plus one line per real send in the app's activity log (`activity/{id}`, by `website`).
+  `Settings.dryRun` = true works everything out and sends nothing; `testNames` treats
   those suggested links as confirmed in a dry run.
 - `node n8n/website/build-sync.cjs` prints the workflow.
