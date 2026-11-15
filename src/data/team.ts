@@ -10,7 +10,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'brainstorm'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
@@ -19,6 +19,7 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   'designs.approve': ['Approve designs', 'Approve, redo or skip posters in Review.'],
   fix: ['Fix problems', 'Retry, change photos and ignore errors in Fix.'],
   schedule: ['Schedule', 'Set, move and cancel times in the Planner.'],
+  brainstorm: ['Brainstorm posts', 'Use the Brainstorm page: plan which approved post goes out on which day of a week. It is only a plan and never schedules anything.'],
   'templates.edit': ['Edit caption templates', 'See and change the caption templates in Settings, Posters.'],
   delete: ['Delete posts', 'Delete posts that are not on the schedule.'],
   people: ['Manage people', 'See the system code, accept and remove people.'],

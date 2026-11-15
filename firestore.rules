@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'brainstorm'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -31,7 +31,7 @@ service cloud.firestore {
       return role == 'owner' ? allPerms()
         : exists(rolePath(role)) ? get(rolePath(role)).data.perms
         : role == 'admin' ? allPerms()
-        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit']
+        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit', 'brainstorm']
         : [];
     }
     // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
@@ -331,6 +331,19 @@ service cloud.firestore {
       allow delete: if isMember() && (uid == request.auth.uid || can('quotes.discount'));
     }
     // Products and styles come from the engine. Roles with 'Edit caption templates' may change the caption templates.
+    // Brainstorm: a draft plan of which approved post could go out on which day, one document per week
+    // (plans/{the Saturday it starts on}). It is only a plan: it never sets a post's date or time.
+    match /plans/{week} {
+      allow read: if can('brainstorm');
+      allow create, update: if can('brainstorm')
+        && week.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly(['days', 'at', 'by', 'byName'])
+        && request.resource.data.days is map && request.resource.data.days.size() <= 7
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.at == request.time;
+      allow delete: if can('brainstorm');
+    }
     match /catalog/{id} {
       allow read: if isMember();
       allow create, update: if id == 'templates'

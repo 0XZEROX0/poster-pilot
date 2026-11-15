@@ -348,5 +348,22 @@ await no('editor adds fields', updateDoc(doc(pricer, 'drafts/u-sch'), U({ evil: 
 await no('editor creates a quote for someone', setDoc(doc(pricer, 'drafts/u-nobody'), { ...D(), byName: 'X' }))
 await no('editor removes someone\'s quote', deleteDoc(doc(pricer, 'drafts/u-sch')))
 await no('member without Edit live quotes changes someone\'s quote', updateDoc(doc(sch, 'drafts/u-boss'), U()))
+// brainstorm: a plan per week, never a schedule
+{
+  const W = (by, over = {}) => ({ days: { '2026-11-14': ['p1', 'p3'] }, at: serverTimestamp(), by, byName: 'B', ...over })
+  await ok('owner saves a week plan', setDoc(doc(boss, 'plans/2026-11-14'), W('u-boss')))
+  await ok('owner reads a week plan', getDoc(doc(boss, 'plans/2026-11-14')))
+  await no('role without Brainstorm reads a plan', getDoc(doc(pricer, 'plans/2026-11-14')))
+  await no('role without Brainstorm saves a plan', setDoc(doc(pricer, 'plans/2026-11-21'), W('u-hr2')))
+  await no('plan in someone else\'s name', setDoc(doc(boss, 'plans/2026-11-14'), W('u-old')))
+  await no('plan with a made-up time', setDoc(doc(boss, 'plans/2026-11-14'), W('u-boss', { at: 5 })))
+  await no('plan with extra fields', setDoc(doc(boss, 'plans/2026-11-14'), W('u-boss', { postDate: '2026-11-14' })))
+  await no('plan under a bad week id', setDoc(doc(boss, 'plans/week1'), W('u-boss')))
+  await no('plan with too many days', setDoc(doc(boss, 'plans/2026-11-14'), W('u-boss', { days: Object.fromEntries(Array.from({ length: 8 }, (_, i) => ['d' + i, []])) })))
+  await ok('owner gives pricer Brainstorm', setDoc(doc(boss, 'roles/pricer'), { name: 'Pricer', perms: ['quotes.edit', 'brainstorm'] }))
+  await ok('role with Brainstorm saves a plan', setDoc(doc(pricer, 'plans/2026-11-14'), W('u-hr2')))
+  await ok('role with Brainstorm clears a plan', deleteDoc(doc(pricer, 'plans/2026-11-14')))
+  await no('outsider reads plans', getDocs(collection(as('u-out', 'out@x.com'), 'plans')))
+}
 console.log(`${n} checks, ${bad} wrong`)
 await env.cleanup(); process.exit(bad ? 1 : 0)

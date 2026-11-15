@@ -920,3 +920,58 @@ button.stock:hover { filter: brightness(1.15); }
 .web-option-list button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .web-option-list button .muted { font-size: 0.8125rem; }
 .web-picker-opts { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+
+/* Brainstorm: a week of days to plan approved posts on. Only a plan, nothing is scheduled. */
+.bs-weeks { display: flex; flex-direction: column; gap: 10px; }
+.bs-month { display: flex; align-items: center; justify-content: space-between; gap: 4px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 2px; }
+.bs-month b { text-align: center; }
+[dir='rtl'] .bs-month .icon { transform: scaleX(-1); }
+.bs-week-chips .filter { position: relative; font-variant-numeric: tabular-nums; }
+.bs-week-chips .filter.on { background: var(--accent); color: #fff; }
+.bs-now { width: 7px; height: 7px; padding: 0 !important; border-radius: 50%; background: var(--warn) !important; }
+.bs-note { display: flex; align-items: center; gap: 6px; margin: 0; }
+.bs-days { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px 10px 10px; min-width: 0; }
+.bs-days-head { display: flex; align-items: center; gap: 10px; padding: 4px 2px 8px; }
+.bs-days-head h2 { font-size: 1rem; margin: 0; }
+.bs-clear { margin-inline-start: auto; min-height: 34px; font-size: 0.8125rem; }
+.bs-day { display: flex; gap: 10px; align-items: stretch; border-top: 1px solid var(--border); border-radius: 10px; min-height: 76px; padding: 6px 0; }
+.bs-day-name { flex: none; width: 64px; display: flex; flex-direction: column; justify-content: center; padding-inline-start: 4px; }
+.bs-day-name b { font-size: 0.9375rem; }
+.bs-day-name span { font-size: 0.75rem; color: var(--muted); }
+.bs-today .bs-day-name b { color: var(--accent); }
+.bs-today { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.bs-past .bs-day-name { opacity: 0.55; }
+.bs-day-posts { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-content: center; }
+.bs-empty { color: var(--muted); font-size: 0.8125rem; align-self: center; padding: 0 6px; }
+.bs-target { cursor: pointer; }
+.bs-target:hover, .bs-over { background: var(--accent-soft); outline: 2px dashed var(--accent); outline-offset: -2px; }
+.bs-post { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 220px; max-width: 360px; padding: 4px; border-radius: 12px; background: var(--accent-soft); cursor: grab; user-select: none; -webkit-user-select: none; }
+.bs-post .poster-small { width: 48px; border-radius: 8px; flex: none; }
+.bs-post .poster-brand { display: none; }
+.bs-post .grip { width: 22px; }
+.bs-post-text { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 0.8125rem; line-height: 1.3; }
+.bs-post-text span { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 600; }
+.bs-post-text i { font-style: normal; font-size: 0.75rem; color: var(--text-2); }
+.bs-post-text i.good { color: var(--good); font-weight: 600; }
+.bs-posted { background: var(--good-soft); }
+.bs-gone { background: var(--surface-2); color: var(--muted); padding: 8px 6px 8px 12px; font-size: 0.8125rem; cursor: default; }
+.bs-gone span { flex: 1; }
+.bs-post .icon-btn { width: 30px; height: 30px; flex: none; }
+.bs-tray.bs-over { outline-offset: -2px; }
+.tray-card.bs-in { opacity: 0.6; }
+.bs-in-day { color: var(--accent); font-weight: 600; }
+.desk .brainstorm .tray { max-height: calc(100dvh - 176px); overflow-y: auto; position: sticky; top: 0; }
+@media (max-width: 1023px) {
+  .brainstorm .tray { padding: 8px 10px; gap: 6px; }
+  .brainstorm .tray .review-bar { min-height: 0; }
+  .brainstorm .tray-card { width: 84px; padding: 4px; gap: 2px; }
+  .brainstorm .tray-card .grip { top: 6px; inset-inline-end: 6px; width: 28px; height: 28px; }
+  .brainstorm .tray-title { -webkit-line-clamp: 1; font-size: 0.75rem; }
+  .brainstorm .tray-when { font-size: 0.6875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bs-filter-btn.on { color: var(--accent); background: var(--accent-soft); }
+}
+@media (max-width: 759px) {
+  .bs-day { min-height: 64px; }
+  .bs-day-name { width: 48px; }
+  .bs-post { flex-basis: 100%; max-width: none; }
+}
