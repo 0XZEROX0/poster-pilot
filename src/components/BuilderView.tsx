@@ -86,7 +86,7 @@ export function BuilderView() {
   }, [build, editing])
 
   // Lines always show today's names and prices from the price list.
-  const lines = useMemo(() => build.lines.map((l) => fresh(cats, l)), [build.lines, cats])
+  const lines = useMemo(() => build.lines.map((l) => fresh(cats, slotOf(l.slot).single && l.qty !== 1 ? { ...l, qty: 1 } : l)), [build.lines, cats])
   const parts = useMemo(() => chosen(cats, lines), [cats, lines])
   const sum = totals(lines, build.extra + given, build.buildDiscount)
 
@@ -239,16 +239,16 @@ export function BuilderView() {
                   </span>
                 )}
               </button>
-              <span className="bl-qty">
+              {slot.single ? <span className="bl-qty bl-qty-one"><b>1</b></span> : <span className="bl-qty">
                 <button className="icon-btn" aria-label={t('Less')} disabled={line.qty <= 1} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.max(1, l.qty - 1) }))}><Icon name="minus" size={16} /></button>
                 <b>{line.qty}</b>
                 <button className="icon-btn" aria-label={t('More')} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.min(99, l.qty + 1) }))}><Icon name="plus" size={16} /></button>
-              </span>
+              </span>}
               <span className="num bl-war">{line.name && line.warranty ? tn('%n y', { n: line.warranty }) : ''}</span>
               <span className="num bl-price">{line.name ? money(line.alone ?? line.in) : ''}</span>
               <span className="num bl-total">{line.name ? money((line.alone ?? line.in ?? 0) * line.qty) : ''}</span>
               <span className="bl-acts">
-                <button className="icon-btn" title={tn('Another %s', { s: t(slot.label) })} aria-label={tn('Another %s', { s: t(slot.label) })} onClick={() => addAfter(line)}><Icon name="plus" size={16} /></button>
+                {!slot.single && <button className="icon-btn" title={tn('Another %s', { s: t(slot.label) })} aria-label={tn('Another %s', { s: t(slot.label) })} onClick={() => addAfter(line)}><Icon name="plus" size={16} /></button>}
                 {keeps(line) ? (
                   <button className="icon-btn" title={t('Empty this row')} aria-label={t('Empty this row')} disabled={!line.name} onClick={() => removeLine(line)}><Icon name="close" size={16} /></button>
                 ) : (

@@ -808,3 +808,4 @@ button.stock:hover { filter: brightness(1.15); }
 .apps-settings { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-weight: 600; text-align: start; }
 .apps-settings span { flex: 1; }
 [dir="rtl"] .apps-settings .icon:last-child { transform: scaleX(-1); }
+.bl-qty-one b { color: var(--muted); }

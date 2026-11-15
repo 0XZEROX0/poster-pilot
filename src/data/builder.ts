@@ -4,18 +4,19 @@ import { firestore } from './firebase'
 import type { PriceCategory, PriceItem } from './prices'
 
 /** A kind of part in a build. `cats` are the price-list categories it is picked from; empty means any. */
-export type Slot = { key: string; label: string; cats: string[] }
+/** `single`: a build has only one of these (one motherboard, one CPU...), so no second row and no quantity. */
+export type Slot = { key: string; label: string; cats: string[]; single?: boolean }
 
 /** The quotation's rows, in the order of the sheet. */
 export const SLOTS: Slot[] = [
-  { key: 'mb', label: 'Motherboard', cats: ['mb'] },
-  { key: 'cpu', label: 'CPU', cats: ['cpu'] },
+  { key: 'mb', label: 'Motherboard', cats: ['mb'], single: true },
+  { key: 'cpu', label: 'CPU', cats: ['cpu'], single: true },
   { key: 'ram', label: 'RAM', cats: ['ram'] },
   { key: 'gpu', label: 'GPU', cats: ['vga'] },
   { key: 'ssd', label: 'SSD / HDD', cats: ['ssd'] },
-  { key: 'case', label: 'Case', cats: ['case'] },
-  { key: 'psu', label: 'PSU', cats: ['psu'] },
-  { key: 'cooler', label: 'Cooler', cats: ['cooler'] },
+  { key: 'case', label: 'Case', cats: ['case'], single: true },
+  { key: 'psu', label: 'PSU', cats: ['psu'], single: true },
+  { key: 'cooler', label: 'Cooler', cats: ['cooler'], single: true },
   { key: 'fans', label: 'Case fans', cats: ['fans', 'accfan'] },
   { key: 'monitor', label: 'Monitor', cats: ['monitor'] },
   { key: 'keyboard', label: 'Keyboard', cats: ['keyboard'] },
