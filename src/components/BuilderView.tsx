@@ -274,9 +274,11 @@ export function BuilderView() {
                   offline: t('Your change could not be sent. Check the connection.'),
                 }[sync]}</p>}
                 <button className="btn btn-primary" onClick={stopEditing}>{t('Done editing')}</button>
+                {seeCost && <CostEye />}
               </div>
             ) : (
               <div className="bx-links">
+                {seeCost && <CostEye compact />}
                 {(allowed('quotes.all') || allowed('quotes.discount') || allowed('quotes.edit')) && <button className="chip-btn" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
                 <button className="chip-btn" onClick={() => setSaved(true)}><Icon name="clock" size={16} />{t('Saved quotes')}</button>
                 {sure ? (
@@ -416,7 +418,8 @@ export function BuilderView() {
       </div>
 
       <div className="bx-bar">
-        <span><small>{t('TOTAL')}</small><b>{money(sum.total)}</b></span>
+        <span><small>{t('TOTAL')}</small><b>{money(sum.total)}</b>{costOn && filled.length > 0 && <small className="bx-bar-cost">{t('Cost')} {money(bc.cost)} · {t('Profit')} {profitText(profitOf(sum.total, bc.cost))}</small>}</span>
+        {seeCost && <CostEye compact />}
         <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print')}</button>
       </div>
 

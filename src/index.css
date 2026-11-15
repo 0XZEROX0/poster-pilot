@@ -1029,3 +1029,9 @@ button.stock:hover { filter: brightness(1.15); }
   .ptable.with-cost .ptable-row { grid-template-columns: 30px repeat(5, minmax(0, 1fr)); }
 }
 .bl-sum > .bx-cost { align-items: stretch; }
+
+/* The cost eye is always in reach in the Builder: in the top row, and on the phone's total bar. */
+.bx-links .cost-eye { flex: none; min-height: 34px; }
+.bx-bar .cost-eye { flex: none; background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); color: #fff; padding: 8px 10px; }
+.bx-bar .cost-eye.on { background: #fff; color: var(--navy); border-color: #fff; }
+.bx-bar .bx-bar-cost { opacity: 1; letter-spacing: 0; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
