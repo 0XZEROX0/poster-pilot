@@ -7,7 +7,7 @@ for (const j of $('Read open posts').all().map(i => i.json)) {
   if (!j || !j.document) continue;
   const d = docOf(j.document);
   if (d.f.appNew === true || d.f.appDeleted === true) continue;
-  const p = pricesFrom(d.f.items, products);
+  const p = pricesFrom(d.f.items, products, d.f.variants === true);
   // The sheet could not price an item whose name in the price list has extra spaces ('Check item'); the engine can.
   // A post that already has its poster keeps 'Check item', so it is not sent back for a redo just because of that.
   if (clean(d.f.priceBefore) === 'Check item' && /\/d\//.test(str(d.f.posterUrl)) && p.priceBefore !== 'Check item') { p.priceBefore = 'Check item'; }

@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
+import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quoteLabel, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { casePsu, matches, money, parseMoney, specChips, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
+import { buildCost, costKey, profitOf, profitText, useCosts, useCostShown } from '../data/costs'
 import { allowed, isOwner, myId, myName } from '../data/store'
+import { CostEye } from './PricesView'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
 import { Chip, Empty, Icon, SearchBox, showToast } from './ui'
@@ -117,6 +119,15 @@ export function BuilderView() {
   const lines = useMemo(() => build.lines.map((l) => fresh(cats, slotOf(l.slot).single && l.qty !== 1 ? { ...l, qty: 1 } : l)), [build.lines, cats])
   const parts = useMemo(() => chosen(cats, lines), [cats, lines])
   const sum = totals(lines, build.extra + given, build.buildDiscount)
+  // What the build costs the shop: only for roles with 'See and edit cost', and only after the eye is pressed.
+  // It stays on this screen: it is never part of the shared live quote, a saved quote or the printed quotation.
+  const seeCost = allowed('cost')
+  // Whether the printed quotation shows each part's price. Off: only the parts, the discount and the total.
+  const [printPrices, setPrintPricesState] = useState(() => { try { return localStorage.getItem(PRINT_PRICES_KEY) !== 'off' } catch { return true } })
+  const setPrintPrices = (on: boolean) => { setPrintPricesState(on); try { localStorage.setItem(PRINT_PRICES_KEY, on ? 'on' : 'off') } catch { /* lasts while the page is open */ } }
+  const { costs: costMap } = useCosts()
+  const costOn = useCostShown() && seeCost
+  const bc = buildCost(lines, costMap)
 
   // Share the build a moment after each change, so it can be watched live (one write per pause).
   const shared = JSON.stringify([build.customer, build.sales, build.extra, given, build.buildDiscount, lines.filter((l) => l.name).map((l) => [l.slot, l.name, l.qty, l.alone, l.in, l.warranty])])
@@ -128,7 +139,7 @@ export function BuilderView() {
       const id = setTimeout(() => {
         sent.current = [...sent.current.slice(-9), now]
         setSync('sending')
-        edits.send(editing.uid, { ...build, lines }, sum.total).then(() => setSync((s) => (s === 'sending' ? (idle.current ? 'saved' : 'waiting') : s)), (e) => {
+        edits.send(editing.uid, { ...build, lines }, sum.total, editing.name).then(() => setSync((s) => (s === 'sending' ? (idle.current ? 'saved' : 'waiting') : s)), (e) => {
           sent.current = sent.current.filter((s) => s !== now)
           setSync((e as { code?: string }).code === 'permission-denied' ? 'denied' : 'offline')
         })
@@ -213,7 +224,7 @@ export function BuilderView() {
   const stopEditing = () => {
     if (editing && now !== seen.current && !sent.current.includes(now)) {
       const name = editing.name
-      edits.send(editing.uid, { ...build, lines }, sum.total).then(
+      edits.send(editing.uid, { ...build, lines }, sum.total, editing.name).then(
         () => showToast(tn("Saved in %name's quote", { name })),
         (e) => showToast((e as { code?: string }).code === 'permission-denied' ? t('Your last change was not sent: the database refused it.') : t('Your last change was not sent. Check the connection.')),
       )
@@ -266,9 +277,11 @@ export function BuilderView() {
                   offline: t('Your change could not be sent. Check the connection.'),
                 }[sync]}</p>}
                 <button className="btn btn-primary" onClick={stopEditing}>{t('Done editing')}</button>
+                {seeCost && <CostEye />}
               </div>
             ) : (
               <div className="bx-links">
+                {seeCost && <CostEye compact />}
                 {(allowed('quotes.all') || allowed('quotes.discount') || allowed('quotes.edit')) && <button className="chip-btn" onClick={() => setWatching(true)}><span className="live-dot" aria-hidden="true" />{t('Live quotes')}</button>}
                 <button className="chip-btn" onClick={() => setSaved(true)}><Icon name="clock" size={16} />{t('Saved quotes')}</button>
                 {sure ? (
@@ -344,6 +357,7 @@ export function BuilderView() {
                       </button>
                       <div className="bx-side-of-part">
                         <b className="bx-price">{money(unit * line.qty)}</b>
+                        {costOn && line.cat && line.pid && <span className="bx-cost-line">{t('Cost')} {money(costMap[costKey(line.cat, line.pid)] === undefined ? null : costMap[costKey(line.cat, line.pid)] * line.qty)}</span>}
                         {!slot.single && (
                           <span className="bl-qty">
                             <button className="icon-btn" aria-label={t('Less')} disabled={line.qty <= 1} onClick={() => setLine(line.id, (l) => ({ ...l, qty: Math.max(1, l.qty - 1) }))}><Icon name="minus" size={14} /></button>
@@ -386,6 +400,19 @@ export function BuilderView() {
             {given > 0 && <div className="bl-grant"><span>{!editing && grant ? tn('Extra discount from %name', { name: grant.byName || t('Someone') }) : t('Extra discount given')}</span><b>−{money(given)}</b></div>}
             <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)} <small>EGP</small></b></div>
             {sum.discount > 0 && <p className="bx-saved">{tn('The customer saves %n', { n: money(sum.discount) })}</p>}
+            {seeCost && filled.length > 0 && (
+              <div className={`bx-cost${costOn ? ' on' : ''}`}>
+                <div className="bx-cost-head"><span>{t('Cost and profit')}</span><CostEye compact /></div>
+                {costOn && (
+                  <>
+                    <div><span>{t('Cost')}</span><b>{money(bc.cost)}</b></div>
+                    <div><span>{t('Profit')}</span><b className={sum.total - bc.cost < 0 ? 'bad' : 'good'}>{profitText(profitOf(sum.total, bc.cost))}</b></div>
+                    {bc.missing > 0 && <p className="hint">{tn('%n parts have no cost yet, so the profit is higher than it really is.', { n: bc.missing })}</p>}
+                  </>
+                )}
+              </div>
+            )}
+            <label className="bx-switch bx-print-prices"><input type="checkbox" checked={printPrices} onChange={(e) => setPrintPrices(e.target.checked)} /><i aria-hidden="true" /><span>{t('Prices on the printed quotation')}</span><b>{printPrices ? t('On') : t('Off')}</b></label>
             <div className="actions">
               <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print quotation')}</button>
               {!editing && <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>}
@@ -395,14 +422,15 @@ export function BuilderView() {
       </div>
 
       <div className="bx-bar">
-        <span><small>{t('TOTAL')}</small><b>{money(sum.total)}</b></span>
+        <span><small>{t('TOTAL')}</small><b>{money(sum.total)}</b>{costOn && filled.length > 0 && <small className="bx-bar-cost">{t('Cost')} {money(bc.cost)} · {t('Profit')} {profitText(profitOf(sum.total, bc.cost))}</small>}</span>
+        {seeCost && <CostEye compact />}
         <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print')}</button>
       </div>
 
       {pickingLine && <PickSheet cats={cats} line={pickingLine} others={parts.filter((p) => p.line !== pickingLine.id)} onPick={(cat, item) => { choose(pickingLine, cat, item); setPicking(null) }} onClear={() => { setLine(pickingLine.id, (l) => emptyLine(l.slot)); setPicking(null) }} onClose={() => setPicking(null)} />}
       {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra + b.grant, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false); void grants.clearMine() }} onEdit={startEditing} onClose={() => setWatching(false)} />}
       {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false); void grants.clearMine() }} onClose={() => setSaved(false)} />}
-      {createPortal(<QuotePrint build={build} lines={filled} sum={sum} />, document.body)}
+      {createPortal(<QuotePrint build={build} lines={filled} sum={sum} prices={printPrices} />, document.body)}
     </div>
   )
 }
@@ -476,7 +504,7 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
   }, [max, everyone])
   const remove = async (q: SavedQuote) => {
     try {
-      await quotes.remove(q.id)
+      await quotes.remove(q.id, quoteLabel(q.customer, q.total))
       setList((l) => (l ?? []).filter((x) => x.id !== q.id))
       showToast(t('Deleted'))
     } catch {
@@ -556,7 +584,7 @@ function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void
           <div><span>{t('Discount')}</span><b>{money(sum.discount)}</b></div>
           <div className="bl-grand"><span>{t('TOTAL')}</span><b>{money(sum.total)}</b></div>
         </div>
-        <GiveDiscount uid={one.uid} />
+        <GiveDiscount uid={one.uid} whose={one.byName || one.sales} />
       </Sheet>
     )
   }
@@ -580,7 +608,7 @@ function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void
 }
 
 /** Shows the extra discount given on someone's open quote, and lets people with 'Give extra discount' set it. */
-function GiveDiscount({ uid }: { uid: string }) {
+function GiveDiscount({ uid, whose }: { uid: string; whose: string }) {
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined)
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
@@ -593,7 +621,7 @@ function GiveDiscount({ uid }: { uid: string }) {
   const give = async (amount: number) => {
     setBusy(true)
     try {
-      await grants.give(uid, amount)
+      await grants.give(uid, amount, whose)
       showToast(amount > 0 ? t('Discount sent. It shows in their quote now.') : t('Discount removed.'))
     } catch (e) {
       showToast((e as { code?: string }).code === 'permission-denied' ? t('Your role does not allow this.') : t('Could not save. Check the connection.'))
@@ -617,16 +645,22 @@ function GiveDiscount({ uid }: { uid: string }) {
 }
 
 /** The paper the customer gets, laid out like the sheet's quotation. Only shown when printing. */
-function QuotePrint({ build, lines, sum }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals> }) {
+const PRINT_PRICES_KEY = 'posterpilot.builder.printPrices'
+
+function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean }) {
   const logo = `${import.meta.env.BASE_URL}static-logo.png`
+  // Without prices: its own four-column layout (type, product, quantity, warranty), only the totals show money.
+  const cols = prices ? 6 : 4
   return (
-    <div className="quote-print" dir="ltr" lang="en">
+    <div className={`quote-print${prices ? '' : ' q-plain'}`} dir="ltr" lang="en">
       <table>
-        <colgroup><col className="q-type" /><col /><col className="q-n" /><col className="q-n" /><col className="q-n" /><col className="q-n2" /></colgroup>
+        {prices
+          ? <colgroup><col className="q-type" /><col /><col className="q-n" /><col className="q-n" /><col className="q-n" /><col className="q-n2" /></colgroup>
+          : <colgroup><col className="q-type" /><col /><col className="q-qty" /><col className="q-war" /></colgroup>}
         <tbody>
           <tr className="q-top">
             <td><img src={logo} alt="Static" /></td>
-            <td colSpan={3} className="q-title">
+            <td colSpan={prices ? 3 : 1} className="q-title">
               {build.sales.trim() && <div>Sales Man: {build.sales.trim()}</div>}
               <div>Quotation</div>
               {build.customer.trim() && <div className="q-customer" dir="auto">{build.customer.trim()}</div>}
@@ -635,24 +669,27 @@ function QuotePrint({ build, lines, sum }: { build: Build; lines: Line[]; sum: R
             <td className="q-c"><b>{today()}</b></td>
           </tr>
           <tr className="q-head">
-            <th>Type</th><th>Product</th><th>QTY</th><th>Warranty</th><th>Price</th><th>Total Price</th>
+            <th>Type</th><th>Product</th><th>QTY</th><th>Warranty</th>{prices && <><th>Price</th><th>Total Price</th></>}
           </tr>
           {lines.map((l) => (
             <tr key={l.id}>
               <td className="q-c"><b>{slotOf(l.slot).label}</b></td>
               <td className="q-c" dir="auto">{l.name}</td>
               <td className="q-c">{l.qty}</td>
-              <td className="q-c">{l.warranty ?? ''}</td>
-              <td className="q-c">{money(l.alone ?? l.in)}</td>
-              <td className="q-c">{money((l.alone ?? l.in ?? 0) * l.qty)}</td>
+              <td className="q-c">{prices ? l.warranty ?? '' : l.warranty ? `${l.warranty} ${l.warranty === 1 ? 'Year' : 'Years'}` : ''}</td>
+              {prices && <td className="q-c">{money(l.alone ?? l.in)}</td>}
+              {prices && <td className="q-c">{money((l.alone ?? l.in ?? 0) * l.qty)}</td>}
             </tr>
           ))}
-          <tr className="q-sum"><th colSpan={5}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>
-          <tr className="q-sum"><th colSpan={5}>TOTAL</th><td className="q-c">{money(sum.total)}</td></tr>
-          <tr><td className="q-c"><b>Location</b></td><td colSpan={5} className="q-c" dir="rtl" lang="ar"><b>{SHOP.location}</b></td></tr>
-          <tr><td className="q-c"><b>Website</b></td><td colSpan={5} className="q-c"><b className="q-link">{SHOP.website}</b></td></tr>
-          <tr><td className="q-c"><b>Phone</b></td><td colSpan={5} className="q-c"><b>{SHOP.phone}</b></td></tr>
-          <tr><td colSpan={6} className="q-c q-foot" dir="rtl" lang="ar"><b>{SHOP.footer}</b></td></tr>
+          {prices && <tr className="q-sum"><th colSpan={5}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>}
+          {prices && <tr className="q-sum"><th colSpan={5}>TOTAL</th><td className="q-c">{money(sum.total)}</td></tr>}
+          {!prices && <tr className="q-sum"><th colSpan={3}>Price before discount</th><td className="q-c">{money(sum.subtotal)}</td></tr>}
+          {!prices && <tr className="q-sum"><th colSpan={3}>Discount</th><td className="q-c">{money(sum.discount)}</td></tr>}
+          {!prices && <tr className="q-sum"><th colSpan={3}>Price after discount</th><td className="q-c">{money(sum.total)}</td></tr>}
+          <tr className="q-info"><td className="q-c"><b>Location</b></td><td colSpan={cols - 1} className="q-c" dir="rtl" lang="ar"><b>{SHOP.location}</b></td></tr>
+          <tr className="q-info"><td className="q-c"><b>Website</b></td><td colSpan={cols - 1} className="q-c"><b className="q-link">{SHOP.website}</b></td></tr>
+          <tr className="q-info"><td className="q-c"><b>Phone</b></td><td colSpan={cols - 1} className="q-c"><b>{SHOP.phone}</b></td></tr>
+          <tr><td colSpan={cols} className="q-c q-foot" dir="rtl" lang="ar"><b>{SHOP.footer}</b></td></tr>
         </tbody>
       </table>
     </div>

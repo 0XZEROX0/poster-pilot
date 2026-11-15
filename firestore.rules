@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -31,7 +31,7 @@ service cloud.firestore {
       return role == 'owner' ? allPerms()
         : exists(rolePath(role)) ? get(rolePath(role)).data.perms
         : role == 'admin' ? allPerms()
-        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit']
+        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit', 'brainstorm']
         : [];
     }
     // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
@@ -80,12 +80,14 @@ service cloud.firestore {
       let sent = edits.diff(was.get('appEdits', {}));
       let keys = now.diff(was).affectedKeys().union(sent.addedKeys()).union(sent.changedKeys());
       return (!keys.hasAny(['postDate', 'postTime']) || can('schedule'))
+        // "Post now" publishes on Facebook and Instagram at once: only someone who may schedule can ask for it.
+        && (!keys.hasAny(['postNow']) || can('schedule'))
         && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', '')) && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''))))
         && (!keys.hasAny(['appDeleted']) || can('delete'))
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
         // Asking for the website photos of the items, for the photo picker.
         && (!keys.hasAny(['photoAsk']) || can('offers.create') || can('fix') || can('designs.approve'))
-        && (!keys.hasAny(['items', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle']) || can('offers.create') || can('fix') || can('designs.approve'))
+        && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle']) || can('offers.create') || can('fix') || can('designs.approve'))
         // An offer is approved by someone other than the person who made it. The owner always may.
         && (!keys.hasAny(['offer', 'offerNote', 'offerBy'])
           || (can('offers.approve') && (isOwner() || isAdmin() || was.get('createdBy', '') != request.auth.uid))
@@ -229,10 +231,36 @@ service cloud.firestore {
         && request.resource.data.postId is string && request.resource.data.postId.size() > 0 && request.resource.data.postId.size() <= 40
         && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
         && request.resource.data.act in ['created', 'edited', 'offer.approved', 'offer.rejected', 'offer.resubmitted', 'design.approved', 'design.redo', 'design.redo_next',
-          'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'problem.ignored', 'prices.recheck', 'deleted']
+          'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'schedule.postnow', 'problem.ignored', 'prices.recheck', 'deleted']
         && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 1000))
         && (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() <= 300))
         && (!('changes' in request.resource.data) || (request.resource.data.changes is list && request.resource.data.changes.size() <= 12));
+      allow update, delete: if false;
+    }
+    // The activity log of the whole app: everything that has no history of its own above (Builder quotes,
+    // discounts and live edits, people and roles, settings, engine runs). Read on the Activity page together
+    // with log/ and priceLog/. A person adds a line under their own id and the server's time, only for what
+    // their role may do; nobody, the owner included, can change or remove a line. The engine and the website
+    // sync write their lines ('system', 'website') with their service account.
+    function activityOk() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['at', 'by', 'byName', 'app', 'act', 'what', 'note', 'ref'])
+        && d.by == request.auth.uid
+        && d.at == request.time
+        && d.byName is string && d.byName.size() <= 200
+        && (!('what' in d) || (d.what is string && d.what.size() <= 300))
+        && (!('note' in d) || (d.note is string && d.note.size() <= 1000))
+        && (!('ref' in d) || (d.ref is string && d.ref.size() <= 80))
+        && ((d.app == 'builder' && (d.act in ['quote.saved', 'quote.updated', 'quote.deleted']
+              || (d.act in ['quote.discount', 'quote.discount_removed'] && can('quotes.discount'))
+              || (d.act == 'quote.live_edit' && can('quotes.edit'))))
+          || (d.app == 'people' && ((d.act in ['join.accepted', 'join.declined', 'member.removed'] && isAdmin())
+              || (d.act in ['member.role', 'role.saved', 'role.deleted', 'code.reset'] && isOwner())))
+          || (d.app == 'settings' && ((d.act == 'templates.saved' && can('templates.edit')) || d.act == 'engine.run')));
+    }
+    match /activity/{id} {
+      allow read: if can('activity.view');
+      allow create: if isMember() && activityOk();
       allow update, delete: if false;
     }
     // The price list: one document per category (items keyed by product id) and prices/_meta, whose
@@ -243,6 +271,41 @@ service cloud.firestore {
       allow create, update: if can('prices.edit') && (cat == '_meta'
         ? request.resource.data.keys().hasOnly(['version', 'at']) && request.resource.data.version is int
         : request.resource.data.keys().hasOnly(['name', 'order', 'items', 'importedAt']) && request.resource.data.items is map);
+      allow delete: if false;
+    }
+    // What each product costs the shop. Kept apart from prices/* (which everyone inside, the engine and the website
+    // sync read) so that only roles with 'See and edit cost' can read it at all. costs/{category} { items: { [productId]: { cost, at, byName } } }.
+    match /costs/{cat} {
+      allow read: if can('cost');
+      allow create, update: if can('cost')
+        && cat.size() <= 40 && cat != '_meta'
+        && request.resource.data.keys().hasOnly(['items'])
+        && request.resource.data.items is map;
+      allow delete: if false;
+    }
+    // Every cost change, like priceLog but only for those who may see cost. Nobody changes or removes a line.
+    match /costLog/{id} {
+      allow read: if can('cost');
+      allow create: if can('cost')
+        && request.resource.data.keys().hasOnly(['cat', 'pid', 'name', 'act', 'changes', 'at', 'by', 'byName'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.act == 'cost'
+        && request.resource.data.cat is string && request.resource.data.cat.size() <= 40
+        && request.resource.data.pid is string && request.resource.data.pid.size() <= 40
+        && request.resource.data.name is string && request.resource.data.name.size() <= 400
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.changes is list && request.resource.data.changes.size() <= 2;
+      allow update, delete: if false;
+    }
+    // New offer, "Versions of one product": a person asks for every website photo of one product (one request each,
+    // overwritten by the next). The engine answers in the same document with its service account.
+    match /photoAsks/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid && isMember();
+      allow create, update: if signedIn() && request.auth.uid == uid && can('offers.create')
+        && request.resource.data.keys().hasOnly(['name', 'ask', 'by'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 300
+        && request.resource.data.ask is int && request.resource.data.by == uid;
       allow delete: if false;
     }
     // What the engine read from static-eg.com (web/products: every website product, for linking by hand).
@@ -331,6 +394,19 @@ service cloud.firestore {
       allow delete: if isMember() && (uid == request.auth.uid || can('quotes.discount'));
     }
     // Products and styles come from the engine. Roles with 'Edit caption templates' may change the caption templates.
+    // Brainstorm: a draft plan of which approved post could go out on which day, one document per week
+    // (plans/{the Saturday it starts on}). It is only a plan: it never sets a post's date or time.
+    match /plans/{week} {
+      allow read: if can('brainstorm');
+      allow create, update: if can('brainstorm')
+        && week.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly(['days', 'at', 'by', 'byName'])
+        && request.resource.data.days is map && request.resource.data.days.size() <= 7
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
+        && request.resource.data.at == request.time;
+      allow delete: if can('brainstorm');
+    }
     match /catalog/{id} {
       allow read: if isMember();
       allow create, update: if id == 'templates'

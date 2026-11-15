@@ -1,4 +1,5 @@
-import type { CaptionTemplate, Data, LogEntry, NewPost, Post } from './types'
+import type { EngineJob } from './nudge'
+import type { CaptionTemplate, Data, LogEntry, NewPost, Post, VersionPhotos } from './types'
 
 /** Where the app's data lives. The screens only use this, so the store behind it can change. */
 export interface Backend {
@@ -12,4 +13,11 @@ export interface Backend {
   watchLog(postId: string, onLog: (entries: LogEntry[]) => void, onError: (message: string) => void): () => void
   /** The last entry of every post that is gone (deleted in the app or removed from the sheet). */
   deletedLog(): Promise<LogEntry[]>
+  /** Asks the engine (n8n) to start these workflows now. Missing where there is no engine (demo). Resolves to false when it could not ask. */
+  runNow?(jobs: EngineJob[]): Promise<boolean>
+  /**
+   * Asks the engine for every photo the website has of one product (with the option each photo belongs to), to pick
+   * versions from in New offer. Calls back now and when the answer comes. Returns the function that stops listening.
+   */
+  versionPhotos?(name: string, onData: (v: VersionPhotos | null) => void, onError: (message: string) => void): () => void
 }

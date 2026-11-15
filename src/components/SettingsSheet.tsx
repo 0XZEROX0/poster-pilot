@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { resetDemo } from '../data/localBackend'
 import { setTheme, useTheme, type Theme } from '../theme'
 import { allowed, backend, editsTemplates, postWork, restartDemo, signOutNow, type Session } from '../data/store'
+import type { EngineJob } from '../data/nudge'
 import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
 import { PeoplePanel, RolesPanel, useTeam } from './MembersSection'
@@ -116,9 +117,47 @@ function General({ session, onClose }: { session: Session; onClose: () => void }
         <section className="set-card">
           <header className="set-card-head"><h3>{t('Engine')}</h3>{health && <Chip tone={Date.now() - health.lastSync < 30 * 60_000 ? 'good' : 'bad'}>{agoLabel(health.lastSync)}</Chip>}</header>
           <p className="hint">{health ? `${t('Last sync')}: ${agoLabel(health.lastSync)}. ${t('The engine (n8n) builds the posters, keeps prices up to date and posts to Facebook and Instagram.')}` : t('No signal from the engine yet.')}</p>
+          {backend.runNow && <RunNow />}
         </section>
       )}
     </div>
+  )
+}
+
+// The engine's timed workflows, so someone can start one now instead of waiting for its next check.
+// Changes made in the app already start the right one by themselves; this is for "do it now anyway".
+const JOBS: { label: string; hint: string; jobs: EngineJob[] }[] = [
+  { label: 'Posters', hint: 'Carry out post changes and build the posters that are waiting.', jobs: ['app', 'poster'] },
+  { label: 'Facebook and Instagram', hint: 'Schedule posts that have a date and time, carry out changes and cancels, write captions, check what was published.', jobs: ['queue', 'changes', 'captions', 'status', 'instagram'] },
+  { label: 'Published posters', hint: 'Move the posters of published posts to the Published folder.', jobs: ['move'] },
+  { label: 'Product list', hint: 'Update the product list and the prices of open posts from the price list.', jobs: ['lists'] },
+  { label: 'Competitor prices', hint: 'Check competitor prices of offers that are waiting.', jobs: ['market'] },
+  { label: 'Website', hint: 'Send price list changes to the website and read changes made on the website.', jobs: ['website', 'pull'] },
+]
+const ALL_JOBS = [...new Set(JOBS.flatMap((j) => j.jobs))]
+
+function RunNow() {
+  const [sent, setSent] = useState<Record<string, number>>({})
+  const run = (key: string, jobs: EngineJob[]) => {
+    setSent((x) => ({ ...x, [key]: Date.now() }))
+    // Pressing again is possible after a short pause, so a second press does not start a second run at once.
+    setTimeout(() => setSent((x) => { const { [key]: _gone, ...rest } = x; return rest }), 20_000)
+    backend.runNow?.(jobs).then(
+      (ok) => showToast(ok ? t('Started. It runs on the engine computer.') : t('Could not reach the engine. It still runs on its schedule.')),
+      () => showToast(t('Could not reach the engine. It still runs on its schedule.')),
+    )
+  }
+  return (
+    <>
+      <p className="hint">{t('Changes in the app start the right job by themselves. Run one now if you do not want to wait for its next check.')}</p>
+      {JOBS.map((j) => (
+        <div key={j.label} className="person">
+          <span className="person-main"><b>{t(j.label)}</b><span className="muted small run-hint">{t(j.hint)}</span></span>
+          <span className="person-acts"><button className="btn" disabled={!!sent[j.label]} onClick={() => run(j.label, j.jobs)}><Icon name="redo" size={16} />{sent[j.label] ? t('Started') : t('Run now')}</button></span>
+        </div>
+      ))}
+      <div className="actions"><button className="btn btn-primary" disabled={!!sent.all} onClick={() => run('all', ALL_JOBS)}>{sent.all ? t('Started') : t('Run everything now')}</button></div>
+    </>
   )
 }
 

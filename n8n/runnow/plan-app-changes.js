@@ -1,0 +1,134 @@
+const str = v => (v === undefined || v === null) ? '' : String(v);
+const clean = v => str(v).trim();
+const low = v => clean(v).toLowerCase();
+const dec = v => {
+  if (!v || typeof v !== 'object') return null;
+  if ('stringValue' in v) return v.stringValue;
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue' in v) return Number(v.doubleValue);
+  if ('timestampValue' in v) return v.timestampValue;
+  if ('nullValue' in v) return null;
+  if ('mapValue' in v) { const o = {}; const f = (v.mapValue && v.mapValue.fields) || {}; for (const k of Object.keys(f)) o[k] = dec(f[k]); return o; }
+  if ('arrayValue' in v) return ((v.arrayValue && v.arrayValue.values) || []).map(dec);
+  return null;
+};
+const enc = v => {
+  if (v === null || v === undefined) return { nullValue: null };
+  if (typeof v === 'string') return { stringValue: v };
+  if (typeof v === 'boolean') return { booleanValue: v };
+  if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(enc) } };
+  const fields = {}; for (const k of Object.keys(v)) fields[k] = enc(v[k]); return { mapValue: { fields } };
+};
+const fieldsOf = o => enc(o).mapValue.fields;
+const docOf = d => ({ id: d.name.split('/').pop(), name: d.name, updateTime: d.updateTime, f: dec({ mapValue: { fields: d.fields || {} } }) || {} });
+const isNum = s => /^-?[\d,]+(\.\d+)?$/.test(clean(s)) && /\d/.test(s);
+const toNum = s => Number(clean(s).replace(/,/g, ''));
+const OK_FB = /^(scheduled|published|cancelled|waiting)\b/i;
+function zoneOf(f) {
+  const ps = clean(f.photoStatus), fbs = clean(f.fbStatus), igs = clean(f.igStatus), fb = clean(f.feedback);
+  const trouble = (ps !== '' && ps !== 'OK' && !/^(WORKING|PHOTO FOUND)/i.test(ps)) || !(fbs === '' || OK_FB.test(fbs)) || (igs !== '' && /error|fail/i.test(igs));
+  if (clean(f.offer) !== 'Approved') return 'offer';
+  if (trouble) return 'fix';
+  if (/^published/i.test(fb) || /^(published|posted)/i.test(fbs)) return 'posted';
+  if (/^(done|cancel)$/i.test(fb)) return 'approved';
+  return 'design';
+}
+function queuesOf(f) {
+  const ex = (f.ex && typeof f.ex === 'object') ? f.ex : {};
+  const fb = low(f.feedback);
+  const items = (Array.isArray(f.items) ? f.items : []).filter(it => it && clean(it.name));
+  const fbPub = /^(published|posted)/i.test(clean(f.fbStatus)), igPub = /^(published|posted)/i.test(clean(f.igStatus));
+  const poster = /\/d\//.test(str(f.posterUrl));
+  const q = [];
+  if (clean(f.offer) === 'Approved' && items.length && fb !== 'done' && fb !== 'ignore') q.push('poster');
+  if (fb === 'done' && poster && !clean(f.scheduledFor)) q.push('queue');
+  if (clean(f.scheduledFor) && clean(ex.fbPhotoId) && !clean(f.igStatus)) q.push('ig');
+  if ((clean(f.fbPostId) && !/^published/i.test(clean(f.fbStatus))) || /^Posted/.test(clean(f.igStatus))) q.push('status');
+  if (!clean(f.scheduledFor) && fb !== 'ignore' && items.length) q.push('caption');
+  if (fb === 'cancel' || (poster && !fbPub && !igPub && !['redo', 'redo next image', 'ignore'].includes(fb))) q.push('changes');
+  if ((fbPub || igPub) && clean(ex.moved) !== 'yes') q.push('move');
+  return q;
+}
+const randomId = n => { const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; let s = ''; for (let i = 0; i < n; i++) s += abc[Math.floor(Math.random() * abc.length)]; return s; };
+const logWrite = (project, postId, act, note, title, at) => {
+  const fields = fieldsOf({ postId, by: 'system', byName: '', act, ...(note ? { note } : {}), ...(title ? { title } : {}) });
+  fields.at = { timestampValue: at };
+  return { update: { name: 'projects/' + project + '/databases/(default)/documents/log/' + randomId(20), fields }, currentDocument: { exists: false } };
+};
+function pricesFrom(items, products, variants) {
+  const list = (Array.isArray(items) ? items : []).filter(it => it && clean(it.name));
+  if (!list.length) return { priceBefore: '', company: '' };
+  let sum = 0, top = 0, bad = false; const companies = [];
+  for (const it of list) {
+    const p = products.find(x => x.category === clean(it.category) && clean(x.name).toLowerCase() === clean(it.name).toLowerCase()); // like the sheet: same category, any case
+    if (!p || (clean(p.price) !== '' && !isNum(p.price))) { bad = true; continue; }
+    const one = clean(p.price) === '' ? 0 : toNum(p.price); sum += one; top = Math.max(top, one);
+    if (clean(p.company) && !companies.includes(clean(p.company))) companies.push(clean(p.company));
+  }
+  // Versions of one product (post.variants) show one price: the highest of them.
+  return { priceBefore: bad ? 'Check item' : (variants ? top : sum).toLocaleString('en-US'), company: companies.join(' + ') };
+}
+// App engine: carries out what people did in the app that needs the engine (runs every minute).
+// - A post deleted in the app is removed, unless it is on Facebook's schedule (then it is refused with a note).
+// - A post made in the app gets its place in the list, its Price before and Company from the product list.
+// - Any other change: Price before / Company again if the items changed, and the post's zone and queues.
+// The poster and scheduling workflows then find the post in their queue; when a post needs a poster now,
+// the engine also starts the poster workflow at once ('Build now?').
+const PROJECT = 'poster-pilot-8d35e';
+const docs = $('Find app changes').all().map(i => i.json).filter(j => j && j.document).map(j => docOf(j.document));
+const cat = $('Read product list').all().map(i => i.json).find(j => j && j.found);
+const products = cat ? ((docOf(cat.found).f.items) || []) : [];
+const last = $('Last post').all().map(i => i.json).find(j => j && j.document);
+let maxOrder = last ? Number(docOf(last.document).f.order) || 0 : 0;
+const at = new Date().toISOString();
+const FLAGS = ['appDirty', 'appEdits', 'appNew', 'appNote'];
+const fileIdOf = v => { const m = str(v).match(/\/d\/([\w-]+)/) || str(v).match(/[?&]id=([\w-]+)/); return m ? m[1] : (/^[\w-]{20,}$/.test(clean(v)) ? clean(v) : ''); };
+const writes = []; const bin = []; const notes = [];
+let build = false;
+// Parts of the scheduling workflow to start at once, instead of at their next 5-15 minute check.
+const sched = new Set();
+for (const d of docs) {
+  const f = d.f;
+  if (f.appDeleted === true) {
+    const out = /^(published|posted)/i, queued = /^scheduled/i;
+    const isOut = out.test(clean(f.fbStatus)) || out.test(clean(f.igStatus)) || /^published/i.test(clean(f.feedback));
+    if (queued.test(clean(f.fbStatus)) || queued.test(clean(f.igStatus)) || (!isOut && clean(f.fbPostId) !== '')) {
+      writes.push({ update: { name: d.name, fields: fieldsOf({ appDirty: false, appDeleted: false, appNote: 'This post is on the schedule, so it was not deleted. Cancel its schedule first.' }) }, updateMask: { fieldPaths: FLAGS.concat(['appDeleted']) }, currentDocument: { updateTime: d.updateTime } });
+      writes.push(logWrite(PROJECT, d.id, 'delete.refused', '', '', at));
+      continue;
+    }
+    if (/^(WORKING|PHOTO FOUND)/i.test(clean(f.photoStatus))) { notes.push('delete waits, poster being built: ' + d.id); continue; }
+    writes.push({ delete: d.name, currentDocument: { updateTime: d.updateTime } });
+    for (const v of [f.posterUrl, f.ex && f.ex.scheduledImage]) { const id = fileIdOf(v); if (id && !bin.includes(id)) bin.push(id); }
+    continue;
+  }
+  const g = { ...f };
+  const mask = new Set(FLAGS);
+  const edits = (f.appEdits && typeof f.appEdits === 'object') ? f.appEdits : {};
+  if (f.appNew === true) {
+    g.order = ++maxOrder; mask.add('order');
+    g.offer = clean(f.offer) === 'Approved' ? 'Approved' : ''; mask.add('offer');
+    g.items = (Array.isArray(f.items) ? f.items : []).filter(it => it && clean(it.name)).slice(0, f.variants === true ? 4 : 3).map((it, i) => ({ slot: i + 1, category: clean(it.category), name: clean(it.name), manualPhoto: clean(it.manualPhoto), nextPhoto: it.nextPhoto === true, ...(clean(it.label) ? { label: clean(it.label) } : {}) })); mask.add('items');
+    if (!clean(g.style)) { g.style = 'Static'; mask.add('style'); }
+    if (!g.ex || typeof g.ex !== 'object') { g.ex = {}; mask.add('ex'); }
+  }
+  if (f.appNew === true || 'items' in edits) {
+    const p = pricesFrom(g.items, products, g.variants === true);
+    if (products.length) { g.priceBefore = p.priceBefore; g.company = p.company; mask.add('priceBefore'); mask.add('company'); }
+  }
+  g.zone = zoneOf(g); g.q = queuesOf(g); mask.add('zone'); mask.add('q');
+  // Starts the poster workflow right away (instead of at its next 3-minute check) when this post now needs a poster:
+  // just approved, a Redo, or a missing photo to try again.
+  if (g.q.includes('poster') && (!/\/d\//.test(str(g.posterUrl)) || /^redo/i.test(clean(g.feedback)) || /^MISSING/i.test(clean(g.photoStatus)))) build = true;
+  // Scheduling: a Done post that now has its Post date and Post time is scheduled at once; a cancel or a change
+  // to a scheduled post is carried out at once; a post without a caption gets one at once.
+  if (g.q.includes('queue') && clean(g.postDate) && clean(g.postTime)) sched.add('queue');
+  if (low(g.feedback) === 'cancel' || (clean(g.scheduledFor) && g.q.includes('changes'))) sched.add('changes');
+  if (g.q.includes('caption') && !clean(g.caption)) sched.add('captions');
+  const fields = { appDirty: false, appNote: '' };
+  for (const k of mask) if (!FLAGS.includes(k)) fields[k] = g[k];
+  writes.push({ update: { name: d.name, fields: fieldsOf(fields) }, updateMask: { fieldPaths: [...mask] }, currentDocument: { updateTime: d.updateTime } });
+}
+return [{ json: { writes, bin, notes, build, sched: [...sched], count: docs.length } }];

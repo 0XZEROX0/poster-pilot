@@ -1,5 +1,5 @@
 import { addDays, buildCaption, cairoNow, marketKey } from './logic'
-import type { CaptionTemplate, Data, MarketItem, PhotoChoices, Post, PostItem, Product } from './types'
+import type { CaptionTemplate, Data, MarketItem, PhotoChoiceItem, PhotoChoices, Post, PostItem, Product } from './types'
 
 // Sample data for demo mode (no Firebase configured). The products, prices and caption templates are
 // a small copy of the real Posts sheet; the states are spread out so every screen has something to show.
@@ -72,6 +72,14 @@ export function demoPhotoChoices(p: Post, asked: number): PhotoChoices {
       ? { name: it.name, product: '', page: '', photos: [] }
       : { name: it.name, product: it.name, page: '', photos: Array.from({ length: 4 - (i % 2) }, (_, n) => { const src = shape(i * 90 + 210, n); return { src, thumb: src } }) }),
   }
+}
+
+/** Demo: a product with four coloured versions, two of them named like website options. */
+export function demoVersionPhotos(name: string): PhotoChoiceItem {
+  const shape = (hue: number) => 'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="#fff"/><rect x="14" y="40" width="92" height="40" rx="8" fill="hsl(${hue} 60% 50%)"/></svg>`)
+  const photos = [[140, 'Jungle'], [30, 'Hurricane'], [210, ''], [300, '']].map(([h, label]) => { const src = shape(Number(h)); return { src, thumb: src, ...(label ? { label: String(label) } : {}) } })
+  return { name, product: name, page: '', photos }
 }
 
 export function demoPosts(): Post[] {

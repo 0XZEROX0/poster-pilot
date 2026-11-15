@@ -65,7 +65,7 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
             <span className="person-main"><b dir="auto">{r.name || r.email}</b><span className="muted small" dir="ltr">{r.email}</span></span>
             <span className="person-acts">
               <button className="btn btn-primary" onClick={() => act(accept(db, r), 'Accepted')}>{t('Accept')}</button>
-              <button className="btn" onClick={() => act(decline(db, r.uid), 'Declined')}>{t('Decline')}</button>
+              <button className="btn" onClick={() => act(decline(db, r), 'Declined')}>{t('Decline')}</button>
             </span>
           </div>
         ))}
@@ -79,7 +79,7 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
             <span className="person-main"><b dir="auto">{m.name || m.email}{m.uid === me && ` (${t('you')})`}</b><span className="muted small" dir="ltr">{m.email}</span></span>
             <span className="person-acts">
               {owner && m.role !== 'owner' ? (
-                <select className="role-pick" aria-label={t('Role')} value={team.roles.some((r) => r.id === m.role) ? m.role : ''} onChange={(e) => e.target.value && act(setRole(db, m.uid, e.target.value), 'Saved')}>
+                <select className="role-pick" aria-label={t('Role')} value={team.roles.some((r) => r.id === m.role) ? m.role : ''} onChange={(e) => e.target.value && act(setRole(db, m, e.target.value, { from: roleNameOf(team, m.role), to: roleNameOf(team, e.target.value) }), 'Saved')}>
                   {!team.roles.some((r) => r.id === m.role) && <option value="">{t('No role')}</option>}
                   {team.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
@@ -104,10 +104,11 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
 }
 
 /** Permissions and pages grouped by the part of the app they belong to. */
-const GROUPS: { title: string; hint: string; pages: Page[]; perms: Perm[] }[] = [
-  { title: 'Shop', hint: 'Prices and the PC builder.', pages: ['prices', 'builder'], perms: ['prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit'] },
-  { title: 'Posters', hint: 'Offers, posters, the schedule and Facebook.', pages: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'], perms: ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'templates.edit'] },
-  { title: 'People', hint: 'Who is in the system.', pages: [], perms: ['people'] },
+/** permPages: pages that are switched on by a permission alone; they show among the page pills and tick that permission. */
+const GROUPS: { title: string; hint: string; pages: Page[]; perms: Perm[]; permPages?: { perm: Perm; label: string }[] }[] = [
+  { title: 'Shop', hint: 'Prices and the PC builder.', pages: ['prices', 'builder'], perms: ['prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit'] },
+  { title: 'Posters', hint: 'Offers, posters, the schedule and Facebook.', pages: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'], perms: ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'brainstorm', 'delete', 'templates.edit'], permPages: [{ perm: 'brainstorm', label: 'Brainstorm' }] },
+  { title: 'People', hint: 'Who is in the system, and what everyone did.', pages: [], perms: ['people', 'activity.view'] },
 ]
 
 /** The roles the owner makes: what each may do and which pages it sees. Owner only. */
@@ -174,6 +175,12 @@ export function RolesPanel({ state }: { state: TeamState }) {
                             {r.pages.includes(p) && <Icon name="check" size={14} />}{t(PAGE_LABEL[p])}
                           </label>
                         ))}
+                        {g.permPages?.map((x) => (
+                          <label key={x.perm} className={`page-pill${r.perms.includes(x.perm) ? ' on' : ''}`}>
+                            <input type="checkbox" checked={r.perms.includes(x.perm)} onChange={(e) => tick(r, x.perm, e.target.checked)} />
+                            {r.perms.includes(x.perm) && <Icon name="check" size={14} />}{t(x.label)}
+                          </label>
+                        ))}
                       </div>
                     )}
                     {g.perms.map((p) => (
@@ -193,7 +200,7 @@ export function RolesPanel({ state }: { state: TeamState }) {
                   ) : used ? (
                     <span className="muted small">{tn(used === 1 ? '1 person has this role, so it cannot be deleted.' : '%n people have this role, so it cannot be deleted.', { n: used })}</span>
                   ) : confirm === r.id ? (
-                    <button className="btn btn-danger" onClick={() => run(deleteRole(db, r.id), 'Deleted').then(() => setConfirm(''))}>{t('Yes, delete')}</button>
+                    <button className="btn btn-danger" onClick={() => run(deleteRole(db, r), 'Deleted').then(() => setConfirm(''))}>{t('Yes, delete')}</button>
                   ) : (
                     <button className="btn btn-ghost" onClick={() => setConfirm(r.id)}><Icon name="trash" size={18} />{t('Delete role')}</button>
                   ))}

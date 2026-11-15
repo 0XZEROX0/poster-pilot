@@ -3,6 +3,8 @@
 // product on static-eg.com, the same way the poster maker does ("Pick Static Store Photo"), and saves every photo of
 // that product in `photoChoices`, then removes `photoAsk`. The app shows them as a picker; the chosen photo goes into
 // the item's Manual photo and the poster is rebuilt. Reads only the store's public product search.
+// It also answers New offer's "Versions of one product" picker: photoAsks/{uid} { name, ask } gets `choice` (one
+// PhotoChoiceItem, each option's own photo labelled with the option, e.g. "Jungle Panda") and `answered` = ask.
 const START = Date.now();
 const BUDGET = 40 * 1000; // stop starting new posts after this, so a run ends before the next one starts
 const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', Accept: 'application/json' };
@@ -61,7 +63,7 @@ function pick(products, itemName) {
     if (score > bestScore) { best = p; bestScore = score; }
   }
   if (!best) return null;
-  return { product: decode(best.name).replace(/\s+/g, ' ').trim(), page: best.permalink || '', photos: photosOf(best, item) };
+  return { product: decode(best.name).replace(/\s+/g, ' ').trim(), page: best.permalink || '', photos: photosOf(best, item), raw: best };
 }
 
 // When no product is the same item, the closest ones (most words in common, at least 40%), so a photo can still be chosen by eye.
@@ -92,6 +94,32 @@ function photosOf(best, item) {
   return gallery.filter(i => !seen.has(i.src) && seen.add(i.src)).slice(0, 24).map(i => ({ src: i.src, thumb: i.thumbnail || i.src }));
 }
 
+// Each option's own photo of a product with options (colours...), labelled with the option's name. Read only for
+// the versions picker. A photo that every option shares is not labelled.
+async function labelled(p) {
+  const vars = (Array.isArray(p.variations) ? p.variations : []).slice(0, 8);
+  if (!vars.length) return [];
+  const terms = {};
+  for (const a of (p.attributes || [])) for (const t of (a.terms || [])) terms[String(t.slug || '').toLowerCase()] = decode(t.name);
+  // An option kind every variation has the same value of (one switch for all colours) says nothing: left out.
+  const valueOf = a => terms[String(a.value || '').toLowerCase()] || decode(a.value || '').replace(/-/g, ' ');
+  const kinds = {};
+  for (const v of vars) for (const a of (v.attributes || [])) (kinds[a.name] = kinds[a.name] || new Set()).add(valueOf(a));
+  const out = [];
+  for (const v of vars) {
+    const label = (v.attributes || []).filter(a => !kinds[a.name] || kinds[a.name].size > 1 || vars.length === 1).map(valueOf).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    try {
+      const r = await this.helpers.httpRequest({ url: 'https://static-eg.com/wp-json/wc/store/v1/products/' + v.id, headers: UA, json: true, timeout: 20000, returnFullResponse: true, ignoreHttpStatusErrors: true });
+      const img = r.statusCode === 200 && r.body && Array.isArray(r.body.images) ? r.body.images.find(i => i && i.src) : null;
+      if (img) out.push({ src: img.src, thumb: img.thumbnail || img.src, label });
+    } catch (e) { /* no photo for this option */ }
+    await new Promise(r => setTimeout(r, 300));
+  }
+  const count = {};
+  for (const o of out) count[o.src] = (count[o.src] || 0) + 1;
+  return out.filter(o => o.label && count[o.src] === 1);
+}
+
 async function search(q) {
   try {
     const r = await this.helpers.httpRequest({ url: 'https://static-eg.com/wp-json/wc/store/v1/products', qs: { search: q, per_page: 20 }, headers: UA, json: true, timeout: 30000, returnFullResponse: true, ignoreHttpStatusErrors: true });
@@ -101,30 +129,65 @@ async function search(q) {
 }
 
 // ---------- the posts that asked ----------
-const docs = $input.all().map(i => i.json).filter(j => j && j.document && j.document.name)
+let asked = [];
+try { asked = $('Find photo requests').all(); } catch (e) { asked = $input.all(); }
+const docs = asked.map(i => i.json).filter(j => j && j.document && j.document.name)
   .map(j => ({ name: j.document.name, f: dv({ mapValue: { fields: j.document.fields || {} } }) || {} }))
   .sort((a, b) => (Number(a.f.photoAsk) || 0) - (Number(b.f.photoAsk) || 0));
-if (!docs.length) return [];
+let versionDocs = [];
+try { versionDocs = $('Find version requests').all().map(i => i.json).filter(j => j && j.document && j.document.name).map(j => ({ name: j.document.name, updateTime: j.document.updateTime, f: dv({ mapValue: { fields: j.document.fields || {} } }) || {} })); } catch (e) { versionDocs = []; }
+if (!docs.length && !versionDocs.length) return [];
 const writes = [], report = [];
 const cache = {};
+// One name -> what the website has for it, the same way as for a post's item.
+async function lookUp(name) {
+  const q = storeQuery(name);
+  if (!cache[q]) { cache[q] = await search.call(this, q); await new Promise(r => setTimeout(r, 800)); }
+  let res = cache[q];
+  const q2 = clean(name).split(' ').slice(0, 2).join(' ');
+  if (!res.err && !pick(res.products, name) && q2 && q2 !== q) {
+    if (!cache[q2]) { cache[q2] = await search.call(this, q2); await new Promise(r => setTimeout(r, 800)); }
+    if (!cache[q2].err) res = { products: res.products.concat(cache[q2].products) };
+  }
+  if (res.err) return { name, product: '', page: '', photos: [], error: res.err };
+  const hit = pick(res.products, name);
+  return hit ? { name, ...hit, all: res.products } : { name, product: '', page: '', photos: [], near: near(res.products, name, 3), all: res.products };
+}
+for (const d of versionDocs) {
+  if (Date.now() - START > BUDGET) break;
+  const name = String(d.f.name || '').trim();
+  const ask = Number(d.f.ask) || 0;
+  let choice = name ? await lookUp.call(this, name) : { name: '', product: '', page: '', photos: [] };
+  if (choice.raw) {
+    // Every photo of the product, with each option's own photo first and named.
+    const opts = await labelled.call(this, choice.raw);
+    const all = (choice.raw.images || []).filter(i => i && i.src).map(i => ({ src: i.src, thumb: i.thumbnail || i.src }));
+    const byLabel = new Map(opts.map(o => [o.src, o]));
+    const seen = new Set();
+    choice.photos = opts.concat(all.filter(p => !byLabel.has(p.src))).filter(p => !seen.has(p.src) && seen.add(p.src)).slice(0, 30);
+    // Other products of the same family (other editions or colours listed on their own page), to pick versions from too.
+    const others = near((choice.all || []).filter(p => p.id !== choice.raw.id), name, 4).filter(n => n.photos.length);
+    // Named by the words their page has that the main product's does not ("White Blue").
+    const mainWords = new Set(choice.product.toLowerCase().split(/\s+/));
+    for (const n of others) { const label = n.product.split(/\s+/).filter(w => !mainWords.has(w.toLowerCase())).join(' '); if (label) for (const ph of n.photos) ph.label = label; }
+    if (others.length) choice.near = others;
+  }
+  delete choice.raw; delete choice.all;
+  const failed = !!choice.error;
+  const keepAsk = failed && Date.now() - ask < 10 * 60000;
+  writes.push({ update: { name: d.name, fields: { choice: ev(choice), answered: ev(ask) } }, updateMask: { fieldPaths: keepAsk ? ['choice', 'answered'] : ['choice', 'answered', 'ask'] }, currentDocument: { updateTime: d.updateTime } });
+  report.push({ versions: d.name.split('/').pop(), name, result: choice.error || (choice.photos.length + ' photos, ' + choice.photos.filter(p => p.label).map(p => p.label).join(', ')) });
+}
 for (const d of docs) {
   if (Date.now() - START > BUDGET) break;
   const items = [];
   for (const it of (Array.isArray(d.f.items) ? d.f.items : [])) {
     const name = String((it && it.name) || '').trim();
     if (!name) { items.push({ name: '', product: '', page: '', photos: [] }); continue; }
-    const q = storeQuery(name);
-    if (!cache[q]) { cache[q] = await search.call(this, q); await new Promise(r => setTimeout(r, 800)); }
-    let res = cache[q];
     // The store wants every search word in the title; with nothing found, the first two words of the name are tried.
-    const q2 = clean(name).split(' ').slice(0, 2).join(' ');
-    if (!res.err && !pick(res.products, name) && q2 && q2 !== q) {
-      if (!cache[q2]) { cache[q2] = await search.call(this, q2); await new Promise(r => setTimeout(r, 800)); }
-      if (!cache[q2].err) res = { products: res.products.concat(cache[q2].products) };
-    }
-    if (res.err) { items.push({ name, product: '', page: '', photos: [], error: res.err }); continue; }
-    const hit = pick(res.products, name);
-    items.push(hit ? { name, ...hit } : { name, product: '', page: '', photos: [], near: near(res.products, name, 3) });
+    const one = await lookUp.call(this, name);
+    delete one.raw; delete one.all;
+    items.push(one);
   }
   const failed = items.some(i => i.error);
   const choices = { checkedAt: Date.now(), asked: Number(d.f.photoAsk) || 0, items };

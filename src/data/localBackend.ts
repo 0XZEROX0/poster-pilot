@@ -1,7 +1,7 @@
 import type { Backend } from './backend'
-import { DEMO_POSTER, demoData, demoPhotoChoices } from './demo'
+import { DEMO_POSTER, demoData, demoPhotoChoices, demoVersionPhotos } from './demo'
 import { describe, describeDelete, describeNew } from './history'
-import { buildCaption } from './logic'
+import { buildCaption, cairoNow } from './logic'
 import type { Data, LogEntry, Post } from './types'
 
 const KEY = 'posterpilot.demo.v2'
@@ -70,6 +70,11 @@ export function createLocalBackend(): Backend {
       if (p.feedback === 'Redo' || !p.posterUrl || !p.photoStatus) {
         patchPost(id, { posterUrl: DEMO_POSTER, photoStatus: 'OK', feedback: '', caption: p.caption || buildCaption(p, data.templates), items: p.items.map((i) => ({ ...i, nextPhoto: false })) })
         system(id, 'poster.built')
+      } else if (p.feedback === 'Done' && p.postNow === 'yes' && !p.fbPostId) {
+        // Post now: published at once, at the real minute.
+        const now = cairoNow()
+        patchPost(id, { postNow: '', postDate: now.date, postTime: now.time, scheduledFor: `${now.date} ${now.time}`, fbStatus: 'Published', igStatus: 'Published', fbPostId: 'demo', caption: p.caption || buildCaption(p, data.templates) })
+        system(id, 'fb.published')
       } else if (p.feedback === 'Done' && p.fbStatus !== 'Published') {
         // Nothing is scheduled without a date and a time.
         if (p.postDate && p.postTime) {
@@ -113,6 +118,11 @@ export function createLocalBackend(): Backend {
         if (p) patchPost(id, { photoAsk: undefined, photoChoices: demoPhotoChoices(p, patch.photoAsk ?? 0) })
       }, 1500)
       else engine(id)
+    },
+    versionPhotos(name, onData) {
+      onData({ name, asked: Date.now(), answered: 0, choice: null })
+      const id = setTimeout(() => onData({ name, asked: Date.now(), answered: Date.now(), choice: demoVersionPhotos(name) }), 1500)
+      return () => clearTimeout(id)
     },
     async removePost(id) {
       note(id, describeDelete(data.posts.find((p) => p.id === id)))

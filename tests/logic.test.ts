@@ -216,3 +216,27 @@ describe('choicesFor', () => {
     expect(choicesFor(post(), 0)).toBeNull()
   })
 })
+
+describe('versions of one product', () => {
+  const names = ['Metaphyuni Metapanda PD98 Jungle Panda', 'Metaphyuni Metapanda PD98 Hurricane Panda']
+  const items = names.map((name) => ({ category: 'Acc', name, manualPhoto: '', nextPhoto: false }))
+  it('versions picked from website photos keep the price list name and add their own', async () => {
+    const { itemName, variantsName } = await import('../src/data/logic')
+    const base = 'Metaphyuni Metapanda PD98 Pro'
+    const vs = ['Jungle Panda', 'Hurricane Panda', ''].map((label) => ({ category: 'Acc', name: base, manualPhoto: 'x', nextPhoto: false, ...(label ? { label } : {}) }))
+    expect(itemName(vs[0])).toBe('Metaphyuni Metapanda PD98 Pro Jungle Panda')
+    expect(itemName(vs[2])).toBe(base)
+    expect(variantsName({ items: vs, title: base })).toBe('Metaphyuni Metapanda PD98 Pro (Jungle Panda / Hurricane Panda)')
+    expect(variantsName({ items: vs, title: '' })).toBe('Metaphyuni Metapanda PD98 Pro (Jungle Panda / Hurricane Panda)')
+  })
+  it('finds the shared name and what tells the versions apart', async () => {
+    const { commonTitle, variantsName } = await import('../src/data/logic')
+    expect(commonTitle(names)).toBe('Metaphyuni Metapanda PD98')
+    expect(variantsName({ items, title: '' })).toBe('Metaphyuni Metapanda PD98 (Jungle Panda / Hurricane Panda)')
+    expect(variantsName({ items, title: 'Metapanda PD98' })).toBe('Metapanda PD98 (Metaphyuni Jungle Panda / Metaphyuni Hurricane Panda)')
+  })
+  it('uses the versions name in the caption', () => {
+    const p = post({ items, variants: true, title: 'Metaphyuni Metapanda PD98 Panda' })
+    expect(buildCaption(p, [{ name: 'Default', text: '{name}' }])).toBe('Metaphyuni Metapanda PD98 Panda (Jungle / Hurricane)')
+  })
+})

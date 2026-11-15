@@ -1,9 +1,10 @@
 import { getAuth } from 'firebase/auth'
 import { collection, deleteField, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch, type DocumentData, type Firestore, type WriteBatch } from 'firebase/firestore'
+import { track } from './activity'
 import type { Backend } from './backend'
 import { describe, describeDelete, describeNew } from './history'
-import { nudgeEngine } from './nudge'
-import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product } from './types'
+import { engineReachable, nudgeEngine, runEngineNow, type EngineJob } from './nudge'
+import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product, type VersionPhotos } from './types'
 
 // Firestore layout (the engine, n8n, reads and writes the same documents with a service account):
 //   posts/{id}          one post; see Post in types.ts
@@ -106,7 +107,13 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       if (typeof patch.feedback === 'string' && /^redo/i.test(patch.feedback)) edits.retriedAt = Date.now()
       if (Object.keys(edits).some((k) => k.startsWith('appEdits.'))) Object.assign(edits, { appDirty: true, appEditedAt: serverTimestamp() })
       await commit((b) => b.update(doc(db, 'posts', id), edits), id, describe(known.get(id), patch))
-      if (edits.appDirty) nudgeEngine(getAuth(db.app))
+      // Start what this change needs at once: the engine for post changes, the competitor price check for
+      // "Check prices again", the website photo reader for the photo picker.
+      const jobs: EngineJob[] = []
+      if (edits.appDirty) jobs.push('app')
+      if (patch.marketAsk) jobs.push('market')
+      if (patch.photoAsk) jobs.push('photos')
+      if (jobs.length) nudgeEngine(getAuth(db.app), jobs)
     },
     async removePost(id) {
       // The engine removes the document after it has cancelled anything already scheduled.
@@ -115,6 +122,38 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
     },
     async saveTemplates(templates) {
       await setDoc(doc(db, 'catalog', 'templates'), { items: templates, appEditedAt: serverTimestamp() })
+      track('settings', 'templates.saved', { note: templates.map((x) => x.name).join(', ') })
+      // New captions, and scheduled posts whose caption changed, are handled at once.
+      nudgeEngine(getAuth(db.app), ['captions', 'changes'])
+    },
+    ...(engineReachable() ? {
+      runNow: async (jobs: EngineJob[]) => {
+        const ok = await runEngineNow(getAuth(db.app), jobs)
+        if (ok) track('settings', 'engine.run', { note: jobs.join(', ') })
+        return ok
+      },
+    } : {}),
+    versionPhotos(name, onData, onError) {
+      // photoAsks/{uid}: one request per person, overwritten by the next one. The engine (Website photos workflow)
+      // adds `choice` and `answered` and removes `ask`. Read only while the picker is open.
+      const uid = getAuth(db.app).currentUser?.uid
+      if (!uid) { onError('Not signed in'); return () => {} }
+      const ref = doc(db, 'photoAsks', uid)
+      const asked = Date.now()
+      let stop = () => {}
+      let stopped = false
+      setDoc(ref, { name: name.slice(0, 300), ask: asked, by: uid })
+        .then(() => {
+          nudgeEngine(getAuth(db.app), ['photos'])
+          if (stopped) return
+          stop = onSnapshot(ref, (snap) => {
+            const d = snap.data()
+            if (!d || d.name !== name.slice(0, 300)) return onData(null)
+            onData({ name, asked, answered: Number(d.answered) || 0, choice: (d.choice as VersionPhotos['choice']) ?? null })
+          }, (e) => onError(e.message))
+        })
+        .catch((e: Error) => onError(e.message))
+      return () => { stopped = true; stop() }
     },
     watchLog(postId, onLog, onError) {
       // Read only while the history is open: a few reads per post, nothing in the background.

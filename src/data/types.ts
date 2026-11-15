@@ -1,4 +1,4 @@
-/** One product on a poster. A post holds 1 to 3 of them (the sheet's Item 1 to 3 columns). */
+/** One product on a poster. A post holds 1 to 3 of them (the sheet's Item 1 to 3 columns), or up to 4 versions of one product. */
 export type PostItem = {
   category: string
   name: string
@@ -8,6 +8,11 @@ export type PostItem = {
   nextPhoto: boolean
   /** Set by the engine: this is the item whose photo could not be found. */
   photoMissing?: boolean
+  /**
+   * Versions of one product picked from the website photos: what tells this version apart ("Jungle Panda").
+   * `name` stays the price list name, so the price check still finds it; the poster and caption show both.
+   */
+  label?: string
 }
 
 /** What the person decided about a finished poster (sheet: Feedback). */
@@ -19,6 +24,10 @@ export type Post = {
   /** Position in the list, lowest first. */
   order: number
   items: PostItem[]
+  /** The items are versions (colours, switches...) of one product: one name and one price on the poster, up to 4 items. */
+  variants?: boolean
+  /** With variants: the product name shown once on the poster and in the caption. */
+  title?: string
   company: string
   priceBefore: string
   priceAfter: string
@@ -51,6 +60,9 @@ export type Post = {
   createdByName?: string
   /** True until the engine has written a post made in the app into the sheet. */
   appNew?: boolean
+  /** 'yes' after someone confirmed "Post now": the engine publishes it on Facebook and Instagram at once (not scheduled),
+   * then empties it and sets Post date / Post time to the minute it went out. */
+  postNow?: string
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
   /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */
@@ -66,7 +78,10 @@ export type Post = {
 }
 
 /** One photo of a product on the website: the full photo and a small one for the picker. */
-export type WebPhoto = { src: string; thumb: string }
+export type WebPhoto = { src: string; thumb: string; /** The website option this photo belongs to ("Jungle Panda"), when it is an option's own photo. */ label?: string }
+
+/** Someone's request for the website photos of one product, to pick versions from in New offer (photoAsks/{uid}). */
+export type VersionPhotos = { name: string; asked: number; answered: number; choice: PhotoChoiceItem | null }
 
 /** What the engine found on the website for one item: the product it matched and all its photos. Empty when there is none. */
 export type PhotoChoiceItem = {
@@ -107,7 +122,7 @@ export type Data = {
   health: Health | null
 }
 
-export type NewPost = Pick<Post, 'items' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime'>
+export type NewPost = Pick<Post, 'items' | 'variants' | 'title' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime'>
 
 export const emptyData: Data = { loaded: false, posts: [], products: [], styles: [], templates: [], health: null }
 
