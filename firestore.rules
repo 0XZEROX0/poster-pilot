@@ -290,6 +290,14 @@ service cloud.firestore {
         && request.resource.data.extra is number && request.resource.data.total is number && request.resource.data.buildDiscount is bool
         && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
         && request.resource.data.at == request.time;
+      // Someone with 'Edit live quotes' changes the quote itself too, so the change shows at once and is kept
+      // even while the person's app is closed. Who made the quote (sales, byName) and a given discount stay.
+      allow update: if can('quotes.edit') && uid != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer', 'lines', 'extra', 'buildDiscount', 'total', 'at'])
+        && request.resource.data.customer is string && request.resource.data.customer.size() <= 120
+        && request.resource.data.lines is list && request.resource.data.lines.size() <= 40
+        && request.resource.data.extra is number && request.resource.data.total is number && request.resource.data.buildDiscount is bool
+        && request.resource.data.at == request.time;
       allow delete: if isMember() && uid == request.auth.uid;
     }
     // Changes someone with 'Edit live quotes' makes to another person's open quote; the builder's app takes them in.

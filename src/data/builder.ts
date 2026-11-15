@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase/auth'
-import { addDoc, collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { firestore } from './firebase'
 import { casePsu, type PriceCategory, type PriceItem } from './prices'
 
@@ -308,16 +308,23 @@ export const grants = {
 
 // ---------- Changes someone with 'Edit live quotes' makes to another person's open quote ----------
 
-/** The whole quote as the editor left it: edits/{the builder's uid}. The builder's app takes it in and removes it. */
+/**
+ * The whole quote as the editor left it: edits/{the builder's uid}. The builder's app takes it in and removes it.
+ * The same change also goes straight into their shared quote (drafts/{uid}), so Live quotes shows it at once
+ * even when their app is closed, and nothing is lost if they open the app much later.
+ */
 export type QuoteEdit = { customer: string; lines: Line[]; extra: number; buildDiscount: boolean; byName: string; at: number }
 
 export const edits = {
-  async send(uid: string, b: Build): Promise<void> {
+  async send(uid: string, b: Build, total: number): Promise<void> {
     if (!firestore) return
     const me = getAuth(firestore.app).currentUser
     if (!me) return
     const body = clean(b)
-    await setDoc(doc(firestore, 'edits', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() })
+    const batch = writeBatch(firestore)
+    batch.set(doc(firestore, 'edits', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() })
+    batch.update(doc(firestore, 'drafts', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, total, at: serverTimestamp() })
+    await batch.commit()
   },
   /** Changes made to this person's quote by someone else. */
   watchMine(onData: (e: QuoteEdit) => void): () => void {
@@ -342,7 +349,7 @@ export const edits = {
   /** For the editor: whether the change sent to this person is still waiting for their builder to take it in. */
   watchWaiting(uid: string, onData: (waiting: boolean) => void): () => void {
     if (!firestore) return () => {}
-    return onSnapshot(doc(firestore, 'edits', uid), (snap) => onData(snap.exists() && !snap.metadata.hasPendingWrites), () => {})
+    return onSnapshot(doc(firestore, 'edits', uid), { includeMetadataChanges: true }, (snap) => { if (!snap.metadata.hasPendingWrites) onData(snap.exists()) }, () => {})
   },
 }
 
@@ -352,7 +359,6 @@ export const DRAFT_KEY = 'posterpilot.builder.draft'
 export const builderOpen = { current: false }
 /** A change someone made to this person's quote while their Builder page was closed: written into the kept quote. */
 export function applyEditToStored(e: QuoteEdit): boolean {
-  if (e.at && Date.now() - e.at > LIVE_IDLE_MS) return false
   try {
     const raw = localStorage.getItem(DRAFT_KEY)
     const b = raw ? (JSON.parse(raw) as Build) : newBuild('')

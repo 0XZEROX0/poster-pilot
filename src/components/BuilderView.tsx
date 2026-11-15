@@ -60,13 +60,16 @@ export function BuilderView() {
   const [theirGrant, setTheirGrant] = useState(0)
   const sent = useRef<string[]>([])
   // How the editor's changes are getting to the other person: '' nothing sent yet, then sending, waiting (their builder has not taken it in), done, or an error.
-  const [sync, setSync] = useState<'' | 'sending' | 'waiting' | 'done' | 'late' | 'denied' | 'offline'>('')
+  const [sync, setSync] = useState<'' | 'sending' | 'saved' | 'waiting' | 'done' | 'late' | 'denied' | 'offline'>('')
+  // Their app has not been used for a while, so it takes the change in the next time it is opened.
+  const idle = useRef(false)
   useEffect(() => {
     if (!editing) return
     let timer: ReturnType<typeof setTimeout> | undefined
     const stop = edits.watchWaiting(editing.uid, (waiting) => {
       clearTimeout(timer)
-      setSync((s) => (waiting ? 'waiting' : s === 'waiting' || s === 'late' || s === 'sending' ? 'done' : s))
+      if (waiting && idle.current) return setSync((s) => (s === '' ? s : 'saved'))
+      setSync((s) => (waiting ? (s === '' ? s : 'waiting') : s === 'waiting' || s === 'late' || s === 'sending' || s === 'saved' ? 'done' : s))
       // Their builder normally takes a change in within a second or two.
       if (waiting) timer = setTimeout(() => setSync((s) => (s === 'waiting' ? 'late' : s)), 8000)
     })
@@ -82,7 +85,6 @@ export function BuilderView() {
   }, [])
   useEffect(() => edits.watchMine((e) => {
     void edits.clearMine()
-    if (e.at && Date.now() - e.at > LIVE_IDLE_MS) return
     const apply = (b: Build): Build => ({ ...b, customer: e.customer, lines: complete(e.lines), extra: e.extra, buildDiscount: e.buildDiscount })
     if (editingRef.current) mine.current = mine.current && apply(mine.current)
     else setBuild(apply)
@@ -126,7 +128,7 @@ export function BuilderView() {
       const id = setTimeout(() => {
         sent.current = [...sent.current.slice(-9), now]
         setSync('sending')
-        edits.send(editing.uid, { ...build, lines }).catch((e) => {
+        edits.send(editing.uid, { ...build, lines }, sum.total).then(() => setSync((s) => (s === 'sending' ? (idle.current ? 'saved' : 'waiting') : s)), (e) => {
           sent.current = sent.current.filter((s) => s !== now)
           setSync((e as { code?: string }).code === 'permission-denied' ? 'denied' : 'offline')
         })
@@ -201,6 +203,7 @@ export function BuilderView() {
     mine.current = build
     seen.current = shape(one, one.lines)
     sent.current = []
+    idle.current = Date.now() - one.at > LIVE_IDLE_MS
     setBuild({ customer: one.customer, sales: one.sales, lines: complete(one.lines), extra: one.extra, buildDiscount: one.buildDiscount })
     setTheirGrant(one.grant)
     setEditing({ uid: one.uid, name: one.byName || one.sales || t('Someone') })
@@ -210,8 +213,8 @@ export function BuilderView() {
   const stopEditing = () => {
     if (editing && now !== seen.current && !sent.current.includes(now)) {
       const name = editing.name
-      edits.send(editing.uid, { ...build, lines }).then(
-        () => showToast(tn('Sent to %name', { name })),
+      edits.send(editing.uid, { ...build, lines }, sum.total).then(
+        () => showToast(tn("Saved in %name's quote", { name })),
         (e) => showToast((e as { code?: string }).code === 'permission-denied' ? t('Your last change was not sent: the database refused it.') : t('Your last change was not sent. Check the connection.')),
       )
     }
@@ -255,9 +258,10 @@ export function BuilderView() {
                 <p className="edit-banner"><span className="live-dot" aria-hidden="true" />{tn("You're editing %name's quote. They see each change.", { name: editing.name })}</p>
                 {sync && <p className={`edit-sync edit-sync-${sync}`}>{{
                   sending: t('Sending…'),
-                  waiting: t('Sent. Waiting for their builder…'),
+                  saved: tn("Saved in %name's quote. Their app takes it in the next time they open it.", { name: editing.name }),
+                  waiting: t('Saved. Waiting for their builder…'),
                   done: tn('%name has your changes.', { name: editing.name }),
-                  late: tn("%name's builder has not taken your changes in yet. They need the Builder page open, and may need to close and reopen the app to get the latest version.", { name: editing.name }),
+                  late: tn("Saved in %name's quote. Their app has not taken it in yet: it will when they open it (an old version may need closing and reopening).", { name: editing.name }),
                   denied: t('The database refused your change. Make sure the latest rules are published in Firebase and that your role has Edit live quotes.'),
                   offline: t('Your change could not be sent. Check the connection.'),
                 }[sync]}</p>}
