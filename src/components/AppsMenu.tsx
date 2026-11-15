@@ -38,7 +38,7 @@ export function usePins(available: string[]) {
 /** Sections of the apps menu. */
 const GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Shop', ids: ['prices', 'builder'] },
-  { title: 'Posters', ids: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'] },
+  { title: 'Posters', ids: ['offers', 'review', 'fix', 'calendar', 'brainstorm', 'posted', 'database'] },
   { title: 'Team', ids: ['activity'] },
 ]
 
