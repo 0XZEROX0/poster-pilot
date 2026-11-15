@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { buildCaption, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
+import { buildCaption, cairoNow, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
@@ -15,6 +15,7 @@ import { Icon, showToast } from './ui'
 export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onClose: () => void }) {
   const [draft, setDraft] = useState(post)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmPost, setConfirmPost] = useState(false)
   const [busy, setBusy] = useState(false)
   const stage = stageOf(post)
   const posted = stage === 'posted'
@@ -30,15 +31,35 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     const out: Partial<Post> = {}
     for (const key of ['priceBefore', 'priceAfter', 'style', 'details', 'postDate', 'postTime', 'caption', 'captionStyle'] as const) if (draft[key] !== post[key]) out[key] = draft[key]
     if (JSON.stringify(draft.items) !== JSON.stringify(post.items)) out.items = draft.items
+    // A new date or time replaces a "Post now" the engine has not carried out yet.
+    if (post.postNow && ('postDate' in out || 'postTime' in out)) out.postNow = ''
+    if (post.variants && (draft.title ?? '') !== (post.title ?? '')) out.title = draft.title ?? ''
     return out
   }
   async function save(extra: Partial<Post>, message: string) {
     const patch = { ...changes(), ...extra }
     // A new price or style means a new poster, as in the sheet.
-    if (!extra.feedback && !posted && stage !== 'offer' && ('priceBefore' in patch || 'priceAfter' in patch || 'style' in patch || 'items' in patch)) patch.feedback = 'Redo'
+    if (!extra.feedback && !posted && stage !== 'offer' && ('priceBefore' in patch || 'priceAfter' in patch || 'style' in patch || 'items' in patch || 'title' in patch)) patch.feedback = 'Redo'
     if (Object.keys(patch).length) await backend.updatePost(post.id, patch)
     showToast(t(message))
     onClose()
+  }
+  /**
+   * "Post now": after the person confirms, the engine publishes the post on Facebook and Instagram at once instead of
+   * scheduling it. The time sent is the moment of the press; the engine replaces it with the minute it really went out.
+   * Only unsaved-free, approved posts that Facebook does not hold yet can be posted this way (the button is hidden otherwise).
+   */
+  async function postNow() {
+    setBusy(true)
+    try {
+      const now = cairoNow()
+      await backend.updatePost(post.id, { postNow: 'yes', postDate: now.date, postTime: now.time })
+      showToast(t('Posting now on Facebook and Instagram'))
+      onClose()
+    } catch {
+      showToast(t('Could not ask for Post now. Try again.'))
+      setBusy(false)
+    }
   }
   async function remove() {
     await backend.removePost(post.id)
@@ -65,6 +86,8 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const mayPlan = allowed('schedule')
   const mayEdit = allowed('offers.create') || allowed('fix') || mayReview
   const dirty = Object.keys(changes()).length > 0
+  // Post now: an approved post with its poster, not on Facebook yet, no unsaved changes, not already asked for.
+  const mayPostNow = mayPlan && stage === 'scheduled' && post.feedback === 'Done' && !onFacebook && post.postNow !== 'yes' && !!post.posterUrl && !dirty
 
   const footer = posted ? (
     post.fbPostId && <a className="btn btn-primary" href={`https://www.facebook.com/${post.fbPostId}`} target="_blank" rel="noreferrer"><Icon name="link" size={18} />{t('Open on Facebook')}</a>
@@ -87,9 +110,18 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Schedule cancelled. The post stays approved.')}>{t('Cancel schedule')}</button>
           )}
         </>
+      ) : stage === 'scheduled' && confirmPost ? (
+        <div className="confirm-post" role="alertdialog" aria-labelledby="confirm-post-q">
+          <p id="confirm-post-q"><b>{t('Publish to Facebook and Instagram now?')}</b><br /><span className="muted small">{t('It goes out within a minute and cannot be taken back from here.')}</span></p>
+          <div className="confirm-post-actions">
+            <button className="btn btn-primary" disabled={busy} onClick={postNow}><Icon name="send" size={18} />{t('Yes, post now')}</button>
+            <button className="btn btn-ghost" disabled={busy} onClick={() => setConfirmPost(false)}>{t('Cancel')}</button>
+          </div>
+        </div>
       ) : stage === 'scheduled' ? (
         <>
           <button className="btn btn-primary" disabled={!dirty} onClick={() => save({}, 'Saved')}>{t('Save')}</button>
+          {mayPostNow && <button className="btn" onClick={() => setConfirmPost(true)}><Icon name="send" size={18} />{t('Post now')}</button>}
           {/* The engine takes the post off Facebook, empties its date and time and leaves it approved. */}
           {mayPlan && post.feedback !== 'Cancel' && (onFacebook || when) && (
             <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Schedule cancelled. The post stays approved.')}>{t('Cancel schedule')}</button>
@@ -122,6 +154,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               <b><Icon name="fix" size={18} />{problem.title}</b>
               <p>{problem.advice}</p>
             </div>
+          )}
+          {!posted && post.variants && (
+            <label><span>{t('Name on the poster')}</span><input dir="auto" value={draft.title ?? ''} onChange={(e) => set({ title: e.target.value })} /></label>
           )}
           {!posted && draft.items.map((it, i) => (
             <fieldset key={i} className={`item-box${it.photoMissing && problem ? ' item-missing' : ''}`}>

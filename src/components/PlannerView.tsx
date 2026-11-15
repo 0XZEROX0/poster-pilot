@@ -181,7 +181,8 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
     const when = post && whenOf(post)
     if (when?.date === day && when.time === time) return
     // A new time for a post whose cancel is still pending replaces the cancel.
-    backend.updatePost(id, { postDate: day, postTime: time, ...(post?.feedback === 'Cancel' ? { feedback: 'Done' as const } : {}) }).then(() => showToast(`${t('Set for')} ${dayLabel(day)} · ${timeLabel(time)}`))
+    // A new time also replaces a "Post now" the engine has not carried out yet.
+    backend.updatePost(id, { postDate: day, postTime: time, ...(post?.feedback === 'Cancel' ? { feedback: 'Done' as const } : {}), ...(post?.postNow ? { postNow: '' } : {}) }).then(() => showToast(`${t('Set for')} ${dayLabel(day)} · ${timeLabel(time)}`))
   }
 
   /** Dragging with the mouse from anywhere on a card, and with a finger from its grip. */

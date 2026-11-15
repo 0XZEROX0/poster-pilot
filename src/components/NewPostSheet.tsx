@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react'
-import { buildCaption, duplicatesOf, formatPrice, stageOf, toNumber, whenOf } from '../data/logic'
+import { buildCaption, commonTitle, duplicatesOf, formatPrice, maxItems, stageOf, toNumber, whenOf } from '../data/logic'
 import { backend } from '../data/store'
 import type { Data, NewPost, Post, PostItem, Product } from '../data/types'
 import { t } from '../i18n'
 import { Sheet } from './Sheet'
 import { Icon, dayLabel, showToast } from './ui'
 
-/** Start a post: pick 1 to 3 products by searching the product list, then price, style and time. */
+/** Start a post: pick 1 to 3 products (or up to 4 versions of one product) by searching the product list, then price, style and time. */
 export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<Product[]>([])
+  // Versions of one product (colours, switches...): one name and one price on the poster, up to 4 items.
+  const [variants, setVariants] = useState(false)
+  const [title, setTitle] = useState('')
+  const max = maxItems(variants)
   const [priceAfter, setPriceAfter] = useState('')
   const [priceBefore, setPriceBefore] = useState('')
   const [style, setStyle] = useState(data.styles[0] ?? 'Static')
@@ -26,16 +30,18 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
   }, [query, data.products, picked])
 
   /** The list price follows the picked products until the person types their own. */
-  const autoBefore = picked.reduce((sum, p) => sum + toNumber(p.price), 0)
+  // Versions: the poster shows one price, the highest of them (same rule as the engine).
+  const autoBefore = variants ? Math.max(0, ...picked.map((p) => toNumber(p.price))) : picked.reduce((sum, p) => sum + toNumber(p.price), 0)
   const before = priceBefore || (autoBefore ? String(autoBefore) : '')
   function add(p: Product) {
-    if (picked.length >= 3) return
+    if (picked.length >= max) return
     setPicked([...picked, p])
     setQuery('')
     setError('')
   }
   const draft: NewPost = {
     items: picked.map((p): PostItem => ({ category: p.category, name: p.name, manualPhoto: '', nextPhoto: false })),
+    ...(variants ? { variants: true, title: title.trim() || commonTitle(picked.map((p) => p.name)) } : {}),
     company: [...new Set(picked.map((p) => p.company).filter(Boolean))].join(' + '),
     priceBefore: before, priceAfter, style, details, captionStyle, postDate, postTime,
   }
@@ -50,6 +56,8 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
   }
   async function create() {
     if (!picked.length) return setError(t('Pick at least one product.'))
+    if (variants && picked.length < 2) return setError(t('Pick at least 2 versions.'))
+    if (picked.length > max) return setError(t('Up to 3 products. Tick "Versions of one product" for 4.'))
     await backend.addPost(draft)
     showToast(t('Post created'))
     onClose()
@@ -70,9 +78,9 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
               ))}
             </div>
           )}
-          {picked.length < 3 && <input type="search" placeholder={t('Search products…')} value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />}
+          {picked.length < max && <input type="search" placeholder={t('Search products…')} value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />}
         </label>
-        {query.trim() && picked.length < 3 && (
+        {query.trim() && picked.length < max && (
           <div className="results">
             {matches.map((p) => (
               <button key={`${p.category}${p.name}`} onClick={() => add(p)}>
@@ -88,7 +96,14 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
             )}
           </div>
         )}
-        <p className="hint">{error ? <b className="bad">{error}</b> : t('Add up to 3 products.')}</p>
+        <p className="hint">{error ? <b className="bad">{error}</b> : t(variants ? 'Add up to 4 versions of the same product, such as its colours.' : 'Add up to 3 products.')}</p>
+        <label className="check">
+          <input type="checkbox" checked={variants} onChange={(e) => { setVariants(e.target.checked); setError('') }} />
+          <span>{t('Versions of one product (colours, switches…): one name and one price, up to 4')}</span>
+        </label>
+        {variants && (
+          <label><span>{t('Name on the poster')}</span><input dir="auto" value={title} placeholder={commonTitle(picked.map((p) => p.name)) || t('Product name')} onChange={(e) => setTitle(e.target.value)} /></label>
+        )}
         {(dup.same.length > 0 || dup.partly.length > 0) && (
           <div className={dup.same.length ? 'alert' : 'alert alert-info'}>
             <b><Icon name="fix" size={18} />{t(dup.same.length ? (picked.length > 1 ? 'You already made this bundle.' : 'You already made a post for this item.') : 'Some of these items are already in other posts.')}</b>
