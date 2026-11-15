@@ -404,11 +404,21 @@ await ok('role with See the activity log pages by date', getDocs(query(collectio
   await ok('role with Brainstorm clears a plan', deleteDoc(doc(pricer, 'plans/2026-11-14')))
   await no('outsider reads plans', getDocs(collection(as('u-out', 'out@x.com'), 'plans')))
 }
-// cost: its own collection, only for 'Edit prices'
+// cost: its own collection, only for 'See and edit cost'
 {
   const CL = (over = {}) => ({ cat: 'cpu', pid: 'a1', name: 'Ryzen', act: 'cost', changes: [{ f: 'cost', from: '', to: '90' }], at: serverTimestamp(), by: 'u-hr2', byName: 'P', ...over })
   const out = as('u-out', 'out@x.com')
   await ok('owner sets pricer back to Edit prices only', setDoc(doc(boss, 'roles/pricer'), { name: 'Pricer', perms: ['prices.edit'] }))
+  // 'Edit prices' alone is not enough: cost has its own permission
+  await no('Edit prices without See cost lists costs', getDocs(collection(pricer, 'costs')))
+  await no('Edit prices without See cost reads a cost document', getDoc(doc(pricer, 'costs/cpu')))
+  await no('Edit prices without See cost sets a cost', setDoc(doc(pricer, 'costs/cpu'), { items: { a1: { cost: 1 } } }, { merge: true }))
+  await no('Edit prices without See cost reads the cost log', getDocs(collection(pricer, 'costLog')))
+  await no('Edit prices without See cost writes a cost line', setDoc(doc(pricer, 'costLog/c0'), CL()))
+  await ok('Edit prices without See cost still changes a price', updateDoc(doc(pricer, 'prices/cpu'), { 'items.a1.alone': 131 }))
+  await ok('owner gives pricer See and edit cost only', setDoc(doc(boss, 'roles/pricer'), { name: 'Pricer', perms: ['cost'] }))
+  await no('See cost without Edit prices changes a price', updateDoc(doc(pricer, 'prices/cpu'), { 'items.a1.alone': 132 }))
+  await no('built-in member role reads costs', getDocs(collection(old, 'costs')))
   { const b = writeBatch(pricer); b.set(doc(pricer, 'costs/cpu'), { items: { a1: { cost: 90, at: serverTimestamp(), byName: 'P' } } }, { merge: true }); b.set(doc(pricer, 'costLog/c1'), CL()); await ok('pricer sets a cost with its line', b.commit()) }
   await ok('pricer reads costs', getDocs(collection(pricer, 'costs')))
   await ok('pricer reads one cost document', getDoc(doc(pricer, 'costs/cpu')))

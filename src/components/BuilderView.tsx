@@ -119,9 +119,9 @@ export function BuilderView() {
   const lines = useMemo(() => build.lines.map((l) => fresh(cats, slotOf(l.slot).single && l.qty !== 1 ? { ...l, qty: 1 } : l)), [build.lines, cats])
   const parts = useMemo(() => chosen(cats, lines), [cats, lines])
   const sum = totals(lines, build.extra + given, build.buildDiscount)
-  // What the build costs the shop: only for roles that may edit prices, and only after the eye is pressed.
+  // What the build costs the shop: only for roles with 'See and edit cost', and only after the eye is pressed.
   // It stays on this screen: it is never part of the shared live quote, a saved quote or the printed quotation.
-  const seeCost = allowed('prices.edit')
+  const seeCost = allowed('cost')
   const { costs: costMap } = useCosts()
   const costOn = useCostShown() && seeCost
   const bc = buildCost(lines, costMap)

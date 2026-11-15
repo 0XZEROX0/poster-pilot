@@ -11,7 +11,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
@@ -24,7 +24,8 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   'templates.edit': ['Edit caption templates', 'See and change the caption templates in Settings, Posters.'],
   delete: ['Delete posts', 'Delete posts that are not on the schedule.'],
   people: ['Manage people', 'See the system code, accept and remove people.'],
-  'prices.edit': ['Edit prices', 'Change prices, add, hide and delete products in the price list, and see and change what each product costs.'],
+  'prices.edit': ['Edit prices', 'Change prices, add, hide and delete products in the price list.'],
+  cost: ['See and edit cost', 'See and change what each product costs the shop, in Prices and in the Builder, with the profit. Hidden from everyone else.'],
   'quotes.all': ["See everyone's quotes", "Watch the quote each person is building, live, and see everyone's saved quotes with who made them. Without it, people see only their own."],
   'quotes.discount': ['Give extra discount', "Add an extra discount to someone's quote while they build it (from Live quotes). It shows in their quote at once, with your name."],
   'activity.view': ['See the activity log', 'Open Activity: everything everyone did in the app (offers, prices, quotes, people, settings, engine and website), with filters. Nobody can change or remove a line. The owner always sees it.'],
@@ -52,7 +53,7 @@ export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
   { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit'), pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }

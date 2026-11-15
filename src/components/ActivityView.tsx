@@ -47,7 +47,7 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
   const feed = useRef<ActivityFeed | null>(null)
-  const seeCost = allowed('prices.edit')
+  const seeCost = allowed('cost')
   const costOn = useCostShown()
 
   const pick = (id: Range) => {
@@ -63,8 +63,8 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
   const from = cairoMidnight(fromDay <= toDay ? fromDay : toDay)
   const to = cairoMidnight(addDays(fromDay <= toDay ? toDay : fromDay, 1))
   useEffect(() => {
-    // Cost changes are only readable (and only read) for roles that may edit prices.
-    const f = new ActivityFeed(from, to, allowed('prices.edit') ? ['activity', 'log', 'priceLog', 'costLog'] : undefined)
+    // Cost changes are only readable (and only read) for roles with 'See and edit cost'.
+    const f = new ActivityFeed(from, to, allowed('cost') ? ['activity', 'log', 'priceLog', 'costLog'] : undefined)
     feed.current = f
     setRows(null)
     setErrors([])
