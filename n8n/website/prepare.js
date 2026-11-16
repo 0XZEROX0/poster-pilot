@@ -2,10 +2,14 @@
 // (a simple product, or the list of options of a product with options). Picks the option that fits the app
 // product's name (colour, Tray/Box...), and builds the change WooCommerce needs.
 const plans = $('What to send').all().map(i => i.json);
-const got = {};
+const got = {}, byId = {};
 for (const it of $input.all()) {
-  const k = it.pairedItem && typeof it.pairedItem.item === 'number' ? it.pairedItem.item : 0;
+  const pi = Array.isArray(it.pairedItem) ? it.pairedItem[0] : it.pairedItem;
+  const k = pi && typeof pi.item === 'number' ? pi.item : 0;
   (got[k] = got[k] || []).push(it.json);
+  // Every product and option read in this run, by id (ids are unique on the website), so the chosen one is found even
+  // if n8n paired an answer to the wrong planned product.
+  if (it.json && it.json.id && !it.json.error) byId[it.json.id] = it.json;
 }
 const decode = s => String(s || '').replace(/&#215;|&times;|×/gi, 'x').replace(/&amp;/g, '&').replace(/&#\d+;/g, ' ');
 const tok = s => decode(s).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
@@ -13,18 +17,20 @@ const DRY = $('Settings').first().json.dryRun !== false;
 const out = [];
 plans.forEach((p, i) => {
   const rows = (got[i] || []).filter(r => r && !r.error);
+  if (!rows.length && p.type !== 'variable' && byId[p.id]) rows.push(byId[p.id]);
+  if (!rows.length && p.type === 'variable' && p.variation && byId[p.variation]) rows.push(byId[p.variation]);
   // A product that cannot be sent skips "Send to website"; its error is still saved.
   const fail = msg => out.push({ json: { ...p, method: '', url: '', body: {}, error: msg } });
   if (!rows.length) return fail(((got[i] || [])[0] || {}).error ? 'The website did not answer: ' + String(((got[i] || [])[0].error || {}).message || '').slice(0, 200) : 'The website product was not found');
-  let target = rows[0], url = `https://static-eg.com/wp-json/wc/v3/products/${p.id}`;
+  let target = (p.type !== 'variable' && byId[p.id]) || rows[0], url = `https://static-eg.com/wp-json/wc/v3/products/${p.id}`;
   if (p.type === 'variable') {
     const words = new Set(tok(p.name));
     const fits = rows.filter(v => v && v.id && (v.attributes || []).length && (v.attributes || []).every(a => tok(a.option).every(t => words.has(t))));
     // The chosen option; when it is gone from the website (options edited there get new ids), the option that fits the name.
-    const picked = p.variation ? rows.find(v => v.id === p.variation) : null;
+    const picked = p.variation ? (rows.find(v => v.id === p.variation) || (byId[p.variation] && (byId[p.variation].attributes || []).length ? byId[p.variation] : null)) : null;
     const chosen = picked || (fits.length === 1 ? fits[0] : null);
     const names = rows.map(v => (v.attributes || []).map(a => a.option).join(' ')).join(', ').slice(0, 200);
-    if (!chosen) return fail(p.variation ? 'The chosen website option is no longer on the website; choose the option again (' + names + ')' : fits.length > 1 ? 'More than one option of the website product fits this name' : 'No option of the website product fits this name (' + names + ')');
+    if (!chosen) return fail(p.variation ? 'The chosen website option is no longer on the website; choose the option again (read ' + rows.map(v => v.id + ' ' + (v.attributes || []).map(a => a.option).join(' ')).join(', ').slice(0, 200) + ')' : fits.length > 1 ? 'More than one option of the website product fits this name' : 'No option of the website product fits this name (' + names + ')');
     target = chosen;
     url = `https://static-eg.com/wp-json/wc/v3/products/${p.id}/variations/${chosen.id}`;
   }
