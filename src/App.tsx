@@ -48,7 +48,8 @@ const tabFromHash = (): Tab => ALL_TABS.find((x) => `#/${x.id}` === location.has
 const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' ? 'Shop' : id === 'activity' ? 'Team' : 'Posters')
 
 /** The engine is "quiet" when it has not written its sign of life for this long. */
-const QUIET_MS = 30 * 60 * 1000
+// The engine's timed run (which writes the heartbeat) is now hourly; the app's signals start everything else.
+const QUIET_MS = 75 * 60 * 1000
 
 export default function App() {
   useLang()
