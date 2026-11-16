@@ -83,7 +83,10 @@ export function webPending(item: PriceItem, evenIfNotConfirmed = false): string[
   if (!w || (!w.ok && !evenIfNotConfirmed)) return []
   const out: string[] = []
   if (item.online !== undefined && item.online !== null && item.online !== (w.price ?? null)) out.push('price')
-  if ((item.onlineSale ?? null) !== (w.sale ?? null)) out.push('sale')
+  // A sale price that is not below the price is no sale: the website ignores it, so it is never "waiting".
+  const ref = item.online ?? w.price ?? null
+  const sale = item.onlineSale !== undefined && item.onlineSale !== null && (ref === null || item.onlineSale < ref) ? item.onlineSale : null
+  if (sale !== (w.sale ?? null)) out.push('sale')
   if (w.stock && (item.out ? 'outofstock' : 'instock') !== (w.stock === 'outofstock' ? 'outofstock' : 'instock')) out.push('stock')
   if (w.rename && !sameName(w.rename, w.name)) out.push('name')
   return out

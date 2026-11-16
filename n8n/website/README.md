@@ -61,3 +61,14 @@ static-eg.com is WordPress + WooCommerce. n8n reads and writes it with the REST 
 - WooCommerce sends webhooks in the background (Action Scheduler), so a delivery can take from a few seconds up to
   about a minute after the save, depending on site traffic.
 - `node n8n/website/build-changed.cjs` prints the workflow.
+
+## Staying under the website's firewall (2026-11-16)
+
+Hostinger's firewall blocked the engine's address for a few minutes after bursts of website requests. Since then:
+
+- Website changed waits 30 s after a call and starts one pull only for the newest call (hook-check.js adds `t`,
+  hook-newest.js drops older calls), so a burst of product saves starts one pull, not one each.
+- Every website request is at least 1.5 s apart: sync reads and batch sends, the pull's reads, and the link
+  workflow's pages and options.
+- A sale price at or above the regular price counts as no sale (plan.js, and webPending in the app), because
+  WooCommerce ignores it; before, those items were resent on every run.

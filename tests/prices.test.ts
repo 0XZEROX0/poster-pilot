@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bulkPatches, categoryOf, diff, matches, money, parseMoney, roundTo, type PriceItem } from '../src/data/prices'
+import { bulkPatches, categoryOf, diff, matches, money, parseMoney, roundTo, webPending, type PriceItem } from '../src/data/prices'
 
 const item = (over: Partial<PriceItem> = {}): PriceItem => ({ id: 'a1', name: 'Asus Prime B850M-K', in: 5500, alone: 5700, warranty: 3, company: 'Asus Prime', specs: { socket: 'AM5', memory: 'DDR5' }, ...over })
 
@@ -43,5 +43,16 @@ describe('stock', () => {
     expect(diff(item, { out: true })).toEqual([{ f: 'out', from: 'In stock', to: 'Out of stock' }])
     expect(diff({ ...item, out: true }, { out: undefined })).toEqual([{ f: 'out', from: 'Out of stock', to: 'In stock' }])
     expect(diff(item, { out: undefined })).toEqual([])
+  })
+})
+
+describe('webPending', () => {
+  const linked = (x: Partial<PriceItem>, web: Record<string, unknown>) => ({ name: 'X', ...x, web: { id: 1, ok: true, stock: 'instock', ...web } }) as unknown as PriceItem
+  it('treats a sale price not below the price as no sale', () => {
+    expect(webPending(linked({ online: 9400, onlineSale: 9400 }, { price: 9400, sale: null }))).toEqual([])
+    expect(webPending(linked({ onlineSale: 2200 }, { price: 2200, sale: null }))).toEqual([])
+  })
+  it('still sends a real sale', () => {
+    expect(webPending(linked({ online: 8900, onlineSale: 7999 }, { price: 8900, sale: null }))).toEqual(['sale'])
   })
 })
