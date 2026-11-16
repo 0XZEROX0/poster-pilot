@@ -467,9 +467,26 @@ export function BuilderView() {
 /** Pick a product for one row: the ones that fit come first, then the ones in stock. */
 /** The product's website photo, or the short name of its kind when there is none (or it fails to load). */
 function Thumb({ src, label, small }: { src: string; label: string; small?: boolean }) {
-  const [broken, setBroken] = useState('')
-  if (!src || broken === src) return <span className={`bx-tile on${small ? ' sm' : ''}`}>{label}</span>
-  return <span className={`bx-tile bx-photo${small ? ' sm' : ''}`}><img src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBroken(src)} /></span>
+  // The website's small copy of the photo first (a few KB instead of the full photo), the full photo if there is none.
+  const [step, setStep] = useState<{ src: string; n: number }>({ src: '', n: 0 })
+  const n = step.src === src ? step.n : smallPhotosWork() ? 0 : 1
+  if (!src || n > 1) return <span className={`bx-tile on${small ? ' sm' : ''}`}>{label}</span>
+  const url = n === 0 ? smallPhoto(src) : src
+  const fail = () => { if (n === 0) noSmallPhotos(); setStep({ src, n: n + 1 }) }
+  return <span className={`bx-tile bx-photo${small ? ' sm' : ''}`}><img src={url} alt="" width={96} height={96} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={fail} /></span>
+}
+
+/** WordPress keeps a 300x300 copy of each product photo next to it (photo-300x300.jpg; a big photo's -scaled is not in the copy's name). */
+const smallPhoto = (src: string) => src.replace(/-scaled(\.\w+)$/i, '$1').replace(/(-\d+x\d+)?(\.(?:jpe?g|png|webp))$/i, '-300x300$2')
+// When small copies fail a few times, the full photos are used from then on (remembered on this device for a day).
+const SMALL_KEY = 'posterpilot.builder.noSmallPhotos'
+let smallFails = 0
+function smallPhotosWork() {
+  try { return Date.now() - Number(localStorage.getItem(SMALL_KEY) || 0) > 86_400_000 } catch { return true }
+}
+function noSmallPhotos() {
+  if (++smallFails < 3) return
+  try { localStorage.setItem(SMALL_KEY, String(Date.now())) } catch { /* private window */ }
 }
 
 /** Every product that matches the search, from all kinds, with the row it would go into. */
