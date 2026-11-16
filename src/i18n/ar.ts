@@ -444,6 +444,7 @@ export const ar: Record<string, string> = {
   'Website price': 'سعر الموقع',
   'Online sale': 'خصم أونلاين',
   'Website': 'الموقع',
+  'Website prices': 'أسعار الموقع',
   'Website: all': 'الموقع: الكل',
   'Website link to check': 'ربط بالموقع محتاج مراجعة',
   'On the website': 'على الموقع',
