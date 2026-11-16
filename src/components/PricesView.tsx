@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { bulkPatches, casePsu, fieldLabel, loadWebProducts, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, sameName as sameNameLoose, usePrices, webNameDiff, webNeedsOption, webPending, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem, type WebOption, type WebProduct } from '../data/prices'
-import { costKey, costs, profitOf, profitText, setCostShown, useCosts, useCostShown, type CostMap } from '../data/costs'
+import { costKey, costs, lowestPrice, profitOf, profitText, setCostShown, useCosts, useCostShown, type CostMap } from '../data/costs'
 import { allowed } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -168,13 +168,21 @@ export function CostEye({ compact }: { compact?: boolean }) {
   )
 }
 
-/** The cost of one product as its own edit box, with the profit on the alone price as a tooltip. */
-function CostCell({ cat, item, cost }: { cat: PriceCategory; item: PriceItem; cost: CostMap }) {
+/** Profit on the product's lowest price, and which price that is: "500 (6.4%) · In build". */
+function ProfitLine({ item, cost }: { item: { in?: number | null; alone?: number | null; online?: number | null; onlineSale?: number | null }; cost: number | null }) {
+  const low = lowestPrice(item, seeWeb())
+  const p = profitOf(low?.price, cost)
+  if (!low || !p) return <>—</>
+  return <><b className={p.profit < 0 ? 'bad' : 'good'}>{profitText(p)}</b> <small className="muted">· {t(low.label)} {money(low.price)}</small></>
+}
+
+/** The cost of one product as its own edit box. In the list, the profit on its lowest price is under it. */
+function CostCell({ cat, item, cost, withProfit }: { cat: PriceCategory; item: PriceItem; cost: CostMap; withProfit?: boolean }) {
   const value = cost[costKey(cat.id, item.id)] ?? null
-  const p = profitOf(item.alone ?? item.in, value)
   return (
-    <span className="cost-cell" title={p ? `${t('Profit')}: ${profitText(p)}` : undefined}>
+    <span className="cost-cell">
       <PriceCell value={value} label={t('Cost')} canEdit onSave={(v) => costs.save(cat.id, item.id, item.name, v, value).catch(fail)} />
+      {withProfit && value !== null && <span className="cost-profit"><ProfitLine item={item} cost={value} /></span>}
     </span>
   )
 }
@@ -224,7 +232,7 @@ function ListRow({ cat, item, canEdit, cost, catHead, groupHead, onOpen }: RowPr
             <PriceCell value={item.onlineSale ?? null} label={t('Price after')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} />
           </span>
         )}
-        {cost && <CostCell cat={cat} item={item} cost={cost} />}
+        {cost && <CostCell cat={cat} item={item} cost={cost} withProfit />}
       </div>
     </>
   )
@@ -258,7 +266,7 @@ function PriceCard({ cat, item, canEdit, cost, catHead, groupHead, onOpen }: Row
             <label><span>{t('Price after')}</span><PriceCell value={item.onlineSale ?? null} label={t('Price after')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} /></label>
           </div>}
           {cost && <label className="pcard-cost"><span>{t('Cost')}</span><CostCell cat={cat} item={item} cost={cost} /></label>}
-          {cost && <div className="pcard-profit"><span>{t('Profit')}</span><b>{profitText(profitOf(item.alone ?? item.in, cost[costKey(cat.id, item.id)]))}</b></div>}
+          {cost && <div className="pcard-profit"><span>{t('Profit')}</span><span className="cost-profit"><ProfitLine item={item} cost={cost[costKey(cat.id, item.id)] ?? null} /></span></div>}
         </div>
       </article>
     </>
@@ -451,8 +459,9 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, canCost, costMap, on
             </label>
             {costOn && (() => {
               const c = parseMoney(cost) ?? null
-              const a = profitOf(parseMoney(alone) ?? null, c), b = profitOf(parseMoney(inb) ?? null, c)
-              return (a || b) ? <p className="hint">{t('Profit')}: {t('Alone')} {profitText(a)} · {t('In build')} {profitText(b)}</p> : null
+              if (c === null) return null
+              const typed = { in: parseMoney(inb) ?? null, alone: parseMoney(alone) ?? null, online: parseMoney(online) ?? null, onlineSale: parseMoney(onlineSale) ?? null }
+              return <p className="hint cost-profit">{t('Profit on the lowest price')}: <ProfitLine item={typed} cost={c} /></p>
             })()}
           </div>
         )}

@@ -1085,3 +1085,18 @@ button.stock:hover { filter: brightness(1.15); }
   .ptable.no-web .ptable-row { grid-template-columns: 30px repeat(2, minmax(0, 1fr)); }
   .ptable.no-web.with-cost .ptable-row { grid-template-columns: 30px repeat(3, minmax(0, 1fr)); }
 }
+
+/* Profit on the lowest price, with the price it was worked out from. */
+.cost-profit { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.cost-cell .cost-profit { display: block; text-align: end; padding-inline-end: 8px; line-height: 1.25; white-space: normal; }
+.cost-profit b.good { color: var(--good); }
+.cost-profit b.bad { color: var(--bad); }
+.cost-profit small { white-space: nowrap; }
+.pcard-profit .cost-profit b { display: block; font-size: 0.9375rem; }
+.ptable.with-cost .ptable-row { grid-template-columns: minmax(150px, 1.6fr) minmax(0, 1fr) 110px repeat(4, 84px) 130px; }
+.ptable.with-cost.no-web .ptable-row { grid-template-columns: minmax(150px, 1.6fr) minmax(0, 1fr) 110px repeat(2, 84px) 130px; }
+@media (max-width: 640px) {
+  .ptable.with-cost .ptable-row { grid-template-columns: 30px repeat(4, minmax(0, 1fr)) minmax(0, 1.4fr); }
+  .ptable.with-cost.no-web .ptable-row { grid-template-columns: 30px repeat(2, minmax(0, 1fr)) minmax(0, 1.4fr); }
+}
+.cost-cell .cost-profit small { display: block; white-space: normal; }
