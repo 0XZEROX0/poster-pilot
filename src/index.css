@@ -684,7 +684,6 @@ button.stock:hover { filter: brightness(1.15); }
 /* The printed quotation: hidden on screen, the only thing on the paper. */
 .quote-print { display: none; }
 @media print {
-  @page { size: A4 landscape; margin: 8mm; }
   body > *:not(.quote-print) { display: none !important; }
   html, body { background: #fff !important; min-height: 0 !important; height: auto !important; width: auto !important; overflow: visible !important; }
   /* Nothing else may take room on the paper (an empty second page came from the screen's full-height body). */
@@ -710,6 +709,23 @@ button.stock:hover { filter: brightness(1.15); }
   .quote-print.q-plain .q-qty { width: 11%; }
   .quote-print.q-plain .q-war { width: 15%; }
   .quote-print.q-plain tbody tr:not(.q-top):not(.q-head):not(.q-info) td { padding-top: 9px; padding-bottom: 9px; }
+  /* Narrow paper (a phone printing on A5 or A4 portrait): smaller text so every column fits the page. */
+  .quote-print table { max-width: 100%; }
+  /* Numbers and dates never break inside; product names wrap. */
+  .quote-print tr:not(.q-info) > td:nth-child(n+3), .quote-print .q-sum td { white-space: nowrap; }
+}
+@media print and (max-width: 230mm) {
+  .quote-print table { font-size: 8pt; }
+  .quote-print td, .quote-print th { padding: 3px 4px; }
+  .quote-print .q-top td { height: 40px; }
+  .quote-print .q-top img { max-height: 34px; }
+  .quote-print .q-title, .quote-print .q-foot { font-size: 9pt; }
+  .quote-print .q-customer { font-size: 8pt; }
+  .quote-print .q-type { width: 15%; }
+  .quote-print .q-n { width: 9%; }
+  .quote-print .q-n2 { width: 12%; }
+  .quote-print td, .quote-print th { line-height: 1.25; }
+  .quote-print.q-plain tbody tr:not(.q-top):not(.q-head):not(.q-info) td { padding-top: 5px; padding-bottom: 5px; }
 }
 .saved-by { font-size: 0.75rem; font-weight: 700; color: var(--accent); }
 .choice-new { display: flex; align-items: center; gap: 8px; }

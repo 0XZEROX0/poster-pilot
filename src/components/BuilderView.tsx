@@ -644,44 +644,33 @@ function GiveDiscount({ uid, whose }: { uid: string; whose: string }) {
 /** The paper the customer gets, laid out like the sheet's quotation. Only shown when printing. */
 const PRINT_PRICES_KEY = 'posterpilot.builder.printPrices'
 
-/** The width the quotation is laid out at for paper: A4 landscape in CSS pixels. */
-const PAPER_WIDTH = 1123
-
 /**
- * Prints the quotation. Phone browsers print the page at the phone's screen width and cut off whatever is wider,
- * so on a narrow screen the page is laid out at paper width for the print, and the browser then fits it to the paper.
+ * Prints the quotation. A computer prints it on A4 landscape, like the sheet. A phone prints on the paper chosen in
+ * its print screen (often A5 or A4 portrait): forcing A4 landscape there made Android shrink and cut the page, so the
+ * phone leaves the paper alone and the print styles fit the table to whatever width the paper has.
  */
 function printQuote(name: string) {
   const title = document.title
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]')
-  const viewport = meta?.content ?? ''
-  const narrow = !!meta && window.innerWidth < PAPER_WIDTH - 100
+  const phone = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900
+  const page = document.createElement('style')
+  page.textContent = phone ? '@page { margin: 6mm; }' : '@page { size: A4 landscape; margin: 8mm; }'
+  document.head.appendChild(page)
+  document.title = name
   let done = false
   const restore = () => {
     if (done) return
     done = true
     document.title = title
-    if (narrow && meta) meta.content = viewport
+    page.remove()
   }
-  document.title = name
-  if (!narrow) {
-    window.print()
-    restore()
-    return
-  }
-  meta!.content = `width=${PAPER_WIDTH}`
-  // Let the page lay out at the new width before the print dialog takes its picture.
-  setTimeout(() => {
-    const started = Date.now()
-    window.print()
-    // A computer's print dialog holds the page until it closes: then all is done.
-    if (Date.now() - started > 1000) return restore()
-    // Phones return from print() at once while the print screen still reads the page, so the screen is put back
-    // only when the person comes back from the print screen (or after a minute with the page in front).
-    const back = () => { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', back); setTimeout(restore, 300) } }
-    document.addEventListener('visibilitychange', back)
-    setTimeout(() => { if (!done && document.hasFocus()) restore() }, 60_000)
-  }, 350)
+  const started = Date.now()
+  window.print()
+  // A computer's print dialog holds the page until it closes. A phone returns at once while its print screen still
+  // reads the page, so the page is put back when the person comes back from it.
+  if (Date.now() - started > 1000 || !phone) return restore()
+  const back = () => { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', back); setTimeout(restore, 500) } }
+  document.addEventListener('visibilitychange', back)
+  window.addEventListener('afterprint', () => setTimeout(restore, 2000), { once: true })
 }
 
 function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean }) {
