@@ -60,7 +60,7 @@ export default function App() {
   const session = useSession()
   const signal = useEngineSignal()
   const [wanted, setTab] = useState<Tab>(tabFromHash)
-  const TABS = ALL_TABS.filter((x) => x.id === 'home' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || seesPage(x.id)).filter((x) => (x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
+  const TABS = ALL_TABS.filter((x) => x.id === 'home' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || seesPage(x.id)).filter((x) => (x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)

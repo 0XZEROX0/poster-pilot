@@ -828,4 +828,9 @@ export const ar: Record<string, string> = {
   "%n year warranty": "ضمان %n سنة",
   "%n years warranty": "ضمان %n سنوات",
   "Open Maintenance: open warranty and repair tickets, add steps to their log, edit them, message the customer on WhatsApp and print the receipt. Only the owner can delete a ticket or take a step out.": "فتح الصيانة: فتح تذاكر الضمان والإصلاح، إضافة خطوات لسجلها، تعديلها، مراسلة العميل على واتساب وطباعة الإيصال. المالك فقط يمكنه حذف تذكرة أو حذف خطوة.",
+  "Prices, the PC builder and maintenance tickets.": "الأسعار وتجميع الأجهزة وتذاكر الصيانة.",
+  "Open maintenance tickets": "فتح تذاكر الصيانة",
+  "See the Maintenance page, open new tickets, print the receipt and message the customer on WhatsApp. Without Edit tickets, a ticket cannot be changed after it is opened.": "رؤية صفحة الصيانة وفتح تذاكر جديدة وطباعة الإيصال ومراسلة العميل على واتساب. بدون تعديل التذاكر لا يمكن تغيير التذكرة بعد فتحها.",
+  "Edit maintenance tickets": "تعديل تذاكر الصيانة",
+  "Change a ticket's details and add steps to its log (given to warranty, fixed, replaced, delivered and so on). Only the owner can delete a ticket or take a step out.": "تغيير بيانات التذكرة وإضافة خطوات لسجلها (تسليم للضمان، إصلاح، استبدال، تسليم للعميل وغيرها). المالك فقط يمكنه حذف تذكرة أو حذف خطوة.",
 }
