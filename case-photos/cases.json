@@ -32,7 +32,16 @@
    },
    "source": "static-eg product page (long description/spec table)"
   },
-  "fan_style": "blade, ARGB (pink/purple in photo)"
+  "fan_style": "blade, ARGB (pink/purple in photo)",
+  "dimensions": {
+   "depth": 485,
+   "width": 235,
+   "height": 520,
+   "source": "https://static-eg.com/product/tuf-gaming-gt302-argb/",
+   "note": "labelled W x H x D on the page"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 407
  },
  {
   "id": 5122,
@@ -68,7 +77,16 @@
    "source": "static-eg product page (long description/spec table)",
    "note": "front fans hidden behind dark glass; RGB is on the front glass graphic"
   },
-  "fan_style": "plain"
+  "fan_style": "plain",
+  "dimensions": {
+   "depth": 591,
+   "width": 250,
+   "height": 565,
+   "source": "https://static-eg.com/product/asus-rog-strix-helios-gx601-edition-rgb-mid-tower-gaming-case/",
+   "note": "page lists 250 x 565 x 591 with no axis labels; read as ASUS W x H x D, the same order the GT302 page labels"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 450
  },
  {
   "id": 5224,
@@ -103,7 +121,16 @@
    },
    "source": "static-eg product page (long description/spec table)"
   },
-  "fan_style": "plain"
+  "fan_style": "plain",
+  "dimensions": {
+   "depth": 450,
+   "width": 210,
+   "height": 450,
+   "source": "https://static-eg.com/product/gigabyte-c102-glass/",
+   "note": "labelled H x W x D"
+  },
+  "max_board": "mATX",
+  "max_gpu_mm": 410
  },
  {
   "id": 5226,
@@ -138,7 +165,16 @@
    "source": "static-eg product page (long description/spec table)",
    "note": "the only light is the blue strip on the front"
   },
-  "fan_style": "plain"
+  "fan_style": "plain",
+  "dimensions": {
+   "depth": 435,
+   "width": 210,
+   "height": 480,
+   "source": "https://static-eg.com/product/gigabyte-c200-glass/",
+   "note": "labelled H x W x D"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 330
  },
  {
   "id": 5227,
@@ -174,7 +210,16 @@
    "source": "static-eg product page (long description/spec table)",
    "note": "the 3 fans are on the BOTTOM blowing up, not the front"
   },
-  "fan_style": "ring, rainbow ARGB"
+  "fan_style": "ring, rainbow ARGB",
+  "dimensions": {
+   "depth": 469,
+   "width": 210,
+   "height": 435,
+   "source": "https://static-eg.com/product/gigabyte-c400-glass/",
+   "note": "labelled H x W x D"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 360
  },
  {
   "id": 5246,
@@ -209,7 +254,16 @@
    },
    "source": "static-eg product page (long description/spec table)"
   },
-  "fan_style": "ring, rainbow ARGB"
+  "fan_style": "ring, rainbow ARGB",
+  "dimensions": {
+   "depth": 482,
+   "width": 250,
+   "height": 548,
+   "source": "https://static-eg.com/product/gigabyte-aorus-c500-g/",
+   "note": "labelled H x W x D"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 420
  },
  {
   "id": 6135,
@@ -245,7 +299,16 @@
    },
    "source": "static-eg product page (long description/spec table)"
   },
-  "fan_style": "ring, cyan (ARGB)"
+  "fan_style": "ring, cyan (ARGB)",
+  "dimensions": {
+   "depth": 446,
+   "width": 285,
+   "height": 450,
+   "source": "https://static-eg.com/product/asus-tuf-gaming-gt502-horizon-argb/",
+   "note": "page lists 285 x 450 x 446 with no axis labels; read as ASUS W x H x D"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 400
  },
  {
   "id": 7108,
@@ -286,7 +349,16 @@
    },
    "source": "count from the static-eg title; positions from the photos"
   },
-  "fan_style": "octagon, orange on the black version / blue on the white version"
+  "fan_style": "octagon, orange on the black version / blue on the white version",
+  "dimensions": {
+   "depth": null,
+   "width": 298,
+   "height": null,
+   "source": "https://static-eg.com/product/dy470-atx-pc-case-7-fans/",
+   "note": "page and darkflash.com give 473*298*497 with no axis labels, and retailers disagree, so depth and height are unknown: one is 473 and the other 497. Width 298 is certain."
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 410
  },
  {
   "id": 7997,
@@ -329,7 +401,16 @@
    "source": "count from the retailer https://alfrensia.com/en/product/darkflash-l285-atx-curved-tempered-glass-back-connect-support-argb-type-c-with-4x-dm20-fans-black-mid-tower-case (4x DM20 ARGB)",
    "note": "UNCONFIRMED: static-eg and darkflash.com do not say how many fans are included. Positions and size are guesses based on the K430, which uses the same DM20 fans (3 side + 1 rear). The photos show a full build with about 10 fans."
   },
-  "fan_style": "ring, rainbow ARGB with lit hub"
+  "fan_style": "ring, rainbow ARGB with lit hub",
+  "dimensions": {
+   "depth": 460,
+   "width": 285,
+   "height": 398,
+   "source": "https://static-eg.com/product/darkflash-l285-atx-pc-case-gaming/",
+   "note": "page gives 460 x 285 x 398 with no axis labels; the photos show the case is deeper than it is tall, so 460 = depth and 398 = height"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 445
  },
  {
   "id": 9083,
@@ -371,7 +452,16 @@
    },
    "source": "static-eg product page (long description/spec table)"
   },
-  "fan_style": "ring, rainbow ARGB"
+  "fan_style": "ring, rainbow ARGB",
+  "dimensions": {
+   "depth": 565,
+   "width": 290,
+   "height": 611,
+   "source": "https://www.gigabyte.com/PC-Case/GB-AC601G-GLOBAL/sp",
+   "note": "Gigabyte lists H611 x W290 x D565; the static-eg page gives 611 x 290 x 565 unlabelled"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 420
  },
  {
   "id": 10654,
@@ -414,7 +504,17 @@
    },
    "source": "count from the static-eg title; positions from the photos"
   },
-  "fan_style": "infinity (X-logo hub), rainbow ARGB"
+  "fan_style": "infinity (X-logo hub), rainbow ARGB",
+  "dimensions": {
+   "depth": 323,
+   "width": 195,
+   "height": 388,
+   "source": "https://static-eg.com/product/xigmatek-amun/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "mATX",
+  "max_gpu_mm": 295,
+  "max_gpu_note": "270 with front fans installed"
  },
  {
   "id": 11279,
@@ -456,7 +556,17 @@
    },
    "source": "count from the static-eg title; positions from the photos"
   },
-  "fan_style": "infinity (X-logo hub), rainbow ARGB"
+  "fan_style": "infinity (X-logo hub), rainbow ARGB",
+  "dimensions": {
+   "depth": 323,
+   "width": 195,
+   "height": 388,
+   "source": "https://static-eg.com/product/xigmatek-amun/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "mATX",
+  "max_gpu_mm": 295,
+  "max_gpu_note": "270 with front fans installed"
  },
  {
   "id": 11577,
@@ -497,7 +607,16 @@
    "source": "static-eg product page (long description/spec table)",
    "note": "the side fans are reverse-blade"
   },
-  "fan_style": "infinity (stated: infinity-mirror effect), cyan/blue in the photos (ARGB)"
+  "fan_style": "infinity (stated: infinity-mirror effect), cyan/blue in the photos (ARGB)",
+  "dimensions": {
+   "depth": 475.8,
+   "width": 285,
+   "height": 398,
+   "source": "https://static-eg.com/product/aerocool-p500c/",
+   "note": "overall dimensions, labelled W x H x D (the internal size is 285 x 380 x 420)"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 450
  },
  {
   "id": 11582,
@@ -539,7 +658,16 @@
    "source": "static-eg product page (long description/spec table)",
    "note": "the side fans are reverse-blade"
   },
-  "fan_style": "infinity (stated: infinity-mirror effect), cyan/blue in the photos (ARGB)"
+  "fan_style": "infinity (stated: infinity-mirror effect), cyan/blue in the photos (ARGB)",
+  "dimensions": {
+   "depth": 475.8,
+   "width": 285,
+   "height": 398,
+   "source": "https://static-eg.com/product/aerocool-p500c/",
+   "note": "overall dimensions, labelled W x H x D (the internal size is 285 x 380 x 420)"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 450
  },
  {
   "id": 12112,
@@ -581,7 +709,16 @@
    },
    "source": "static-eg product page (long description/spec table)"
   },
-  "fan_style": "ring, cyan/white (ARGB)"
+  "fan_style": "ring, cyan/white (ARGB)",
+  "dimensions": {
+   "depth": 460,
+   "width": 235,
+   "height": 480,
+   "source": "https://static-eg.com/product/aerocool-d520a-black/",
+   "note": "labelled D x W x H"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 400
  },
  {
   "id": 12383,
@@ -623,7 +760,16 @@
    },
    "source": "count from the static-eg title (4 fans); positions from the photos"
   },
-  "fan_style": "infinity (X-logo hub), rainbow ARGB"
+  "fan_style": "infinity (X-logo hub), rainbow ARGB",
+  "dimensions": {
+   "depth": 388,
+   "width": 195,
+   "height": 448,
+   "source": "https://static-eg.com/product/xigmatek-hero-ii-air-4-fan-argb/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 340
  },
  {
   "id": 12384,
@@ -664,7 +810,16 @@
    },
    "source": "count from the static-eg title (4 fans); positions from the photos"
   },
-  "fan_style": "infinity (X-logo hub), rainbow ARGB"
+  "fan_style": "infinity (X-logo hub), rainbow ARGB",
+  "dimensions": {
+   "depth": 388,
+   "width": 195,
+   "height": 448,
+   "source": "https://static-eg.com/product/xigmatek-hero-ii-air-4-fan-argb/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 340
  },
  {
   "id": 12391,
@@ -707,7 +862,16 @@
    },
    "source": "count from the title; positions from the photos"
   },
-  "fan_style": "ring, white frame with rainbow/pastel ARGB, plus vertical light bars beside the side fans"
+  "fan_style": "ring, white frame with rainbow/pastel ARGB, plus vertical light bars beside the side fans",
+  "dimensions": {
+   "depth": 453,
+   "width": 280,
+   "height": 435,
+   "source": "https://static-eg.com/product/xigmatek-crystal-storm-v2-arctic/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 420
  },
  {
   "id": 12392,
@@ -749,7 +913,16 @@
    },
    "source": "count from the title; positions from the photos"
   },
-  "fan_style": "ring, white frame with rainbow/pastel ARGB, plus vertical light bars beside the side fans"
+  "fan_style": "ring, white frame with rainbow/pastel ARGB, plus vertical light bars beside the side fans",
+  "dimensions": {
+   "depth": 453,
+   "width": 280,
+   "height": 435,
+   "source": "https://static-eg.com/product/xigmatek-crystal-storm-v2-arctic/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 420
  },
  {
   "id": 12429,
@@ -792,7 +965,16 @@
    },
    "source": "count from the title; positions from the photos"
   },
-  "fan_style": "infinity (X-logo hub), rainbow ARGB"
+  "fan_style": "infinity (X-logo hub), rainbow ARGB",
+  "dimensions": {
+   "depth": 431,
+   "width": 277,
+   "height": 431,
+   "source": "https://static-eg.com/product/xigmatek-cubi-ii/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 370
  },
  {
   "id": 12642,
@@ -836,7 +1018,17 @@
    "source": "count from the title; positions from the photos",
    "note": "the included fan size is not stated; the front takes 120 or 140"
   },
-  "fan_style": "infinity (X-logo hub), rainbow ARGB"
+  "fan_style": "infinity (X-logo hub), rainbow ARGB",
+  "dimensions": {
+   "depth": 465,
+   "width": 238,
+   "height": 481,
+   "source": "https://static-eg.com/product/xigmatek-osiris-ii-4-fan-argb/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 400,
+  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)"
  },
  {
   "id": 12643,
@@ -879,7 +1071,17 @@
    "source": "count from the title; positions from the photos",
    "note": "the included fan size is not stated; the front takes 120 or 140"
   },
-  "fan_style": "infinity (X-logo hub), rainbow ARGB"
+  "fan_style": "infinity (X-logo hub), rainbow ARGB",
+  "dimensions": {
+   "depth": 465,
+   "width": 238,
+   "height": 481,
+   "source": "https://static-eg.com/product/xigmatek-osiris-ii-4-fan-argb/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 400,
+  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)"
  },
  {
   "id": 12651,
@@ -923,7 +1125,17 @@
    "source": "count from the title; positions from the photos",
    "note": "the included fan size is not stated; the front takes 120 or 140"
   },
-  "fan_style": "infinity (X-logo hub), rainbow ARGB"
+  "fan_style": "infinity (X-logo hub), rainbow ARGB",
+  "dimensions": {
+   "depth": 465,
+   "width": 238,
+   "height": 481,
+   "source": "https://static-eg.com/product/xigmatek-osiris-ii-4-fan-argb/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 400,
+  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)"
  },
  {
   "id": 12655,
@@ -964,7 +1176,17 @@
    },
    "source": "count from the title; positions from the photos"
   },
-  "fan_style": "ring, rainbow ARGB, plus light bars beside the side fans"
+  "fan_style": "ring, rainbow ARGB, plus light bars beside the side fans",
+  "dimensions": {
+   "depth": 425,
+   "width": 212,
+   "height": 490,
+   "source": "https://static-eg.com/product/xigmatek-blast-argb-valkyrie-750w-atx3-1-80-bronze/",
+   "note": "labelled L x W x H"
+  },
+  "max_board": "E-ATX",
+  "max_gpu_mm": 410,
+  "max_gpu_note": "the same page also says 285 in one place; 410 is stated twice"
  },
  {
   "id": 12805,
@@ -1006,6 +1228,15 @@
    "source": "static-eg product page (long description/spec table)",
    "note": "3 reverse-blade side fans + 1 standard rear fan (DM20 ARGB)"
   },
-  "fan_style": "blade, orange/amber glow in the photos (ARGB)"
+  "fan_style": "blade, orange/amber glow in the photos (ARGB)",
+  "dimensions": {
+   "depth": 441,
+   "width": 238,
+   "height": 490,
+   "source": "https://static-eg.com/product/darkflash-k430-combo-atx-pc-case-psu-750/",
+   "note": "overall size; the body without feet/panels is 430 x 238 x 465"
+  },
+  "max_board": "ATX",
+  "max_gpu_mm": 410
  }
 ]
