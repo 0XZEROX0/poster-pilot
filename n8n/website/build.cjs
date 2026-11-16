@@ -2,10 +2,11 @@
 const fs = require('fs');
 const J = JSON.stringify;
 const src = fs.readFileSync(__dirname + '/link.js', 'utf8');
+const photos = fs.readFileSync(__dirname + '/photos.js', 'utf8');
 const FB = "{ googleApi: { id: 'P1HrSWrwsJZy44Ur', name: 'PosterPilot Firebase' } }";
 const WOO = "{ wooCommerceApi: { id: 'coKsvik1ximz06rn', name: 'Static website' } }";
 const FS = "https://firestore.googleapis.com/v1/projects/{{ $('Settings').first().json.projectId }}/databases/(default)/documents";
-const FIELDS = 'id,name,type,status,sku,permalink,regular_price,sale_price,stock_status,manage_stock,stock_quantity,attributes';
+const FIELDS = 'id,name,type,status,sku,permalink,regular_price,sale_price,stock_status,manage_stock,stock_quantity,attributes,images';
 console.log(`import { workflow, node, trigger, ifElse, expr } from '@n8n/workflow-sdk';
 const start = trigger({ type: 'n8n-nodes-base.manualTrigger', version: 1, config: { name: 'Run by hand' } });
 const every = trigger({ type: 'n8n-nodes-base.scheduleTrigger', version: 1.2, config: { name: 'Every 15 minutes', parameters: { rule: { interval: [ { field: 'minutes', minutesInterval: 15 } ] } } } });
@@ -16,8 +17,9 @@ const opts = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { 
 const list = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Read price list', executeOnce: true, retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, credentials: ${FB}, parameters: { method: 'GET', url: expr(${J(FS + '/prices?pageSize=100')}), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', options: { timeout: 60000 } } } });
 const match = node({ type: 'n8n-nodes-base.code', version: 2, config: { name: 'Match website products', parameters: { mode: 'runOnceForAllItems', language: 'javaScript', jsCode: ${J(src)} } } });
 const save = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Save links to the app', retryOnFail: true, maxTries: 2, waitBetweenTries: 3000, credentials: ${FB}, parameters: { method: 'POST', url: expr(${J(FS + ':batchWrite')}), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', sendBody: true, contentType: 'json', specifyBody: 'json', jsonBody: expr('{{ { writes: $json.writes } }}'), options: { timeout: 60000 } } } });
+const addPhotos = node({ type: 'n8n-nodes-base.code', version: 2, config: { name: 'Add photos', parameters: { mode: 'runOnceForAllItems', language: 'javaScript', jsCode: ${J(photos)} } } });
 const has = ifElse({ version: 2.2, config: { name: 'Anything to save?', parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 }, conditions: [ { id: 'c1', leftValue: expr('{{ $json.writes.length }}'), rightValue: 0, operator: { type: 'number', operation: 'gt' } } ], combinator: 'and' }, options: {} } } });
 export default workflow('website-link', 'Static OS - Website link')
   .add(every).to(settings)
-  .add(start).to(settings).to(woo).to(withOpts).to(opts).to(list).to(match).to(has.onTrue(save));
+  .add(start).to(settings).to(woo).to(withOpts).to(opts).to(list).to(match).to(addPhotos).to(has.onTrue(save));
 `);

@@ -68,6 +68,37 @@ export type WebLink = {
   option?: string
   /** Set by the engine: when it last tried to send. */
   triedAt?: string
+  /** The product's photo on the website (optional; normally looked up in web/products by id). */
+  img?: string
+}
+
+/** Website photos by website product id, from web/products (one read, at most every 30 minutes, only where photos show). */
+let photoMap = new Map<number, string>()
+let photoAt = 0
+let photoBusy = false
+const photoSubs = new Set<() => void>()
+function loadPhotos() {
+  if (!firestore || photoBusy || Date.now() - photoAt < 30 * 60_000) return
+  photoBusy = true
+  getDoc(doc(firestore, 'web', 'products')).then((snap) => {
+    const items = (snap.data()?.items ?? {}) as Record<string, Record<string, unknown>>
+    const m = new Map<number, string>()
+    for (const [id, v] of Object.entries(items)) if (typeof v.i === 'string' && /^https:\/\//.test(v.i)) m.set(Number(id), v.i)
+    photoMap = m
+    photoAt = Date.now()
+    photoSubs.forEach((f) => f())
+  }, () => { photoAt = Date.now() - 25 * 60_000 }).finally(() => { photoBusy = false })
+}
+/** Loads the website photos (once) and redraws when they arrive. */
+export function useWebPhotos() {
+  return useSyncExternalStore((f) => { photoSubs.add(f); loadPhotos(); return () => { photoSubs.delete(f) } }, () => photoMap)
+}
+/** The website photo of a product: from its confirmed (or strong, 80%+) link to a website product that has one. */
+export const photoOf = (item: PriceItem | undefined) => {
+  const w = item?.web
+  if (!w) return ''
+  if (w.img) return w.img
+  return w.ok || (w.score ?? 0) >= 80 ? photoMap.get(Number(w.id)) || '' : ''
 }
 
 /** One product of static-eg.com, from web/products (refreshed by the engine). */
@@ -214,7 +245,7 @@ const num = (v: unknown) => (typeof v === 'number' && !Number.isNaN(v) ? v : nul
 const webOf = (v: unknown): WebLink | undefined => {
   const w = v as Record<string, unknown> | null | undefined
   if (!w || typeof w !== 'object' || typeof w.id !== 'number') return undefined
-  return { id: w.id, name: String(w.name ?? ''), ok: w.ok === true, url: w.url ? String(w.url) : undefined, type: w.type ? String(w.type) : undefined, score: typeof w.score === 'number' ? w.score : undefined, price: num(w.price), sale: num(w.sale), stock: w.stock ? String(w.stock) : undefined, sentAt: w.sentAt ? String(w.sentAt) : undefined, error: w.error ? String(w.error) : undefined, rename: w.rename ? String(w.rename) : undefined, variation: typeof w.variation === 'number' ? w.variation : undefined, option: w.option ? String(w.option) : undefined, triedAt: w.triedAt ? String(w.triedAt) : undefined }
+  return { id: w.id, name: String(w.name ?? ''), ok: w.ok === true, url: w.url ? String(w.url) : undefined, type: w.type ? String(w.type) : undefined, score: typeof w.score === 'number' ? w.score : undefined, price: num(w.price), sale: num(w.sale), stock: w.stock ? String(w.stock) : undefined, sentAt: w.sentAt ? String(w.sentAt) : undefined, error: w.error ? String(w.error) : undefined, rename: w.rename ? String(w.rename) : undefined, variation: typeof w.variation === 'number' ? w.variation : undefined, option: w.option ? String(w.option) : undefined, triedAt: w.triedAt ? String(w.triedAt) : undefined, img: w.img ? String(w.img) : undefined }
 }
 
 /** Every product on the website, for picking a link by hand. Read once when asked (one document). */
