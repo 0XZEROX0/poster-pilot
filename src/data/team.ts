@@ -11,7 +11,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
@@ -25,6 +25,7 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   delete: ['Delete posts', 'Delete posts that are not on the schedule.'],
   people: ['Manage people', 'See the system code, accept and remove people.'],
   'prices.edit': ['Edit prices', 'Change prices, add, hide and delete products in the price list.'],
+  'prices.web': ['See website prices', 'See Price before and Price after (the static-eg.com prices) in Prices, the product form and the price changes. Hidden from everyone else. The owner always sees them.'],
   cost: ['See and edit cost', 'See and change what each product costs the shop, in Prices and in the Builder, with the profit. Hidden from everyone else.'],
   'quotes.all': ["See everyone's quotes", "Watch the quote each person is building, live, and see everyone's saved quotes with who made them. Without it, people see only their own."],
   'quotes.discount': ['Give extra discount', "Add an extra discount to someone's quote while they build it (from Live quotes). It shows in their quote at once, with your name."],
@@ -77,9 +78,16 @@ export function newCode(): string {
 }
 
 const out = (access: Access): Standing => ({ access, role: '', roleName: '', perms: [], pages: [] })
-const asRole = (id: string, data: { name?: string; perms?: string[]; pages?: string[] } | undefined): RoleDef | null =>
+/** Permissions that came after roles were first saved. A role saved before one existed (no `v`, or a lower one) keeps seeing it, so nothing disappears. */
+const ROLE_VERSION = 2
+const ADDED_IN: [number, Perm][] = [[2, 'prices.web']]
+const asRole = (id: string, data: { name?: string; perms?: string[]; pages?: string[]; v?: number } | undefined): RoleDef | null => {
+  if (!data) return null
+  const v = typeof data.v === 'number' ? data.v : 1
+  const given = (p: Perm) => Boolean(data.perms?.includes(p)) || ADDED_IN.some(([n, q]) => q === p && v < n)
   // A role saved before pages existed sees every page.
-  data ? { id, name: data.name ?? id, perms: PERMS.filter((p) => data.perms?.includes(p)), pages: PAGES.filter((p) => !Array.isArray(data.pages) || data.pages.includes(p)) } : null
+  return { id, name: data.name ?? id, perms: PERMS.filter(given), pages: PAGES.filter((p) => !Array.isArray(data.pages) || data.pages.includes(p)) }
+}
 
 /** What a role may do. A built-in role the owner never saved works as it always did. */
 async function standing(db: Firestore, role: Role): Promise<Standing> {
@@ -196,9 +204,12 @@ export async function setRole(db: Firestore, m: Member, role: Role, names: { fro
 }
 
 export async function saveRole(db: Firestore, r: RoleDef) {
-  await setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms, pages: r.pages })
+  const old = r.perms.filter((p) => !ADDED_IN.some(([, q]) => q === p))
+  await setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms, pages: r.pages, v: ROLE_VERSION })
+    // Rules published before 'See website prices' existed refuse it and `v`: save as before (the role then keeps seeing website prices).
+    .catch((e) => (denied(e) ? setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: old, pages: r.pages }) : Promise.reject(e)))
     // Rules published before pages existed refuse the field. A role that hides nothing can still be saved without it.
-    .catch((e) => (denied(e) && r.pages.length === PAGES.length ? setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: r.perms }) : Promise.reject(e)))
+    .catch((e) => (denied(e) && r.pages.length === PAGES.length ? setDoc(doc(db, 'roles', r.id), { name: r.name.trim(), perms: old }) : Promise.reject(e)))
   track('people', 'role.saved', { what: r.name.trim(), note: `${r.perms.length} permissions: ${r.perms.join(', ') || '-'} · pages: ${r.pages.join(', ') || '-'}`, ref: r.id })
 }
 export async function deleteRole(db: Firestore, r: { id: string; name: string }) {

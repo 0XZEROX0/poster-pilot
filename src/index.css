@@ -1078,3 +1078,10 @@ button.stock:hover { filter: brightness(1.15); }
 .bx-bar .cost-eye { flex: none; background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); color: #fff; padding: 8px 10px; }
 .bx-bar .cost-eye.on { background: #fff; color: var(--navy); border-color: #fff; }
 .bx-bar .bx-bar-cost { opacity: 1; letter-spacing: 0; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+/* Roles without 'See website prices': the table loses the two website columns. */
+.ptable.no-web .ptable-row { grid-template-columns: minmax(150px, 1.6fr) minmax(0, 1fr) 110px repeat(2, 84px); }
+.ptable.no-web.with-cost .ptable-row { grid-template-columns: minmax(150px, 1.6fr) minmax(0, 1fr) 110px repeat(3, 84px); }
+@media (max-width: 640px) {
+  .ptable.no-web .ptable-row { grid-template-columns: 30px repeat(2, minmax(0, 1fr)); }
+  .ptable.no-web.with-cost .ptable-row { grid-template-columns: 30px repeat(3, minmax(0, 1fr)); }
+}
