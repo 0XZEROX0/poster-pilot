@@ -14,7 +14,25 @@
   "files": [
    "1.jpg"
   ],
-  "looks": "Mid tower, black. Front: full grid/square-mesh panel with TUF Gaming text down the right edge, IO on top of front. 3x large (140mm-look) ARGB fans in FRONT behind mesh + 1 ARGB fan REAR; fans glow pink/purple in photo. Tempered-glass left side. PSU shroud yes (solid, lower). Chunky angled feet. Only 1 photo."
+  "looks": "Mid tower, black. Front: full grid/square-mesh panel with TUF Gaming text down the right edge, IO on top of front. 3x large (140mm-look) ARGB fans in FRONT behind mesh + 1 ARGB fan REAR; fans glow pink/purple in photo. Tempered-glass left side. PSU shroud yes (solid, lower). Chunky angled feet. Only 1 photo.",
+  "radiators": {
+   "top": 360,
+   "front": 280,
+   "side": 0,
+   "bottom": 0,
+   "rear": 140,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 140,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "fan_style": "blade, ARGB (pink/purple in photo)"
  },
  {
   "id": 5122,
@@ -31,7 +49,26 @@
   "files": [
    "1.jpg"
   ],
-  "looks": "Large mid/near-full tower, black brushed-aluminium pillars on the front edges, carry handles on top. Front: tinted glass with printed ROG neon graphic (pink->blue gradient line art, ROG eye logo top). Tinted glass left side (shown open/swung). 1 visible rear fan (black, non-RGB in photo); front fans hidden behind dark glass. PSU shroud yes. Only 1 photo."
+  "looks": "Large mid/near-full tower, black brushed-aluminium pillars on the front edges, carry handles on top. Front: tinted glass with printed ROG neon graphic (pink->blue gradient line art, ROG eye logo top). Tinted glass left side (shown open/swung). 1 visible rear fan (black, non-RGB in photo); front fans hidden behind dark glass. PSU shroud yes. Only 1 photo.",
+  "radiators": {
+   "top": 360,
+   "front": 420,
+   "side": 0,
+   "bottom": 0,
+   "rear": 140,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 140,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)",
+   "note": "front fans hidden behind dark glass; RGB is on the front glass graphic"
+  },
+  "fan_style": "plain"
  },
  {
   "id": 5224,
@@ -48,7 +85,25 @@
   "files": [
    "1.jpg"
   ],
-  "looks": "Compact M-ATX mid tower, all black. Front: solid black panel with thin vertical side-vent slits and GIGABYTE on left edge (not mesh, not glass). Glass left side. 1 rear black non-RGB fan. PSU shroud yes. Plain, budget. 1 photo (with retail box)."
+  "looks": "Compact M-ATX mid tower, all black. Front: solid black panel with thin vertical side-vent slits and GIGABYTE on left edge (not mesh, not glass). Glass left side. 1 rear black non-RGB fan. PSU shroud yes. Plain, budget. 1 photo (with retail box).",
+  "radiators": {
+   "top": 360,
+   "front": 360,
+   "side": 240,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 2,
+   "size_mm": 120,
+   "positions": {
+    "front": 1,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "fan_style": "plain"
  },
  {
   "id": 5226,
@@ -65,7 +120,25 @@
   "files": [
    "1.jpg"
   ],
-  "looks": "Classic budget ATX mid tower, glossy black. Front: solid black glossy panel with a single vertical blue/cyan RGB light strip near the right edge, GIGABYTE logo top front. Glass left side (screw-mounted, 4 thumbscrews). No visible RGB fans; rear fan black. Bottom PSU, no full shroud (PSU visible behind glass). 1 photo."
+  "looks": "Classic budget ATX mid tower, glossy black. Front: solid black glossy panel with a single vertical blue/cyan RGB light strip near the right edge, GIGABYTE logo top front. Glass left side (screw-mounted, 4 thumbscrews). No visible RGB fans; rear fan black. Bottom PSU, no full shroud (PSU visible behind glass). 1 photo.",
+  "radiators": {
+   "top": 240,
+   "front": 280,
+   "side": 0,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 1,
+   "size_mm": 120,
+   "positions": {
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the only light is the blue strip on the front"
+  },
+  "fan_style": "plain"
  },
  {
   "id": 5227,
@@ -82,7 +155,26 @@
   "files": [
    "1.jpg"
   ],
-  "looks": "Mid tower, black. Front: full mesh with diagonal AORUS text pattern, thin ARGB strip on the bottom/front edge. Glass left side reaching to front (frameless edge). 1 rear ARGB fan (ring RGB). PSU shroud yes. 1 photo (with box)."
+  "looks": "Mid tower, black. Front: full mesh with diagonal AORUS text pattern, thin ARGB strip on the bottom/front edge. Glass left side reaching to front (frameless edge). Fans included: 3 ARGB on the BOTTOM blowing up + 1 rear (ring RGB); none at the front. PSU shroud yes. 1 photo (with box).",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 0,
+   "bottom": 360,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "bottom": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the 3 fans are on the BOTTOM blowing up, not the front"
+  },
+  "fan_style": "ring, rainbow ARGB"
  },
  {
   "id": 5246,
@@ -99,7 +191,25 @@
   "files": [
    "1.jpg"
   ],
-  "looks": "Mid tower, black. Front: dark tinted glass upper with angled lower mesh/vent section and a diagonal ARGB AORUS light strip; 3 ARGB ring fans in FRONT faintly visible through tinted glass. Glass left side with circular cut-out ring. PSU shroud yes. 1 photo (with box)."
+  "looks": "Mid tower, black. Front: dark tinted glass upper with angled lower mesh/vent section and a diagonal ARGB AORUS light strip; 3 ARGB ring fans in FRONT faintly visible through tinted glass. Glass left side with circular cut-out ring. PSU shroud yes. 1 photo (with box).",
+  "radiators": {
+   "top": 360,
+   "front": 420,
+   "side": 0,
+   "bottom": 0,
+   "rear": 140,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "fan_style": "ring, rainbow ARGB"
  },
  {
   "id": 6135,
@@ -116,7 +226,26 @@
   "files": [
    "1.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black. Front: glass corner panoramic (front + left side glass meet with thin pillar) plus a solid grey right-front pillar strip carrying IO and vertical TUF GAMING text with TUF logo. 3 ARGB ring fans (blue/cyan rings) mounted vertically at the RIGHT side of the main chamber (side-intake fan column behind the front glass, in front of the cable chamber) + 1 ARGB rear fan. No PSU shroud on main chamber (PSU is in rear chamber). Raised angled legs. 1 photo."
+  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black. Front: glass corner panoramic (front + left side glass meet with thin pillar) plus a solid grey right-front pillar strip carrying IO and vertical TUF GAMING text with TUF logo. 3 ARGB ring fans (blue/cyan rings) mounted vertically at the RIGHT side of the main chamber (side-intake fan column behind the front glass, in front of the cable chamber) + 1 ARGB rear fan. No PSU shroud on main chamber (PSU is in rear chamber). Raised angled legs. 1 photo.",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 0,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "static-eg lists only top and rear radiator positions"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "fan_style": "ring, cyan (ARGB)"
  },
  {
   "id": 7108,
@@ -137,7 +266,27 @@
    "2.jpg",
    "3.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right) with chamfered/angled front corners and curved glass. Comes in black and white (photos show both). Front/left: glass panoramic with angled front pillar. 7 fans: 3 SIDE-MOUNTED fans on the right (vertical column, intake from right side), 3 TOP, 1 REAR. Fan style: octagon-frame fans with orange (black ver.) or blue (white ver.) ring glow. Front-bottom has an overhanging plinth with IO ports and a cut-out under it. PSU in rear chamber, no shroud."
+  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right) with chamfered/angled front corners and curved glass. Comes in black and white (photos show both). Front/left: glass panoramic with angled front pillar. 7 fans: 3 SIDE-MOUNTED fans on the right (vertical column, intake from right side), 3 TOP, 1 REAR. Fan style: octagon-frame fans with orange (black ver.) or blue (white ver.) ring glow. Front-bottom has an overhanging plinth with IO ports and a cut-out under it. PSU in rear chamber, no shroud.",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 360,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "no bottom radiator listed (bottom takes 3x120 fans only)"
+  },
+  "included_fans": {
+   "total": 7,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "top": 3,
+    "rear": 1
+   },
+   "source": "count from the static-eg title; positions from the photos"
+  },
+  "fan_style": "octagon, orange on the black version / blue on the white version"
  },
  {
   "id": 7997,
@@ -160,7 +309,27 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black. Front: glass corner panoramic (front + left glass, no pillar). Lit ARGB strips along the front-right vertical pillar edge. Fans (in staged photo): 3 SIDE-MOUNTED on right (vertical column, intake through right-side mesh), 3 TOP, 3 BOTTOM, 1 rear, all rainbow ARGB ring fans; check product text for how many are included. Right side panel has mesh windows (fan area + PSU area). Rear glass/clear corner too. No PSU shroud (rear chamber)."
+  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black. Front: glass corner panoramic (front + left glass, no pillar). Lit ARGB strips along the front-right vertical pillar edge. Fans (in staged photo): 3 SIDE-MOUNTED on right (vertical column, intake through right-side mesh), 3 TOP, 3 BOTTOM, 1 rear, all rainbow ARGB ring fans; check product text for how many are included. Right side panel has mesh windows (fan area + PSU area). Rear glass/clear corner too. No PSU shroud (rear chamber).",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 280,
+   "bottom": 360,
+   "rear": 0,
+   "source": "static-eg product page (long description/spec table) + https://www.darkflash.com/product/l285",
+   "note": "no rear radiator listed"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "rear": 1
+   },
+   "source": "count from the retailer https://alfrensia.com/en/product/darkflash-l285-atx-curved-tempered-glass-back-connect-support-argb-type-c-with-4x-dm20-fans-black-mid-tower-case (4x DM20 ARGB)",
+   "note": "UNCONFIRMED: static-eg and darkflash.com do not say how many fans are included. Positions and size are guesses based on the K430, which uses the same DM20 fans (3 side + 1 rear). The photos show a full build with about 10 fans."
+  },
+  "fan_style": "ring, rainbow ARGB with lit hub"
  },
  {
   "id": 9083,
@@ -183,7 +352,26 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "Full tower (E-ATX), black/gunmetal, very distinctive: big curved/angled smoked-glass left side that swings open, top has an integrated carry-handle/bridge, front is a brushed gunmetal panel with large AORUS eagle line logo and an angled lower cut-out showing an ARGB fan. Rear fan ARGB visible through glass. Multi-angle: 4 photos (box, front 3/4, front, open)."
+  "looks": "Full tower (E-ATX), black/gunmetal, very distinctive: big curved/angled smoked-glass left side that swings open, top has an integrated carry-handle/bridge, front is a brushed gunmetal panel with large AORUS eagle line logo and an angled lower cut-out showing an ARGB fan. Rear fan ARGB visible through glass. Multi-angle: 4 photos (box, front 3/4, front, open).",
+  "radiators": {
+   "top": 420,
+   "front": 420,
+   "side": 0,
+   "bottom": 0,
+   "rear": null,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "rear radiator not clearly stated"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 140,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "fan_style": "ring, rainbow ARGB"
  },
  {
   "id": 10654,
@@ -207,7 +395,26 @@
    "4.jpg"
   ],
   "looks": "SAME CASE as xigmatek-amun (bundle with X-Power 650W PSU). See xigmatek-amun.",
-  "same_case_as": "xigmatek-amun"
+  "same_case_as": "xigmatek-amun",
+  "radiators": {
+   "top": null,
+   "front": null,
+   "side": null,
+   "bottom": null,
+   "rear": null,
+   "source": "not stated on static-eg (fan positions only: front 2x120, top 2x120, rear 1x120, bottom 2x120); no maker spec page found",
+   "note": "unknown; a 240mm radiator at the front or top is likely but unconfirmed"
+  },
+  "included_fans": {
+   "total": 3,
+   "size_mm": 120,
+   "positions": {
+    "front": 2,
+    "rear": 1
+   },
+   "source": "count from the static-eg title; positions from the photos"
+  },
+  "fan_style": "infinity (X-logo hub), rainbow ARGB"
  },
  {
   "id": 11279,
@@ -230,7 +437,26 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "Micro tower (M-ATX), black, compact. Front: vertical-slat/fine-ribbed mesh panel with X logo bottom-right; 2 ARGB rainbow fans in FRONT faintly visible through slats + 1 ARGB rainbow REAR fan (3 total). Glass left side. PSU shroud yes (X-Power PSU label visible through cut-out). Top mesh dust filter."
+  "looks": "Micro tower (M-ATX), black, compact. Front: vertical-slat/fine-ribbed mesh panel with X logo bottom-right; 2 ARGB rainbow fans in FRONT faintly visible through slats + 1 ARGB rainbow REAR fan (3 total). Glass left side. PSU shroud yes (X-Power PSU label visible through cut-out). Top mesh dust filter.",
+  "radiators": {
+   "top": null,
+   "front": null,
+   "side": null,
+   "bottom": null,
+   "rear": null,
+   "source": "not stated on static-eg (fan positions only: front 2x120, top 2x120, rear 1x120, bottom 2x120); no maker spec page found",
+   "note": "unknown; a 240mm radiator at the front or top is likely but unconfirmed"
+  },
+  "included_fans": {
+   "total": 3,
+   "size_mm": 120,
+   "positions": {
+    "front": 2,
+    "rear": 1
+   },
+   "source": "count from the static-eg title; positions from the photos"
+  },
+  "fan_style": "infinity (X-logo hub), rainbow ARGB"
  },
  {
   "id": 11577,
@@ -252,7 +478,26 @@
    "3.jpg"
   ],
   "looks": "SAME CASE as aerocool-p500c, black version (bundle with Aero 750W PSU). See aerocool-p500c.",
-  "same_case_as": "aerocool-p500c,"
+  "same_case_as": "aerocool-p500c",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 280,
+   "bottom": 360,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the side fans are reverse-blade"
+  },
+  "fan_style": "infinity (stated: infinity-mirror effect), cyan/blue in the photos (ARGB)"
  },
  {
   "id": 11582,
@@ -275,7 +520,26 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), available black and white. Front: glass corner panoramic (front + left glass meet, thin black/white pillar). 4 ARGB fans included per title (photos show cyan/blue ring fans): 3 SIDE-MOUNTED vertical column at right of main chamber (intake through right side-panel mesh window) + 1 REAR. Photos also show 3 bottom fans (from the build). Right side panel: two mesh windows (fan column + PSU area). No PSU shroud."
+  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), available black and white. Front: glass corner panoramic (front + left glass meet, thin black/white pillar). 4 ARGB fans included per title (photos show cyan/blue ring fans): 3 SIDE-MOUNTED vertical column at right of main chamber (intake through right side-panel mesh window) + 1 REAR. Photos also show 3 bottom fans (from the build). Right side panel: two mesh windows (fan column + PSU area). No PSU shroud.",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 280,
+   "bottom": 360,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the side fans are reverse-blade"
+  },
+  "fan_style": "infinity (stated: infinity-mirror effect), cyan/blue in the photos (ARGB)"
  },
  {
   "id": 12112,
@@ -298,7 +562,26 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "Mid tower (tall, not aquarium), black. Front: solid black panel with tall vertical perforated mesh strip on the RIGHT side of the front holding 3 ARGB fans (cyan/white glow) — narrow mesh column, not full mesh. Glass left side wraps to top edge. 1 ARGB REAR fan (4 total). PSU shroud yes with angled front cut. Top full mesh."
+  "looks": "Mid tower (tall, not aquarium), black. Front: solid black panel with tall vertical perforated mesh strip on the RIGHT side of the front holding 3 ARGB fans (cyan/white glow) — narrow mesh column, not full mesh. Glass left side wraps to top edge. 1 ARGB REAR fan (4 total). PSU shroud yes with angled front cut. Top full mesh.",
+  "radiators": {
+   "top": 360,
+   "front": null,
+   "side": null,
+   "bottom": 0,
+   "rear": null,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the top is confirmed. The page mentions a front-right radiator position but gives no size; side and rear radiator sizes are not stated"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "fan_style": "ring, cyan/white (ARGB)"
  },
  {
   "id": 12383,
@@ -322,7 +605,25 @@
    "4.jpg"
   ],
   "looks": "SAME CASE as xigmatek-hero-ii-air-4-fan-argb (bundle with Valkyrie 750W PSU). See xigmatek-hero-ii-air-4-fan-argb.",
-  "same_case_as": "xigmatek-hero-ii-air-4-fan-argb"
+  "same_case_as": "xigmatek-hero-ii-air-4-fan-argb",
+  "radiators": {
+   "top": 0,
+   "front": 360,
+   "side": 0,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "count from the static-eg title (4 fans); positions from the photos"
+  },
+  "fan_style": "infinity (X-logo hub), rainbow ARGB"
  },
  {
   "id": 12384,
@@ -345,7 +646,25 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "Mid tower, black, budget style. Front: mesh upper 3/4 with 3 ARGB rainbow fans in FRONT (third partially hidden by solid lower block), solid lower front block with X logo. 1 ARGB rainbow REAR fan (4 total). Glass left side with 4 corner screws. PSU shroud yes."
+  "looks": "Mid tower, black, budget style. Front: mesh upper 3/4 with 3 ARGB rainbow fans in FRONT (third partially hidden by solid lower block), solid lower front block with X logo. 1 ARGB rainbow REAR fan (4 total). Glass left side with 4 corner screws. PSU shroud yes.",
+  "radiators": {
+   "top": 0,
+   "front": 360,
+   "side": 0,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "count from the static-eg title (4 fans); positions from the photos"
+  },
+  "fan_style": "infinity (X-logo hub), rainbow ARGB"
  },
  {
   "id": 12391,
@@ -369,7 +688,26 @@
    "4.jpg"
   ],
   "looks": "SAME CASE as xigmatek-crystal-storm-v2-arctic (bundle with Valkyrie 750W PSU + fan controller). See xigmatek-crystal-storm-v2-arctic.",
-  "same_case_as": "xigmatek-crystal-storm-v2-arctic"
+  "same_case_as": "xigmatek-crystal-storm-v2-arctic",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 360,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the side radiator is limited by ATX/E-ATX board width; no bottom radiator listed"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "rear": 1
+   },
+   "source": "count from the title; positions from the photos"
+  },
+  "fan_style": "ring, white frame with rainbow/pastel ARGB, plus vertical light bars beside the side fans"
  },
  {
   "id": 12392,
@@ -392,7 +730,26 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), ALL WHITE (Arctic). Front: CURVED glass — front and left side are one bent glass piece (no corner pillar). 4 white ARGB fans: 3 SIDE-MOUNTED vertical column at the right of main chamber with vertical ARGB light bars beside them (pink/purple glow) + 1 REAR. White square-frame fans with ring RGB. Top white mesh. Gold Xigmatek logo bottom-right front. No PSU shroud."
+  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), ALL WHITE (Arctic). Front: CURVED glass — front and left side are one bent glass piece (no corner pillar). 4 white ARGB fans: 3 SIDE-MOUNTED vertical column at the right of main chamber with vertical ARGB light bars beside them (pink/purple glow) + 1 REAR. White square-frame fans with ring RGB. Top white mesh. Gold Xigmatek logo bottom-right front. No PSU shroud.",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 360,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the side radiator is limited by ATX/E-ATX board width; no bottom radiator listed"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "rear": 1
+   },
+   "source": "count from the title; positions from the photos"
+  },
+  "fan_style": "ring, white frame with rainbow/pastel ARGB, plus vertical light bars beside the side fans"
  },
  {
   "id": 12429,
@@ -415,7 +772,27 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black. Front: glass corner with a vertical black pillar in the middle-front that holds a built-in 9.18in LCD screen (shows CPU temp/graphs) — very distinctive. 7 rainbow ARGB fans: 3 SIDE-MOUNTED vertical column at right (intake from right side mesh), 3 TOP, 1 REAR. Right side panel perforated mesh. Gold X logo bottom-right. Glass corner panoramic."
+  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black. Front: glass corner with a vertical black pillar in the middle-front that holds a built-in 9.18in LCD screen (shows CPU temp/graphs) — very distinctive. 7 rainbow ARGB fans: 3 SIDE-MOUNTED vertical column at right (intake from right side mesh), 3 TOP, 1 REAR. Right side panel perforated mesh. Gold X logo bottom-right. Glass corner panoramic.",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 360,
+   "bottom": 360,
+   "rear": 0,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the bottom 360 radiator works only with a Micro-ATX board; no rear radiator listed"
+  },
+  "included_fans": {
+   "total": 7,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "top": 3,
+    "rear": 1
+   },
+   "source": "count from the title; positions from the photos"
+  },
+  "fan_style": "infinity (X-logo hub), rainbow ARGB"
  },
  {
   "id": 12642,
@@ -439,7 +816,27 @@
    "4.jpg"
   ],
   "looks": "SAME CASE as xigmatek-osiris-ii-4-fan-argb (bundle with Valkyrie 750W PSU). See xigmatek-osiris-ii-4-fan-argb.",
-  "same_case_as": "xigmatek-osiris-ii-4-fan-argb"
+  "same_case_as": "xigmatek-osiris-ii-4-fan-argb",
+  "radiators": {
+   "top": 360,
+   "front": 360,
+   "side": 240,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the side 240 is on the motherboard panel and limited by E-ATX board width"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "count from the title; positions from the photos",
+   "note": "the included fan size is not stated; the front takes 120 or 140"
+  },
+  "fan_style": "infinity (X-logo hub), rainbow ARGB"
  },
  {
   "id": 12643,
@@ -462,7 +859,27 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "Mid tower, black. Front: FULL fine-dot mesh panel with 3 large ARGB rainbow fans in FRONT + 1 ARGB rainbow REAR (4 total). Glass left side. PSU shroud yes (perforated cut-outs). Right side solid with a mesh strip near front. Top mesh."
+  "looks": "Mid tower, black. Front: FULL fine-dot mesh panel with 3 large ARGB rainbow fans in FRONT + 1 ARGB rainbow REAR (4 total). Glass left side. PSU shroud yes (perforated cut-outs). Right side solid with a mesh strip near front. Top mesh.",
+  "radiators": {
+   "top": 360,
+   "front": 360,
+   "side": 240,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the side 240 is on the motherboard panel and limited by E-ATX board width"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "count from the title; positions from the photos",
+   "note": "the included fan size is not stated; the front takes 120 or 140"
+  },
+  "fan_style": "infinity (X-logo hub), rainbow ARGB"
  },
  {
   "id": 12651,
@@ -486,7 +903,27 @@
    "4.jpg"
   ],
   "looks": "SAME CASE as xigmatek-osiris-ii-4-fan-argb (bundle with Valkyrie 850W PSU). See xigmatek-osiris-ii-4-fan-argb.",
-  "same_case_as": "xigmatek-osiris-ii-4-fan-argb"
+  "same_case_as": "xigmatek-osiris-ii-4-fan-argb",
+  "radiators": {
+   "top": 360,
+   "front": 360,
+   "side": 240,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)",
+   "note": "the side 240 is on the motherboard panel and limited by E-ATX board width"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "front": 3,
+    "rear": 1
+   },
+   "source": "count from the title; positions from the photos",
+   "note": "the included fan size is not stated; the front takes 120 or 140"
+  },
+  "fan_style": "infinity (X-logo hub), rainbow ARGB"
  },
  {
   "id": 12655,
@@ -509,7 +946,25 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black (bundle with Valkyrie 750W PSU). Front: glass corner panoramic. 4 rainbow ARGB fans: 3 SIDE-MOUNTED vertical column at right of main chamber (with ARGB light bar strips beside them, intake through right side) + 1 REAR. Right side panel shows the 3 fans from behind (side intake). No PSU shroud; perforated bottom with X logo front-bottom."
+  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black (bundle with Valkyrie 750W PSU). Front: glass corner panoramic. 4 rainbow ARGB fans: 3 SIDE-MOUNTED vertical column at right of main chamber (with ARGB light bar strips beside them, intake through right side) + 1 REAR. Right side panel shows the 3 fans from behind (side intake). No PSU shroud; perforated bottom with X logo front-bottom.",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 360,
+   "bottom": 0,
+   "rear": 120,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "rear": 1
+   },
+   "source": "count from the title; positions from the photos"
+  },
+  "fan_style": "ring, rainbow ARGB, plus light bars beside the side fans"
  },
  {
   "id": 12805,
@@ -532,6 +987,25 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "Mid/large tower dual-chamber style, black with ORANGE accent line along the bottom plinth (bundle with GS750 PSU). Front: glass corner panoramic. 4 DM20 ARGB fans included (photos show orange/yellow glow): 3 SIDE-MOUNTED vertical column on right, intake through a tall mesh window in the RIGHT side panel near the front + 1 rear (photos also show 3 top fans from the build). Solid black bottom plinth/shroud with angled vents across front-bottom."
+  "looks": "Mid/large tower dual-chamber style, black with ORANGE accent line along the bottom plinth (bundle with GS750 PSU). Front: glass corner panoramic. 4 DM20 ARGB fans included (photos show orange/yellow glow): 3 SIDE-MOUNTED vertical column on right, intake through a tall mesh window in the RIGHT side panel near the front + 1 rear (photos also show 3 top fans from the build). Solid black bottom plinth/shroud with angled vents across front-bottom.",
+  "radiators": {
+   "top": 360,
+   "front": 0,
+   "side": 360,
+   "bottom": 0,
+   "rear": 140,
+   "source": "static-eg product page (long description/spec table)"
+  },
+  "included_fans": {
+   "total": 4,
+   "size_mm": 120,
+   "positions": {
+    "side": 3,
+    "rear": 1
+   },
+   "source": "static-eg product page (long description/spec table)",
+   "note": "3 reverse-blade side fans + 1 standard rear fan (DM20 ARGB)"
+  },
+  "fan_style": "blade, orange/amber glow in the photos (ARGB)"
  }
 ]
