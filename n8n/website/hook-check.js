@@ -7,4 +7,4 @@ const b = j.body || {};
 const from = String(h['x-wc-webhook-source'] || '');
 if (!/^https:\/\/(www\.)?static-eg\.com\/?$/i.test(from)) return [];
 if (!b.id) return [];
-return [{ json: { id: b.id, name: String(b.name || ''), type: String(b.type || ''), at: String(b.date_modified_gmt || '') } }];
+return [{ json: { id: b.id, name: String(b.name || ''), type: String(b.type || ''), at: String(b.date_modified_gmt || ''), t: Date.now() } }];

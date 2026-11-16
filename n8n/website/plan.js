@@ -28,6 +28,10 @@ for (const d of (list.documents || [])) {
     if (!w || (w.ok !== true && !test) || !w.id) continue;
     const want = { price: n(it.online), sale: n(it.onlineSale), stock: it.out === true ? 'outofstock' : 'instock' };
     const has = { price: n(w.price), sale: n(w.sale), stock: w.stock === 'outofstock' ? 'outofstock' : 'instock' };
+    // A sale price that is not below the price is no sale: WooCommerce ignores it (sends back an empty sale price), so
+    // sending it again would repeat forever. Same rule as webPending() in the app.
+    const ref = want.price !== null ? want.price : has.price;
+    if (want.sale !== null && ref !== null && want.sale >= ref) want.sale = null;
     const send = {};
     if (want.price !== null && want.price !== has.price) send.price = want.price;
     if (want.sale !== has.sale) send.sale = want.sale;
