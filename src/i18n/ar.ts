@@ -221,6 +221,8 @@ export const ar: Record<string, string> = {
   'That time has passed. Pick a later one.': 'هذا الوقت فات. اختر وقتًا لاحقًا.',
   'Now tap a time to place it.': 'اضغط الآن على وقت لوضعه.',
   'Drag a post onto a time, or tap it and then tap a time.': 'اسحب البوست إلى وقت، أو اضغط عليه ثم اضغط على الوقت.',
+  'Tap a post to edit it. To plan it, drag it onto a time, or tap its handle and then a time.': 'اضغط على البوست لتعديله. لتحديد موعده اسحبه إلى وقت، أو اضغط على المقبض ثم على الوقت.',
+  'Move to another time': 'انقله إلى وقت آخر',
   'No other approved posts. Approve posters in Review first.': 'لا توجد بوستات أخرى موافق عليها. وافق على البوسترات من المراجعة أولًا.',
   'No photo for': 'لا توجد صورة لـ',
   'No photo was found for this item.': 'لم يتم العثور على صورة لهذا المنتج.',

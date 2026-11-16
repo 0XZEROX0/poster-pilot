@@ -43,7 +43,8 @@ const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
 
 type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'settings' } | { kind: 'apps' } | null
 
-const tabFromHash = (): Tab => ALL_TABS.find((x) => `#/${x.id}` === location.hash)?.id ?? 'home'
+// A tab can carry more after its name (the planner keeps its day there: #/calendar/2026-11-16).
+const tabFromHash = (): Tab => ALL_TABS.find((x) => location.hash === `#/${x.id}` || location.hash.startsWith(`#/${x.id}/`))?.id ?? 'home'
 
 /** Sidebar headings: the shop tools, then everything about posters. */
 const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' ? 'Shop' : id === 'activity' ? 'Team' : 'Posters')
@@ -92,8 +93,23 @@ export default function App() {
     const id = setInterval(() => setTick((n) => n + 1), 60_000)
     return () => clearInterval(id)
   }, [])
-  const close = useCallback(() => setOverlay(null), [])
-  const open = (id: string) => setOverlay({ kind: 'post', id })
+  // An open post is a step in the browser's history too: Back closes it, Forward opens it again.
+  useEffect(() => {
+    const onPop = () => {
+      const id = (history.state as { post?: string } | null)?.post
+      setOverlay((cur) => (id ? { kind: 'post', id } : cur?.kind === 'post' ? null : cur))
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+  const close = useCallback(() => {
+    if ((history.state as { post?: string } | null)?.post) history.back()
+    else setOverlay(null)
+  }, [])
+  const open = (id: string) => {
+    history.pushState({ post: id }, '')
+    setOverlay({ kind: 'post', id })
+  }
 
   if (session.mode === 'cloud' && session.user === undefined) return <div className="splash">{t('Loading…')}</div>
   if (session.mode === 'cloud' && !session.user) {

@@ -43,11 +43,35 @@ function savedZoom(): number {
 
 type Drag = { id: string; x: number; y: number; over: string | null }
 
+/** Where the planner is, read from the address: #/calendar (this month), #/calendar/2026-12 or #/calendar/2026-11-16 (a day). */
+function routeOf(hash: string, today: string): { month: string; day: string | null } {
+  const part = hash.split('/')[2] ?? ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(part)) return { month: part.slice(0, 7), day: part }
+  if (/^\d{4}-\d{2}$/.test(part)) return { month: part, day: null }
+  return { month: today.slice(0, 7), day: null }
+}
+
+/**
+ * The planner's month and day live in the address, so every move (a day, a month, back to the month) is a step
+ * the browser's and the phone's Back and Forward go through.
+ */
+function usePlannerRoute(today: string) {
+  const [hash, setHash] = useState(location.hash)
+  useEffect(() => {
+    const onHash = () => setHash(location.hash)
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  const go = (part: string) => { location.hash = `#/calendar/${part}` }
+  return { ...routeOf(hash, today), go }
+}
+
 /** The planner: a month to pick a day from, then that day as a timeline to drop approved posts on. */
 export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string) => void }) {
   const today = cairoNow().date
-  const [month, setMonth] = useState(today.slice(0, 7))
-  const [day, setDay] = useState<string | null>(null)
+  const { month, day, go } = usePlannerRoute(today)
+  const setMonth = go
+  const setDay = (d: string | null) => go(d ?? month)
   const [style, setStyle] = useState('')
   const [category, setCategory] = useState('')
 
@@ -189,7 +213,6 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
   function startDrag(e: React.PointerEvent, id: string) {
     if (e.button !== 0) return
     if (e.pointerType !== 'mouse' && !(e.target as Element).closest('.grip')) return
-    if ((e.target as Element).closest('.tl-open')) return
     const sx = e.clientX, sy = e.clientY
     let active = false
     let y = sy
@@ -229,9 +252,12 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
     window.addEventListener('pointerup', end)
     window.addEventListener('pointercancel', end)
   }
-  const pick = (id: string) => {
+  /** Tapping a post opens it to edit. Its handle picks it up, to then tap a time. */
+  const tap = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
     if (justDragged.current) return
-    setPicked((cur) => (cur === id ? null : id))
+    if ((e.target as Element).closest('.grip')) setPicked((cur) => (cur === id ? null : id))
+    else onOpen(id)
   }
 
   // Escape lets go of a picked post.
@@ -289,15 +315,14 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
                         key={p.id}
                         className={`tl-post${posted ? ' tl-done' : ''}${holding === p.id ? ' held' : ''}${problemOf(p) ? ' tl-bad' : ''}`}
                         {...(posted ? {} : cardProps(p))}
-                        onClick={(e) => { e.stopPropagation(); if (posted) onOpen(p.id); else pick(p.id) }}
+                        onClick={(e) => tap(e, p.id)}
                       >
-                        {!posted && <span className="grip" aria-hidden="true"><Icon name="grip" size={18} /></span>}
+                        {!posted && <span className="grip" title={t('Move to another time')}><Icon name="grip" size={18} /></span>}
                         <Poster post={p} small />
                         <span className="tl-text">
                           <b>{timeLabel(at)}{posted && <> · {t('Published')}</>}</b>
                           <span dir="auto">{titleOf(p)}</span>
                         </span>
-                        {!posted && <button className="icon-btn tl-open" onClick={(e) => { e.stopPropagation(); onOpen(p.id) }} aria-label={t('Edit')}><Icon name="edit" size={18} /></button>}
                       </div>
                     )
                   })}
@@ -309,7 +334,7 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
 
         <aside className="tray">
           <div className="review-bar"><h2>{t('Approved posts')} <span className="group-count">{tray.length}</span></h2><CardSize /></div>
-          <p className="hint">{picked ? t('Now tap a time to place it.') : t('Drag a post onto a time, or tap it and then tap a time.')}</p>
+          <p className="hint">{picked ? t('Now tap a time to place it.') : t('Tap a post to edit it. To plan it, drag it onto a time, or tap its handle and then a time.')}</p>
           <StyleChips posts={allTray} value={style} onChange={setStyle} className="tray-filters" />
           <CategoryChips posts={allTray} value={category} onChange={setCategory} className="tray-filters" />
           {allTray.length > 4 || query ? <SearchBox value={query} onChange={setQuery} /> : null}
@@ -318,9 +343,9 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
               {tray.map((p) => {
                 const when = whenOf(p)
                 return (
-                  <div key={p.id} className={`tray-card${holding === p.id ? ' held' : ''}`} {...cardProps(p)} onClick={() => pick(p.id)}>
+                  <div key={p.id} className={`tray-card${holding === p.id ? ' held' : ''}`} {...cardProps(p)} onClick={(e) => tap(e, p.id)}>
                     <Poster post={p} small />
-                    <span className="grip" aria-hidden="true"><Icon name="grip" size={18} /></span>
+                    <span className="grip" title={t('Move to another time')}><Icon name="grip" size={18} /></span>
                     <span className="tray-title" dir="auto">{titleOf(p)}</span>
                     <span className={`tray-when${when ? '' : ' tray-none'}${problemOf(p) ? ' bad' : ''}`}>{when ? `${dayLabel(when.date)} · ${timeLabel(when.time)}` : t('No time yet')}</span>
                   </div>
