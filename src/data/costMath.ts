@@ -13,6 +13,19 @@ export function profitOf(price: number | null | undefined, cost: number | null |
   const profit = price - cost
   return { profit, percent: price > 0 ? Math.round((profit / price) * 1000) / 10 : 0 }
 }
+/**
+ * The lowest of a product's prices (In build, Alone, and the website's Price before and Price after), and
+ * which one it is. Empty prices are left out. Profit in the price list is worked out from this one, so it
+ * shows the least the shop makes on the product. `web: false` leaves the website prices out (for someone
+ * who may not see them).
+ */
+export function lowestPrice(p: { in?: number | null; alone?: number | null; online?: number | null; onlineSale?: number | null }, web = true): { price: number; label: string } | null {
+  const all: [string, number | null | undefined][] = [['In build', p.in], ['Alone', p.alone], ...(web ? ([['Price before', p.online], ['Price after', p.onlineSale]] as [string, number | null | undefined][]) : [])]
+  let best: { price: number; label: string } | null = null
+  for (const [label, v] of all) if (typeof v === 'number' && v > 0 && (!best || v < best.price)) best = { price: v, label }
+  return best
+}
+
 export const profitText = (p: ReturnType<typeof profitOf>) => (p ? `${money(p.profit)} (${p.percent}%)` : '—')
 
 const num = (v: unknown) => (typeof v === 'number' && !Number.isNaN(v) ? v : null)

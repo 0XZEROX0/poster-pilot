@@ -722,4 +722,5 @@ export const ar: Record<string, string> = {
   '%n parts have no cost yet, so the profit is higher than it really is.': '%n قطع بدون تكلفة بعد، لذلك الربح الظاهر أعلى من الحقيقي.',
   'Cost changed': 'تم تغيير التكلفة',
   'Hidden. Press the eye to see it.': 'مخفية. اضغط على العين لرؤيتها.',
+  'Profit on the lowest price': 'الربح على أقل سعر',
 }

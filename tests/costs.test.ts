@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCost, costKey, costsOf, profitOf, profitText } from '../src/data/costMath'
+import { buildCost, costKey, costsOf, lowestPrice, profitOf, profitText } from '../src/data/costMath'
 
 describe('costs', () => {
   it('reads a costs document into one map by category and product', () => {
@@ -23,5 +23,13 @@ describe('costs', () => {
     expect(profitOf(null, 8000)).toBeNull()
     expect(profitOf(1000, null)).toBeNull()
     expect(profitText(profitOf(9000, 9500))).toBe('-500 (-5.6%)')
+  })
+  it('picks the lowest of the four prices, leaves empty ones out, and says which it is', () => {
+    expect(lowestPrice({ in: 7800, alone: 8000, online: 8200, onlineSale: 7500 })).toEqual({ price: 7500, label: 'Price after' })
+    expect(lowestPrice({ in: 7800, alone: 8000, online: null, onlineSale: undefined })).toEqual({ price: 7800, label: 'In build' })
+    expect(lowestPrice({ in: null, alone: 8000, online: 7900 })).toEqual({ price: 7900, label: 'Price before' })
+    expect(lowestPrice({ in: 0, alone: 8000 })).toEqual({ price: 8000, label: 'Alone' })
+    expect(lowestPrice({ in: 7800, alone: 8000, onlineSale: 7500 }, false)).toEqual({ price: 7800, label: 'In build' })
+    expect(lowestPrice({ in: null, alone: null })).toBeNull()
   })
 })
