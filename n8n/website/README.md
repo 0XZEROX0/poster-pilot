@@ -50,3 +50,14 @@ static-eg.com is WordPress + WooCommerce. n8n reads and writes it with the REST 
   website only updates `web.name`; the app then asks which name to keep.
 - One Firestore commit per category with an `updateTime` precondition; if the app changed it meanwhile it is retried.
 - `node n8n/website/build-pull.cjs` prints the workflow. Successful runs are not saved.
+
+## Website changed (n8n `z7dVXPpKQodlrEfj` "Static OS - Website changed", 2026-11-16)
+- static-eg.com has a WooCommerce webhook (id 1, topic `product.updated`, also fires for option/variation saves) that
+  posts to `/webhook/static-website-changed-<secret>` right after a product is saved on the website.
+- `hook-check.js` "Real product change?": only calls from static-eg.com with a product id go on (the creation ping is
+  dropped) → "Start website to app" starts `fHuULHd2qUV5IMAn` at once. Its own timer is now a once-an-hour safety run.
+- Every hour `hook-keep.js` "Webhook fine?" makes sure the webhook exists and is active (WooCommerce switches it off
+  after repeated failed deliveries, for example while the engine computer is off) and fixes it.
+- WooCommerce sends webhooks in the background (Action Scheduler), so a delivery can take from a few seconds up to
+  about a minute after the save, depending on site traffic.
+- `node n8n/website/build-changed.cjs` prints the workflow.
