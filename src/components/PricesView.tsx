@@ -121,8 +121,10 @@ export function PricesView() {
                 <span role="columnheader" className="ptable-stock">{t('Stock')}</span>
                 <span role="columnheader" className="ptable-num">{t('In build')}</span>
                 <span role="columnheader" className="ptable-num">{t('Alone')}</span>
-                <span role="columnheader" className="ptable-num">{t('Online')}</span>
-                <span role="columnheader" className="ptable-num">{t('Online sale')}</span>
+                <span className="ptable-web ptable-web-head" title={t('Website prices')}>
+                  <span role="columnheader" className="ptable-num">{t('Price before')}</span>
+                  <span role="columnheader" className="ptable-num">{t('Price after')}</span>
+                </span>
                 {showCost && <span role="columnheader" className="ptable-num ptable-cost">{t('Cost')}</span>}
               </div>
               {shown.map(({ cat: c, item }, i) => (
@@ -210,8 +212,10 @@ function ListRow({ cat, item, canEdit, cost, catHead, groupHead, onOpen }: RowPr
         <span className="ptable-stock" role="cell"><StockToggle cat={cat} item={item} canEdit={canEdit} /></span>
         <PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} />
         <PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} />
-        <PriceCell value={item.online ?? null} label={t('Online')} canEdit={canEdit} onSave={(v) => save('online', v)} />
-        <PriceCell value={item.onlineSale ?? null} label={t('Online sale')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} />
+        <span className="ptable-web" title={t('Website prices')}>
+          <PriceCell value={item.online ?? null} label={t('Price before')} canEdit={canEdit} onSave={(v) => save('online', v)} />
+          <PriceCell value={item.onlineSale ?? null} label={t('Price after')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} />
+        </span>
         {cost && <CostCell cat={cat} item={item} cost={cost} />}
       </div>
     </>
@@ -240,8 +244,11 @@ function PriceCard({ cat, item, canEdit, cost, catHead, groupHead, onOpen }: Row
         <div className="pcard-prices">
           <label><span>{t('In build')}</span><PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} /></label>
           <label><span>{t('Alone')}</span><PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} /></label>
-          <label><span>{t('Online')}</span><PriceCell value={item.online ?? null} label={t('Online')} canEdit={canEdit} onSave={(v) => save('online', v)} /></label>
-          <label><span>{t('Online sale')}</span><PriceCell value={item.onlineSale ?? null} label={t('Online sale')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} /></label>
+          <div className="pcard-web">
+            <span className="pcard-web-tag"><Icon name="globe" size={12} />{t('Website')}</span>
+            <label><span>{t('Price before')}</span><PriceCell value={item.online ?? null} label={t('Price before')} canEdit={canEdit} onSave={(v) => save('online', v)} /></label>
+            <label><span>{t('Price after')}</span><PriceCell value={item.onlineSale ?? null} label={t('Price after')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} /></label>
+          </div>
           {cost && <label className="pcard-cost"><span>{t('Cost')}</span><CostCell cat={cat} item={item} cost={cost} /></label>}
           {cost && <div className="pcard-profit"><span>{t('Profit')}</span><b>{profitText(profitOf(item.alone ?? item.in, cost[costKey(cat.id, item.id)]))}</b></div>}
         </div>
@@ -416,9 +423,14 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, canCost, costMap, on
         <div className="form-row two">
           <label><span>{t('In build')}</span><input inputMode="numeric" value={inb} readOnly={ro} onChange={(e) => setIn(e.target.value)} /></label>
           <label><span>{t('Alone')}</span><input inputMode="numeric" value={alone} readOnly={ro} onChange={(e) => setAlone(e.target.value)} /></label>
-          <label><span>{t('Online')}</span><input inputMode="numeric" value={online} readOnly={ro} placeholder={t('Website price')} onChange={(e) => setOnline(e.target.value)} /></label>
-          <label><span>{t('Online sale')}</span><input inputMode="numeric" value={onlineSale} readOnly={ro} placeholder={t('Empty = no sale')} onChange={(e) => setOnlineSale(e.target.value)} /></label>
         </div>
+        <fieldset className="web-prices">
+          <legend><Icon name="globe" size={14} />{t('Website prices')}</legend>
+          <div className="form-row two">
+            <label><span>{t('Price before')}</span><input inputMode="numeric" value={online} readOnly={ro} placeholder={t('Website price')} onChange={(e) => setOnline(e.target.value)} /></label>
+            <label><span>{t('Price after')}</span><input inputMode="numeric" value={onlineSale} readOnly={ro} placeholder={t('Empty = no sale')} onChange={(e) => setOnlineSale(e.target.value)} /></label>
+          </div>
+        </fieldset>
         {canCost && (
           <div className="cost-field">
             <label><span>{t('Cost')} <small className="muted">({t('only people allowed to see cost see this')})</small></span>
@@ -505,7 +517,7 @@ function WebSection({ cat, item, canEdit, onName }: { cat: string; item: PriceIt
   const pending = webPending(item)
   // What confirming would change on the website (the app's prices and stock win).
   const onConfirm = w && !w.ok ? webPending({ ...item, online: item.online ?? w.price, onlineSale: item.onlineSale ?? w.sale }, true) : []
-  const what = (x: string) => t(x === 'price' ? 'Online' : x === 'sale' ? 'Online sale' : x === 'name' ? 'Name' : 'Stock')
+  const what = (x: string) => t(x === 'price' ? 'Price before' : x === 'sale' ? 'Price after' : x === 'name' ? 'Name' : 'Stock')
   return (
     <section className="web-link">
       <h3>{t('Website')}</h3>
