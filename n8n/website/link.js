@@ -13,9 +13,13 @@
 // Settings.renames ("websiteId=New name; ...") puts a new name on the website products listed (sent by the sync once
 // the link is confirmed in the app).
 // Settings.dryRun = true only reports. Nothing is ever written to the website here.
+// Every 15 minutes (schedule) it runs on its own in a light mode: web/products is refreshed (new or removed pages and
+// options, prices, stock) and confirmed links follow their page (moved pages, removed options). No new suggestions are
+// made and dryRun does not apply, so the app's picker always shows what the website has now.
 const S = $('Settings').first().json;
 const DRY = S.dryRun !== false;
-const PULL = S.pullStock === true;
+const AUTO = $execution.mode !== 'manual';
+const PULL = S.pullStock === true && !AUTO;
 const NOW = new Date().toISOString();
 
 const dv = v => { if (!v || typeof v !== 'object') return null; if ('stringValue' in v) return v.stringValue; if ('booleanValue' in v) return v.booleanValue; if ('integerValue' in v) return Number(v.integerValue); if ('doubleValue' in v) return Number(v.doubleValue); if ('timestampValue' in v) return v.timestampValue; if ('nullValue' in v) return null; if ('mapValue' in v) { const o = {}; const f = (v.mapValue && v.mapValue.fields) || {}; for (const k of Object.keys(f)) o[k] = dv(f[k]); return o; } if ('arrayValue' in v) return ((v.arrayValue && v.arrayValue.values) || []).map(dv); return null; };
@@ -91,19 +95,21 @@ for (const d of docs) {
 }
 if (prods.length < 100) throw new Error('Only ' + prods.length + ' app products; stopping.');
 
+// Only pages people can see are linked: a draft (such as a Box or Tray page merged into one page with options) is not.
+const LIVE = W.filter(w => w.status === 'publish');
 // Best website product for each app product; a website product goes to the app product it fits best.
 const cand = [];
 for (const p of prods) {
   if (p.web && p.web.ok) continue; // confirmed by a person: kept as it is
   let best = null, bs = 0;
-  for (const w of W) { const s = score(p.name, w); if (s > bs) { bs = s; best = w; } }
+  for (const w of LIVE) { const s = score(p.name, w); if (s > bs) { bs = s; best = w; } }
   if (best) cand.push({ p, w: best, s: bs });
 }
 const taken = new Map();
 // A simple website product goes to one app product only; a product with options can serve several (one per option).
 for (const c of cand.sort((a, b) => b.s - a.s)) { const key = c.w.type === 'variable' ? 'v' + c.p.pid : c.w.id; if (!taken.has(key)) taken.set(key, c); }
 for (const p of prods) if (p.web && p.web.ok) taken.set('ok' + p.pid, null);
-const links = [...taken.values()].filter(Boolean);
+const links = AUTO ? [] : [...taken.values()].filter(Boolean);
 
 // ---------- stock from the website (Settings.pullStock) ----------
 const stockSet = [];
@@ -137,14 +143,36 @@ const wById0 = new Map(W.map(w => [w.id, w]));
 const optionSet = [];
 for (const p of prods) {
   if (!(p.web && p.web.ok)) continue;
-  const w = wById0.get(Number(p.web.id));
+  let w = wById0.get(Number(p.web.id));
   if (!w) continue;
   const f = {}, paths = [];
-  if (w.type === 'variable' && !p.web.variation) {
+  // A confirmed link to a page that is no longer shown (merged into a page with options) moves to the shown page with
+  // the same name, on the option the name names; it stays confirmed.
+  if (w.status !== 'publish') {
+    let best = null, bs = 0;
+    for (const x of LIVE) { const sc = score(p.name, x); if (sc > bs) { bs = sc; best = x; } }
+    const o = best ? optionFor(p.name, best) : null;
+    if (best && bs >= 80 && (best.type !== 'variable' || o)) {
+      const v = o || best;
+      Object.assign(f, { id: best.id, name: best.name, url: best.url, type: best.type, price: v.price, sale: v.sale, stock: v.stock, variation: o ? o.id : undefined, option: o ? o.name : undefined, error: undefined });
+      paths.push('id', 'name', 'url', 'type', 'price', 'sale', 'stock', 'variation', 'option', 'error');
+      optionSet.push(p.name + ' => moved to ' + best.name + (o ? ' [' + o.name + ']' : ''));
+      w = best;
+    }
+  }
+  // A page that became a page with options (or was renamed): the link follows its name and kind.
+  if (!paths.includes('name') && (p.web.type !== w.type || p.web.name !== w.name) && !p.web.rename) { Object.assign(f, { name: w.name, type: w.type }); paths.push('name', 'type'); }
+  if (w.type === 'variable' && !p.web.variation && !paths.includes('variation')) {
     const o = optionFor(p.name, w);
     if (o) { Object.assign(f, { variation: o.id, option: o.name, price: o.price, sale: o.sale, stock: o.stock }); paths.push('variation', 'option', 'price', 'sale', 'stock'); optionSet.push(p.name + ' => ' + o.name); }
   }
-  if (RENAME[w.id] && RENAME[w.id] !== w.name && !p.web.rename) { f.rename = RENAME[w.id]; paths.push('rename'); }
+  // The option this was linked to is gone from the website: the option that fits the name, else the app asks again.
+  if (w.type === 'variable' && p.web.variation && !paths.includes('variation') && w.options.length && !w.options.some(o => o.id === Number(p.web.variation))) {
+    const o = optionFor(p.name, w);
+    if (o) { Object.assign(f, { variation: o.id, option: o.name, price: o.price, sale: o.sale, stock: o.stock, error: undefined }); paths.push('variation', 'option', 'price', 'sale', 'stock', 'error'); optionSet.push(p.name + ' => ' + o.name + ' (old option removed)'); }
+    else { Object.assign(f, { variation: undefined, option: undefined, error: 'The website option this was linked to was removed; choose the option again' }); paths.push('variation', 'option', 'error'); optionSet.push(p.name + ' => option removed, choose again'); }
+  }
+  if (!AUTO && RENAME[w.id] && RENAME[w.id] !== w.name && !p.web.rename) { f.rename = RENAME[w.id]; paths.push('rename'); }
   if (!paths.length) continue;
   const b = (byCat[p.cat] = byCat[p.cat] || { fields: {}, paths: [] });
   b.fields[p.pid] = Object.assign(b.fields[p.pid] || {}, { web: f });
@@ -171,7 +199,8 @@ writes.push({ update: { name: `${base}/web/products`, fields: { at: { timestampV
 
 const unlinked = prods.filter(p => !(p.web && p.web.ok) && !links.some(c => c.p.pid === p.pid));
 const report = {
-  dryRun: DRY,
+  dryRun: DRY && !AUTO,
+  auto: AUTO,
   websiteProducts: W.length,
   websiteByType: W.reduce((o, w) => (o[w.type] = (o[w.type] || 0) + 1, o), {}),
   websiteOnSale: W.filter(w => w.sale !== null).length,
@@ -195,4 +224,4 @@ const report = {
   weak: links.filter(c => c.s < 80).slice(0, 40).map(c => `${c.s} | ${c.p.name} => ${c.w.name}`),
   noMatchNames: unlinked.slice(0, 80).map(p => `${p.catName}: ${p.name}`),
 };
-return [{ json: { report, writes: DRY ? [] : writes, writeCount: writes.length } }];
+return [{ json: { report, writes: DRY && !AUTO ? [] : writes, writeCount: writes.length } }];
