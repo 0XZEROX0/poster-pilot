@@ -452,7 +452,7 @@ function PickSheet({ cats, line, others, onPick, onClear, onClose }: { cats: Pri
   return (
     <Sheet title={t(slot.label)} onClose={onClose} footer={line.name ? <button className="btn btn-ghost" onClick={onClear}><Icon name="trash" size={18} />{t('Empty this row')}</button> : undefined}>
       <div className="pick-tools">
-        <SearchBox value={search} onChange={setSearch} placeholder={t('Search name, company, socket…')} />
+        <SearchBox autoFocus value={search} onChange={setSearch} placeholder={t('Search name, company, socket…')} />
         {pool.length > 1 && (
           <select className="sort-pick" value={cat} onChange={(e) => setCat(e.target.value)} aria-label={t('Category')}>
             <option value="">{t('All')}</option>

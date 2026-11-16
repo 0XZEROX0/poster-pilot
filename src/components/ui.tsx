@@ -98,11 +98,12 @@ export function Empty({ icon, text }: { icon: string; text: string }) {
 }
 
 /** A search field with a clear button. */
-export function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+/** `autoFocus` puts the cursor in the box when it appears, so the person can type at once. */
+export function SearchBox({ value, onChange, placeholder, autoFocus }: { value: string; onChange: (v: string) => void; placeholder?: string; autoFocus?: boolean }) {
   return (
     <span className="search">
       <Icon name="search" size={18} />
-      <input type="search" value={value} placeholder={placeholder ?? t('Search by item name…')} onChange={(e) => onChange(e.target.value)} aria-label={t('Search')} />
+      <input type="search" autoFocus={autoFocus} enterKeyHint="search" value={value} placeholder={placeholder ?? t('Search by item name…')} onChange={(e) => onChange(e.target.value)} aria-label={t('Search')} />
       {value && <button onClick={() => onChange('')} aria-label={t('Clear')}><Icon name="close" size={16} /></button>}
     </span>
   )
