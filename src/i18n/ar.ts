@@ -723,4 +723,12 @@ export const ar: Record<string, string> = {
   'Cost changed': 'تم تغيير التكلفة',
   'Hidden. Press the eye to see it.': 'مخفية. اضغط على العين لرؤيتها.',
   'Profit on the lowest price': 'الربح على أقل سعر',
+  "Engine received the last change": "المحرك استلم آخر تعديل",
+  "The engine did not answer the app": "المحرك لم يرد على التطبيق",
+  "The engine did not answer the app. Your change is saved and will be done at the engine's next check. Check that n8n is running.": "المحرك لم يرد على التطبيق. تعديلك محفوظ وسيتم تنفيذه في الفحص القادم للمحرك. تأكد أن n8n يعمل.",
+  "Received": "تم الاستلام",
+  "Sent": "تم الإرسال",
+  "Not received yet, trying again": "لم يصل بعد، جارٍ المحاولة مرة أخرى",
+  "Not received. The change waits for the engine's next check.": "لم يصل. التعديل ينتظر الفحص القادم للمحرك.",
+  "Last signal from this app": "آخر إشارة من هذا التطبيق",
 }

@@ -1,28 +1,31 @@
-// "Build website changes" Code node. Input: what "Read website product" returned for each planned product
-// (a simple product, or the list of options of a product with options). Picks the option that fits the app
-// product's name (colour, Tray/Box...), and builds the change WooCommerce needs.
+// "Build website changes" Code node. Input: what "Read website product" returned for the requests of "Website reads"
+// (simple products together, and the options of each product with options). Picks the option that fits the app
+// product's name (colour, Tray/Box...), and builds the change WooCommerce needs. "Group into batches" then sends
+// all changes in as few requests as possible.
 const plans = $('What to send').all().map(i => i.json);
-const got = {}, byId = {};
+const reqs = $('Website reads').all().map(i => i.json);
+const byId = {}, optionsOf = {}, failed = {};
 for (const it of $input.all()) {
   const pi = Array.isArray(it.pairedItem) ? it.pairedItem[0] : it.pairedItem;
-  const k = pi && typeof pi.item === 'number' ? pi.item : 0;
-  (got[k] = got[k] || []).push(it.json);
-  // Every product and option read in this run, by id (ids are unique on the website), so the chosen one is found even
-  // if n8n paired an answer to the wrong planned product.
-  if (it.json && it.json.id && !it.json.error) byId[it.json.id] = it.json;
+  const req = reqs[pi && typeof pi.item === 'number' ? pi.item : 0] || {};
+  const j = it.json || {};
+  if (j.error || !j.id) { failed[req.parent === null ? 'simple' : req.parent] = String((j.error && j.error.message) || j.message || 'no answer').slice(0, 200); continue; }
+  // Every product and option read in this run, by id (ids are unique on the website).
+  byId[j.id] = j;
+  if (req.parent !== null && req.parent !== undefined) (optionsOf[req.parent] = optionsOf[req.parent] || []).push(j);
 }
 const decode = s => String(s || '').replace(/&#215;|&times;|×/gi, 'x').replace(/&amp;/g, '&').replace(/&#\d+;/g, ' ');
 const tok = s => decode(s).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 const DRY = $('Settings').first().json.dryRun !== false;
 const out = [];
-plans.forEach((p, i) => {
-  const rows = (got[i] || []).filter(r => r && !r.error);
-  if (!rows.length && p.type !== 'variable' && byId[p.id]) rows.push(byId[p.id]);
+plans.forEach(p => {
+  const rows = p.type === 'variable' ? (optionsOf[p.id] || []).slice() : (byId[p.id] ? [byId[p.id]] : []);
   if (!rows.length && p.type === 'variable' && p.variation && byId[p.variation]) rows.push(byId[p.variation]);
   // A product that cannot be sent skips "Send to website"; its error is still saved.
   const fail = msg => out.push({ json: { ...p, method: '', url: '', body: {}, error: msg } });
-  if (!rows.length) return fail(((got[i] || [])[0] || {}).error ? 'The website did not answer: ' + String(((got[i] || [])[0].error || {}).message || '').slice(0, 200) : 'The website product was not found');
-  let target = (p.type !== 'variable' && byId[p.id]) || rows[0], url = `https://static-eg.com/wp-json/wc/v3/products/${p.id}`;
+  const why = failed[p.type === 'variable' ? p.id : 'simple'];
+  if (!rows.length) return fail(why ? 'The website did not answer: ' + why : 'The website product was not found');
+  let target = rows[0], url = `https://static-eg.com/wp-json/wc/v3/products/${p.id}`;
   if (p.type === 'variable') {
     const words = new Set(tok(p.name));
     const fits = rows.filter(v => v && v.id && (v.attributes || []).length && (v.attributes || []).every(a => tok(a.option).every(t => words.has(t))));
@@ -44,7 +47,7 @@ plans.forEach((p, i) => {
   } else body.stock_status = p.want.stock;
   // A new name belongs to the product itself; for a product with options that is a second change, to the main product.
   if (p.want.name && p.type !== 'variable') body.name = p.want.name;
-  // Settings.dryRun: everything is worked out, but nothing goes to "Send to website".
+  // Settings.dryRun: everything is worked out, but nothing is sent.
   out.push({ json: { ...p, variation: p.type === 'variable' ? target.id : null, option: p.type === 'variable' ? decode((target.attributes || []).map(a => a.option).join(' ')).replace(/\s+/g, ' ').trim() : null, method: DRY ? '' : 'PUT', url, body, dry: DRY, error: '' } });
   if (p.want.name && p.type === 'variable') out.push({ json: { ...p, part: 'name', variation: null, method: DRY ? '' : 'PUT', url: `https://static-eg.com/wp-json/wc/v3/products/${p.id}`, body: { name: p.want.name }, dry: DRY, error: '' } });
 });

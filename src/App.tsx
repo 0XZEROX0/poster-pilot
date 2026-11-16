@@ -22,6 +22,7 @@ import { ActivityView } from './components/ActivityView'
 import { allowed, isOwner, myId, ownOffer, postWork, seesPage, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, tn, useLang } from './i18n'
+import { useEngineSignal } from './data/nudge'
 
 /** What a tab needs. A tab the person's role cannot use is not shown. */
 const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view', brainstorm: 'brainstorm' }
@@ -54,6 +55,7 @@ const QUIET_MS = 75 * 60 * 1000
 export default function App() {
   useLang()
   const session = useSession()
+  const signal = useEngineSignal()
   const [wanted, setTab] = useState<Tab>(tabFromHash)
   const TABS = ALL_TABS.filter((x) => x.id === 'home' || x.id === 'activity' || x.id === 'brainstorm' || seesPage(x.id)).filter((x) => (x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
@@ -130,12 +132,17 @@ export default function App() {
   const openPost = overlay?.kind === 'post' ? data.posts.find((p) => p.id === overlay.id) : undefined
   const health = data.health
   const quiet = session.mode === 'cloud' && data.loaded && postWork() && (!health || Date.now() - health.lastSync > QUIET_MS)
+  // The last knock to the engine did not arrive after a few tries (shown for 30 minutes, or until a knock arrives).
+  const unheard = session.mode === 'cloud' && postWork() && signal?.state === 'failed' && Date.now() - signal.at < 30 * 60_000
+  const dotBad = quiet || unheard
+  const dotTitle = signal && signal.state !== 'failed' ? `${t('Engine received the last change')}: ${agoLabel(signal.at)}` : unheard ? t('The engine did not answer the app') : (health ? agoLabel(health.lastSync) : '')
 
   const title = t(tab === 'home' ? (desktop ? 'Dashboard' : 'Static OS') : TABS.find((x) => x.id === tab)!.label)
   const banners = (
     <>
       {session.mode === 'demo' && <p className="banner"><b>{t('Demo mode')}.</b> {t('Sample data in this browser. Nothing is posted.')}</p>}
       {quiet && <p className="banner banner-bad">{t('The engine has been quiet for a while. Check that n8n is running.')}</p>}
+      {unheard && !quiet && <p className="banner banner-bad">{t('The engine did not answer the app. Your change is saved and will be done at the engine\'s next check. Check that n8n is running.')}</p>}
       {session.error && <p className="banner banner-bad" dir="ltr">{session.error}</p>}
     </>
   )
@@ -196,7 +203,7 @@ export default function App() {
           </nav>
           <div className="side-foot">
             {session.mode === 'cloud' && postWork() && (
-              <p className="side-engine"><span className={`health${quiet ? ' health-bad' : ''}`} />{t('Engine')}: {health ? agoLabel(health.lastSync) : '—'}</p>
+              <p className="side-engine" title={dotTitle}><span className={`health${dotBad ? ' health-bad' : ''}`} />{t('Engine')}: {health ? agoLabel(health.lastSync) : '—'}</p>
             )}
             <div className="side-user">
               <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
@@ -230,7 +237,7 @@ export default function App() {
       <header className="top">
         <Logo size={30} />
         <h1>{title}</h1>
-        {session.mode === 'cloud' && postWork() && <span className={`health${quiet ? ' health-bad' : ''}`} title={health ? agoLabel(health.lastSync) : ''} />}
+        {session.mode === 'cloud' && postWork() && <span className={`health${dotBad ? ' health-bad' : ''}`} title={dotTitle} />}
         <button className="icon-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')}><Icon name="settings" /></button>
       </header>
       {banners}
