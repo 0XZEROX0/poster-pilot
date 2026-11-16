@@ -24,13 +24,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 140,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x140",
+    "side": 0,
+    "top": 0,
+    "rear": "1x140",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)"
+   "source": "https://static-eg.com/product/tuf-gaming-gt302-argb/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "blade, ARGB (pink/purple in photo)",
   "dimensions": {
@@ -41,7 +44,22 @@
    "note": "labelled W x H x D on the page"
   },
   "max_board": "E-ATX",
-  "max_gpu_mm": 407
+  "max_gpu_mm": 407,
+  "front_io": {
+   "where": "front panel top (ports in a row along the top edge of the front face, seen in the photo)",
+   "ports": [
+    "1x USB-C (USB 3.2 Gen2x2)",
+    "2x USB-A 3.2 Gen1",
+    "1x headphone/mic combo",
+    "power button (seen in photo)"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 8,
+   "vertical_slots": 3,
+   "psu": "bottom rear, under the PSU shroud"
+  }
  },
  {
   "id": 5122,
@@ -68,14 +86,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 140,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x140",
+    "side": 0,
+    "top": 0,
+    "rear": "1x140",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)",
-   "note": "front fans hidden behind dark glass; RGB is on the front glass graphic"
+   "source": "https://static-eg.com/product/asus-rog-strix-helios-gx601-edition-rgb-mid-tower-gaming-case/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "plain",
   "dimensions": {
@@ -86,7 +106,25 @@
    "note": "page lists 250 x 565 x 591 with no axis labels; read as ASUS W x H x D, the same order the GT302 page labels"
   },
   "max_board": "E-ATX",
-  "max_gpu_mm": 450
+  "max_gpu_mm": 450,
+  "front_io": {
+   "where": "unknown (not visible in the photo)",
+   "ports": [
+    "4x USB-A 3.1 Gen1",
+    "1x USB-C 3.1 Gen2",
+    "headphone jack",
+    "mic jack",
+    "LED control button",
+    "fan control button",
+    "reset button"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 8,
+   "vertical_slots": 2,
+   "psu": "bottom rear, under the PSU shroud"
+  }
  },
  {
   "id": 5224,
@@ -113,13 +151,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 2,
-   "size_mm": 120,
    "positions": {
-    "front": 1,
-    "rear": 1
+    "front": "1x120",
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)"
+   "source": "https://static-eg.com/product/gigabyte-c102-glass/",
+   "note": null,
+   "total": 2
   },
   "fan_style": "plain",
   "dimensions": {
@@ -130,7 +171,21 @@
    "note": "labelled H x W x D"
   },
   "max_board": "mATX",
-  "max_gpu_mm": 410
+  "max_gpu_mm": 410,
+  "front_io": {
+   "where": "unknown (not visible in the photo)",
+   "ports": [
+    "2x USB-A 3.0",
+    "reset button",
+    "audio in/out"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 5,
+   "vertical_slots": 0,
+   "psu": "bottom rear, under the PSU shroud"
+  }
  },
  {
   "id": 5226,
@@ -157,13 +212,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 1,
-   "size_mm": 120,
    "positions": {
-    "rear": 1
+    "front": 0,
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)",
-   "note": "the only light is the blue strip on the front"
+   "source": "https://static-eg.com/product/gigabyte-c200-glass/",
+   "note": null,
+   "total": 1
   },
   "fan_style": "plain",
   "dimensions": {
@@ -174,7 +232,22 @@
    "note": "labelled H x W x D"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 330
+  "max_gpu_mm": 330,
+  "front_io": {
+   "where": "unknown (not visible in the photo)",
+   "ports": [
+    "2x USB-A 3.0",
+    "RGB LED switch",
+    "reset button",
+    "audio in/out"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": 0,
+   "psu": "bottom rear, no full shroud (visible through the glass)"
+  }
  },
  {
   "id": 5227,
@@ -201,14 +274,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "bottom": 3,
-    "rear": 1
+    "front": 0,
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": "3x120"
    },
-   "source": "static-eg product page (long description/spec table)",
-   "note": "the 3 fans are on the BOTTOM blowing up, not the front"
+   "source": "https://static-eg.com/product/gigabyte-c400-glass/",
+   "note": "the bottom fans blow upward",
+   "total": 4
   },
   "fan_style": "ring, rainbow ARGB",
   "dimensions": {
@@ -219,7 +294,21 @@
    "note": "labelled H x W x D"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 360
+  "max_gpu_mm": 360,
+  "front_io": {
+   "where": "unknown (not visible in the photo)",
+   "ports": [
+    "1x USB-C 3.2 Gen2",
+    "2x USB-A 3.0",
+    "audio in/out"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 8,
+   "vertical_slots": "unknown",
+   "psu": "bottom rear (a vertical GPU mount is supported, slot count not stated)"
+  }
  },
  {
   "id": 5246,
@@ -246,13 +335,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x120",
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)"
+   "source": "https://static-eg.com/product/gigabyte-aorus-c500-g/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "ring, rainbow ARGB",
   "dimensions": {
@@ -263,7 +355,21 @@
    "note": "labelled H x W x D"
   },
   "max_board": "E-ATX",
-  "max_gpu_mm": 420
+  "max_gpu_mm": 420,
+  "front_io": {
+   "where": "unknown (not visible in the photo)",
+   "ports": [
+    "1x USB-C 3.1 Gen2",
+    "2x USB-A 3.0",
+    "audio in/out"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 8,
+   "vertical_slots": 3,
+   "psu": "bottom rear, under the PSU shroud (the vertical slots need a riser cable)"
+  }
  },
  {
   "id": 6135,
@@ -291,13 +397,16 @@
    "note": "static-eg lists only top and rear radiator positions"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120",
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)"
+   "source": "https://static-eg.com/product/asus-tuf-gaming-gt502-horizon-argb/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "ring, cyan (ARGB)",
   "dimensions": {
@@ -308,7 +417,23 @@
    "note": "page lists 285 x 450 x 446 with no axis labels; read as ASUS W x H x D"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 400
+  "max_gpu_mm": 400,
+  "front_io": {
+   "where": "front-right pillar (vertical column of ports on the grey pillar, seen in the photo)",
+   "ports": [
+    "1x USB-C 3.2 Gen2x2",
+    "2x USB-A 3.2 Gen1",
+    "1x headphone/mic combo",
+    "LED control button",
+    "power button (seen in photo)"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 8,
+   "vertical_slots": 3,
+   "psu": "rear chamber behind the motherboard tray (dual-chamber)"
+  }
  },
  {
   "id": 7108,
@@ -340,14 +465,16 @@
    "note": "no bottom radiator listed (bottom takes 3x120 fans only)"
   },
   "included_fans": {
-   "total": 7,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "top": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120",
+    "top": "3x120",
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "count from the static-eg title; positions from the photos"
+   "source": "https://static-eg.com/product/dy470-atx-pc-case-7-fans/",
+   "note": "the count (7) is from the title, positions from the photos; 120mm because every fan mount is 120-only",
+   "total": 7
   },
   "fan_style": "octagon, orange on the black version / blue on the white version",
   "dimensions": {
@@ -358,7 +485,23 @@
    "note": "page and darkflash.com give 473*298*497 with no axis labels, and retailers disagree, so depth and height are unknown: one is 473 and the other 497. Width 298 is certain."
   },
   "max_board": "ATX",
-  "max_gpu_mm": 410
+  "max_gpu_mm": 410,
+  "front_io": {
+   "where": "front bottom plinth (seen in the photos)",
+   "ports": [
+    "2x USB-A 3.0",
+    "1x USB-C",
+    "HD audio",
+    "reset button",
+    "power button"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "rear chamber behind the motherboard tray (dual-chamber) (a vertical GPU is supported up to 390mm, slot count not stated)"
+  }
  },
  {
   "id": 7997,
@@ -392,14 +535,16 @@
    "note": "no rear radiator listed"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "rear": 1
+    "front": "unknown",
+    "side": "unknown",
+    "top": "unknown",
+    "rear": "unknown",
+    "bottom": "unknown"
    },
-   "source": "count from the retailer https://alfrensia.com/en/product/darkflash-l285-atx-curved-tempered-glass-back-connect-support-argb-type-c-with-4x-dm20-fans-black-mid-tower-case (4x DM20 ARGB)",
-   "note": "UNCONFIRMED: static-eg and darkflash.com do not say how many fans are included. Positions and size are guesses based on the K430, which uses the same DM20 fans (3 side + 1 rear). The photos show a full build with about 10 fans."
+   "source": "https://www.darkflash.com/product/l285",
+   "note": "static-eg and darkflash.com do not list included fans; a retailer (alfrensia.com) lists 4x DM20 ARGB with no positions",
+   "total": 4
   },
   "fan_style": "ring, rainbow ARGB with lit hub",
   "dimensions": {
@@ -410,7 +555,24 @@
    "note": "page gives 460 x 285 x 398 with no axis labels; the photos show the case is deeper than it is tall, so 460 = depth and 398 = height"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 445
+  "max_gpu_mm": 445,
+  "front_io": {
+   "where": "unknown (not clear in the photos)",
+   "ports": [
+    "1x USB-A 3.0",
+    "2x USB-A 2.0",
+    "HD audio",
+    "power button",
+    "reset button",
+    "LED control button"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "rear chamber behind the motherboard tray (dual-chamber)"
+  }
  },
  {
   "id": 9083,
@@ -444,13 +606,16 @@
    "note": "rear radiator not clearly stated"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 140,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x140",
+    "side": 0,
+    "top": 0,
+    "rear": "1x140",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)"
+   "source": "https://static-eg.com/product/gigabyte-aorus-c601-glass-global/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "ring, rainbow ARGB",
   "dimensions": {
@@ -461,7 +626,23 @@
    "note": "Gigabyte lists H611 x W290 x D565; the static-eg page gives 611 x 290 x 565 unlabelled"
   },
   "max_board": "E-ATX",
-  "max_gpu_mm": 420
+  "max_gpu_mm": 420,
+  "front_io": {
+   "where": "unknown (not clear in the photos)",
+   "ports": [
+    "1x USB-C 3.1 Gen2",
+    "4x USB-A 3.0",
+    "audio in/out",
+    "LED switch",
+    "reset button"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 8,
+   "vertical_slots": "unknown",
+   "psu": "bottom rear, under the PSU shroud (a vertical GPU mount is supported, slot count not stated)"
+  }
  },
  {
   "id": 10654,
@@ -496,13 +677,16 @@
    "note": "unknown; a 240mm radiator at the front or top is likely but unconfirmed"
   },
   "included_fans": {
-   "total": 3,
-   "size_mm": 120,
    "positions": {
-    "front": 2,
-    "rear": 1
+    "front": "2x120",
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "count from the static-eg title; positions from the photos"
+   "source": "https://www.xigmatek.com/product/amun-3f/",
+   "note": "maker model line: 3PCS C20F fans; the front takes 120mm only; positions from the photos",
+   "total": 3
   },
   "fan_style": "infinity (X-logo hub), rainbow ARGB",
   "dimensions": {
@@ -514,7 +698,21 @@
   },
   "max_board": "mATX",
   "max_gpu_mm": 295,
-  "max_gpu_note": "270 with front fans installed"
+  "max_gpu_note": "270 with front fans installed",
+  "front_io": {
+   "where": "top panel near the front edge (seen in the photo)",
+   "ports": [
+    "1x USB-A 3.0",
+    "2x USB-A 2.0",
+    "HD audio"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 4,
+   "vertical_slots": 0,
+   "psu": "bottom rear, under the PSU shroud"
+  }
  },
  {
   "id": 11279,
@@ -548,13 +746,16 @@
    "note": "unknown; a 240mm radiator at the front or top is likely but unconfirmed"
   },
   "included_fans": {
-   "total": 3,
-   "size_mm": 120,
    "positions": {
-    "front": 2,
-    "rear": 1
+    "front": "2x120",
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "count from the static-eg title; positions from the photos"
+   "source": "https://www.xigmatek.com/product/amun-3f/",
+   "note": "maker model line: 3PCS C20F fans; the front takes 120mm only; positions from the photos",
+   "total": 3
   },
   "fan_style": "infinity (X-logo hub), rainbow ARGB",
   "dimensions": {
@@ -566,7 +767,21 @@
   },
   "max_board": "mATX",
   "max_gpu_mm": 295,
-  "max_gpu_note": "270 with front fans installed"
+  "max_gpu_note": "270 with front fans installed",
+  "front_io": {
+   "where": "top panel near the front edge (seen in the photo)",
+   "ports": [
+    "1x USB-A 3.0",
+    "2x USB-A 2.0",
+    "HD audio"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 4,
+   "vertical_slots": 0,
+   "psu": "bottom rear, under the PSU shroud"
+  }
  },
  {
   "id": 11577,
@@ -598,14 +813,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120 reverse-blade",
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)",
-   "note": "the side fans are reverse-blade"
+   "source": "https://static-eg.com/product/aerocool-p500c/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "infinity (stated: infinity-mirror effect), cyan/blue in the photos (ARGB)",
   "dimensions": {
@@ -616,7 +833,22 @@
    "note": "overall dimensions, labelled W x H x D (the internal size is 285 x 380 x 420)"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 450
+  "max_gpu_mm": 450,
+  "front_io": {
+   "where": "top panel near the front edge, right corner (seen in the photo)",
+   "ports": [
+    "2x USB-A 3.0",
+    "1x USB-A 2.0",
+    "HD audio",
+    "mic"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "rear chamber behind the motherboard tray (dual-chamber)"
+  }
  },
  {
   "id": 11582,
@@ -649,14 +881,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120 reverse-blade",
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)",
-   "note": "the side fans are reverse-blade"
+   "source": "https://static-eg.com/product/aerocool-p500c/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "infinity (stated: infinity-mirror effect), cyan/blue in the photos (ARGB)",
   "dimensions": {
@@ -667,7 +901,22 @@
    "note": "overall dimensions, labelled W x H x D (the internal size is 285 x 380 x 420)"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 450
+  "max_gpu_mm": 450,
+  "front_io": {
+   "where": "top panel near the front edge, right corner (seen in the photo)",
+   "ports": [
+    "2x USB-A 3.0",
+    "1x USB-A 2.0",
+    "HD audio",
+    "mic"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "rear chamber behind the motherboard tray (dual-chamber)"
+  }
  },
  {
   "id": 12112,
@@ -701,13 +950,16 @@
    "note": "the top is confirmed. The page mentions a front-right radiator position but gives no size; side and rear radiator sizes are not stated"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x120",
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)"
+   "source": "https://static-eg.com/product/aerocool-d520a-black/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "ring, cyan/white (ARGB)",
   "dimensions": {
@@ -718,7 +970,21 @@
    "note": "labelled D x W x H"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 400
+  "max_gpu_mm": 400,
+  "front_io": {
+   "where": "left side bottom, on the shroud below the glass at the front (seen in the photo)",
+   "ports": [
+    "1x USB-C 3.2 Gen2x2",
+    "2x USB-A 3.2 Gen1",
+    "HD audio & mic"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "bottom rear, under the PSU shroud"
+  }
  },
  {
   "id": 12383,
@@ -752,13 +1018,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x120",
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "count from the static-eg title (4 fans); positions from the photos"
+   "source": "https://www.xigmatek.com/product/hero-ii-air-for-egypt-market/",
+   "note": "maker: 4PCS Z20A; the front takes 120mm x3 only",
+   "total": 4
   },
   "fan_style": "infinity (X-logo hub), rainbow ARGB",
   "dimensions": {
@@ -769,7 +1038,22 @@
    "note": "labelled L x W x H"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 340
+  "max_gpu_mm": 340,
+  "front_io": {
+   "where": "top panel near the front edge (maker: \"Top Mount I/O Ports\"; seen in the photo)",
+   "ports": [
+    "1x USB-A 3.0",
+    "2x USB-A 2.0",
+    "HD audio",
+    "LED switch"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": 0,
+   "psu": "bottom rear, under the PSU shroud"
+  }
  },
  {
   "id": 12384,
@@ -802,13 +1086,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x120",
+    "side": 0,
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "count from the static-eg title (4 fans); positions from the photos"
+   "source": "https://www.xigmatek.com/product/hero-ii-air-for-egypt-market/",
+   "note": "maker: 4PCS Z20A; the front takes 120mm x3 only",
+   "total": 4
   },
   "fan_style": "infinity (X-logo hub), rainbow ARGB",
   "dimensions": {
@@ -819,7 +1106,22 @@
    "note": "labelled L x W x H"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 340
+  "max_gpu_mm": 340,
+  "front_io": {
+   "where": "top panel near the front edge (maker: \"Top Mount I/O Ports\"; seen in the photo)",
+   "ports": [
+    "1x USB-A 3.0",
+    "2x USB-A 2.0",
+    "HD audio",
+    "LED switch"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": 0,
+   "psu": "bottom rear, under the PSU shroud"
+  }
  },
  {
   "id": 12391,
@@ -854,13 +1156,16 @@
    "note": "the side radiator is limited by ATX/E-ATX board width; no bottom radiator listed"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120 reverse-blade",
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "count from the title; positions from the photos"
+   "source": "https://www.xigmatek.com/product/crystal-storm-arctic-v2/",
+   "note": "maker: 3PCS J22A PWM Arctic Reverse + 1PC J22A PWM Arctic",
+   "total": 4
   },
   "fan_style": "ring, white frame with rainbow/pastel ARGB, plus vertical light bars beside the side fans",
   "dimensions": {
@@ -871,7 +1176,21 @@
    "note": "labelled L x W x H"
   },
   "max_board": "E-ATX",
-  "max_gpu_mm": 420
+  "max_gpu_mm": 420,
+  "front_io": {
+   "where": "top panel near the front edge, right corner (maker: top mount; seen in the photo)",
+   "ports": [
+    "1x USB-A 3.0",
+    "1x USB-A 2.0",
+    "HD audio"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "rear chamber behind the motherboard tray (dual-chamber)"
+  }
  },
  {
   "id": 12392,
@@ -905,13 +1224,16 @@
    "note": "the side radiator is limited by ATX/E-ATX board width; no bottom radiator listed"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120 reverse-blade",
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "count from the title; positions from the photos"
+   "source": "https://www.xigmatek.com/product/crystal-storm-arctic-v2/",
+   "note": "maker: 3PCS J22A PWM Arctic Reverse + 1PC J22A PWM Arctic",
+   "total": 4
   },
   "fan_style": "ring, white frame with rainbow/pastel ARGB, plus vertical light bars beside the side fans",
   "dimensions": {
@@ -922,7 +1244,21 @@
    "note": "labelled L x W x H"
   },
   "max_board": "E-ATX",
-  "max_gpu_mm": 420
+  "max_gpu_mm": 420,
+  "front_io": {
+   "where": "top panel near the front edge, right corner (maker: top mount; seen in the photo)",
+   "ports": [
+    "1x USB-A 3.0",
+    "1x USB-A 2.0",
+    "HD audio"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "rear chamber behind the motherboard tray (dual-chamber)"
+  }
  },
  {
   "id": 12429,
@@ -945,7 +1281,7 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black. Front: glass corner with a vertical black pillar in the middle-front that holds a built-in 9.18in LCD screen (shows CPU temp/graphs) — very distinctive. 7 rainbow ARGB fans: 3 SIDE-MOUNTED vertical column at right (intake from right side mesh), 3 TOP, 1 REAR. Right side panel perforated mesh. Gold X logo bottom-right. Glass corner panoramic.",
+  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black. Front: glass corner with a vertical black pillar in the middle-front that holds a built-in 9.18in LCD screen (shows CPU temp/graphs) — very distinctive. 7 rainbow ARGB fans: 3 SIDE-MOUNTED vertical column at right (intake from right side mesh), 3 BOTTOM (maker: reverse fans pre-installed on MB panel & bottom), 1 REAR. Right side panel perforated mesh. Gold X logo bottom-right. Glass corner panoramic.",
   "radiators": {
    "top": 360,
    "front": 0,
@@ -956,14 +1292,16 @@
    "note": "the bottom 360 radiator works only with a Micro-ATX board; no rear radiator listed"
   },
   "included_fans": {
-   "total": 7,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "top": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120 reverse-blade",
+    "top": 0,
+    "rear": "1x120",
+    "bottom": "3x120 reverse-blade"
    },
-   "source": "count from the title; positions from the photos"
+   "source": "https://www.xigmatek.com/product/cubi-ii-lcd/",
+   "note": "maker: 6PCS Z22A Reverse + 1PC Z22A, reverse fans \"pre-installed on MB panel & bottom side\". This corrects my earlier note: the 3 fans are on the BOTTOM, not the top.",
+   "total": 7
   },
   "fan_style": "infinity (X-logo hub), rainbow ARGB",
   "dimensions": {
@@ -974,7 +1312,21 @@
    "note": "labelled L x W x H"
   },
   "max_board": "E-ATX",
-  "max_gpu_mm": 370
+  "max_gpu_mm": 370,
+  "front_io": {
+   "where": "top panel near the front edge, right corner (maker: top mount; seen in the photo)",
+   "ports": [
+    "2x USB-A 3.0",
+    "1x USB-C",
+    "HD audio"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "rear chamber behind the motherboard tray (dual-chamber) (a vertical GPU is supported, slot count not stated)"
+  }
  },
  {
   "id": 12642,
@@ -1009,14 +1361,16 @@
    "note": "the side 240 is on the motherboard panel and limited by E-ATX board width"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x140",
+    "side": 0,
+    "top": 0,
+    "rear": "1x140",
+    "bottom": 0
    },
-   "source": "count from the title; positions from the photos",
-   "note": "the included fan size is not stated; the front takes 120 or 140"
+   "source": "https://www.xigmatek.com/product/osiris-ii-for-egypt-market/",
+   "note": "maker model line: 4PCS 140mm Y40A. This is the case with 3x140mm front fans. The rear takes 120 or 140.",
+   "total": 4
   },
   "fan_style": "infinity (X-logo hub), rainbow ARGB",
   "dimensions": {
@@ -1028,7 +1382,23 @@
   },
   "max_board": "E-ATX",
   "max_gpu_mm": 400,
-  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)"
+  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)",
+  "front_io": {
+   "where": "top panel near the front edge (maker: \"Top Mount I/O Ports\")",
+   "ports": [
+    "power button",
+    "reset button",
+    "HD audio jack",
+    "1x USB-A 3.0",
+    "2x USB-A 2.0"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "bottom rear, under the PSU shroud (a 90-degree vertical GPU is supported, slot count not stated)"
+  }
  },
  {
   "id": 12643,
@@ -1062,14 +1432,16 @@
    "note": "the side 240 is on the motherboard panel and limited by E-ATX board width"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x140",
+    "side": 0,
+    "top": 0,
+    "rear": "1x140",
+    "bottom": 0
    },
-   "source": "count from the title; positions from the photos",
-   "note": "the included fan size is not stated; the front takes 120 or 140"
+   "source": "https://www.xigmatek.com/product/osiris-ii-for-egypt-market/",
+   "note": "maker model line: 4PCS 140mm Y40A. This is the case with 3x140mm front fans. The rear takes 120 or 140.",
+   "total": 4
   },
   "fan_style": "infinity (X-logo hub), rainbow ARGB",
   "dimensions": {
@@ -1081,7 +1453,23 @@
   },
   "max_board": "E-ATX",
   "max_gpu_mm": 400,
-  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)"
+  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)",
+  "front_io": {
+   "where": "top panel near the front edge (maker: \"Top Mount I/O Ports\")",
+   "ports": [
+    "power button",
+    "reset button",
+    "HD audio jack",
+    "1x USB-A 3.0",
+    "2x USB-A 2.0"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "bottom rear, under the PSU shroud (a 90-degree vertical GPU is supported, slot count not stated)"
+  }
  },
  {
   "id": 12651,
@@ -1116,14 +1504,16 @@
    "note": "the side 240 is on the motherboard panel and limited by E-ATX board width"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "front": 3,
-    "rear": 1
+    "front": "3x140",
+    "side": 0,
+    "top": 0,
+    "rear": "1x140",
+    "bottom": 0
    },
-   "source": "count from the title; positions from the photos",
-   "note": "the included fan size is not stated; the front takes 120 or 140"
+   "source": "https://www.xigmatek.com/product/osiris-ii-for-egypt-market/",
+   "note": "maker model line: 4PCS 140mm Y40A. This is the case with 3x140mm front fans. The rear takes 120 or 140.",
+   "total": 4
   },
   "fan_style": "infinity (X-logo hub), rainbow ARGB",
   "dimensions": {
@@ -1135,7 +1525,23 @@
   },
   "max_board": "E-ATX",
   "max_gpu_mm": 400,
-  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)"
+  "max_gpu_note": "the same page also says 285 in one place; 400 is the spec-table figure (without motherboard-panel fans)",
+  "front_io": {
+   "where": "top panel near the front edge (maker: \"Top Mount I/O Ports\")",
+   "ports": [
+    "power button",
+    "reset button",
+    "HD audio jack",
+    "1x USB-A 3.0",
+    "2x USB-A 2.0"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "bottom rear, under the PSU shroud (a 90-degree vertical GPU is supported, slot count not stated)"
+  }
  },
  {
   "id": 12655,
@@ -1158,7 +1564,7 @@
    "3.jpg",
    "4.jpg"
   ],
-  "looks": "dual-chamber 'aquarium' (wide, PSU/cable chamber behind the motherboard tray on the right), black (bundle with Valkyrie 750W PSU). Front: glass corner panoramic. 4 rainbow ARGB fans: 3 SIDE-MOUNTED vertical column at right of main chamber (with ARGB light bar strips beside them, intake through right side) + 1 REAR. Right side panel shows the 3 fans from behind (side intake). No PSU shroud; perforated bottom with X logo front-bottom.",
+  "looks": "Panoramic mid tower (narrow at 212mm wide, NOT dual-chamber; the PSU sits under a bottom shroud), black (bundle with Valkyrie 750W PSU). Front: glass corner panoramic. 4 rainbow ARGB fans: 3 SIDE-MOUNTED vertical column at right of main chamber (with ARGB light bar strips beside them, intake through right side) + 1 REAR. Right side panel shows the 3 fans from behind (side intake). No PSU shroud; perforated bottom with X logo front-bottom.",
   "radiators": {
    "top": 360,
    "front": 0,
@@ -1168,13 +1574,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120 reverse-blade",
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "count from the title; positions from the photos"
+   "source": "https://www.xigmatek.com/product/blast/",
+   "note": "maker: 3PCS G20A Reverse pre-installed on the MB panel side + 1PC G20A at the rear",
+   "total": 4
   },
   "fan_style": "ring, rainbow ARGB, plus light bars beside the side fans",
   "dimensions": {
@@ -1186,7 +1595,21 @@
   },
   "max_board": "E-ATX",
   "max_gpu_mm": 410,
-  "max_gpu_note": "the same page also says 285 in one place; 410 is stated twice"
+  "max_gpu_note": "the same page also says 285 in one place; 410 is stated twice",
+  "front_io": {
+   "where": "top panel near the front edge (maker: \"Top Mount I/O Ports\"; seen in the photo)",
+   "ports": [
+    "1x USB-A 3.0",
+    "2x USB-A 2.0",
+    "HD audio"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 9,
+   "vertical_slots": "unknown",
+   "psu": "bottom rear, under the PSU shroud (the maker lists PSU-shroud fan mounts, so this is not a rear chamber; width is 212mm)"
+  }
  },
  {
   "id": 12805,
@@ -1219,14 +1642,16 @@
    "source": "static-eg product page (long description/spec table)"
   },
   "included_fans": {
-   "total": 4,
-   "size_mm": 120,
    "positions": {
-    "side": 3,
-    "rear": 1
+    "front": 0,
+    "side": "3x120 reverse-blade",
+    "top": 0,
+    "rear": "1x120",
+    "bottom": 0
    },
-   "source": "static-eg product page (long description/spec table)",
-   "note": "3 reverse-blade side fans + 1 standard rear fan (DM20 ARGB)"
+   "source": "https://static-eg.com/product/darkflash-k430-combo-atx-pc-case-psu-750/",
+   "note": null,
+   "total": 4
   },
   "fan_style": "blade, orange/amber glow in the photos (ARGB)",
   "dimensions": {
@@ -1237,6 +1662,23 @@
    "note": "overall size; the body without feet/panels is 430 x 238 x 465"
   },
   "max_board": "ATX",
-  "max_gpu_mm": 410
+  "max_gpu_mm": 410,
+  "front_io": {
+   "where": "unknown (not visible in the photos)",
+   "ports": [
+    "1x USB-C",
+    "1x USB-A 3.0",
+    "1x USB-A 2.0",
+    "HD audio",
+    "power button",
+    "reset button"
+   ],
+   "ports_note": "port list from the spec text; the physical left-to-right order is not stated"
+  },
+  "rear": {
+   "pcie_slots": 7,
+   "vertical_slots": "unknown",
+   "psu": "unknown (bottom fan mounts exist; PSU position not stated)"
+  }
  }
 ]
