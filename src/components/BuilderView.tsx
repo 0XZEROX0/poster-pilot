@@ -675,10 +675,13 @@ function printQuote(name: string) {
 
 function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean }) {
   const logo = `${import.meta.env.BASE_URL}static-logo.png`
+  const mark = `${import.meta.env.BASE_URL}quote-watermark.png`
   // Without prices: its own four-column layout (type, product, quantity, warranty), only the totals show money.
   const cols = prices ? 6 : 4
   return (
     <div className={`quote-print${prices ? '' : ' q-plain'}`} dir="ltr" lang="en">
+      {/* A faint pattern of small Static marks over the table, as a watermark. */}
+      <div className="q-mark" aria-hidden="true" style={{ backgroundImage: `url(${mark})` }} />
       <table>
         {prices
           ? <colgroup><col className="q-type" /><col /><col className="q-n" /><col className="q-n" /><col className="q-n" /><col className="q-n2" /></colgroup>
