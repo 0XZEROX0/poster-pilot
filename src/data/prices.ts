@@ -78,7 +78,8 @@ let photoAt = 0
 let photoBusy = false
 const photoSubs = new Set<() => void>()
 function loadPhotos() {
-  if (!firestore || photoBusy || Date.now() - photoAt < 30 * 60_000) return
+  // A list with photos is read again after 30 minutes; an empty one (photos not read yet) after 3 minutes.
+  if (!firestore || photoBusy || Date.now() - photoAt < (photoMap.size ? 30 : 3) * 60_000) return
   photoBusy = true
   getDoc(doc(firestore, 'web', 'products')).then((snap) => {
     const items = (snap.data()?.items ?? {}) as Record<string, Record<string, unknown>>
@@ -87,10 +88,11 @@ function loadPhotos() {
     photoMap = m
     photoAt = Date.now()
     photoSubs.forEach((f) => f())
-  }, () => { photoAt = Date.now() - 25 * 60_000 }).finally(() => { photoBusy = false })
+  }, () => { photoAt = Date.now() }).finally(() => { photoBusy = false })
 }
 /** Loads the website photos (once) and redraws when they arrive. */
 export function useWebPhotos() {
+  useEffect(() => { const t = setInterval(loadPhotos, 60_000); return () => clearInterval(t) }, [])
   return useSyncExternalStore((f) => { photoSubs.add(f); loadPhotos(); return () => { photoSubs.delete(f) } }, () => photoMap)
 }
 /** The website photo of a product: from its confirmed (or strong, 80%+) link to a website product that has one. */
