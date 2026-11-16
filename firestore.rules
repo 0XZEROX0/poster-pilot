@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -196,7 +196,8 @@ service cloud.firestore {
       allow read: if isMember();
       allow create, update: if isOwner()
         && id != 'owner'
-        && request.resource.data.keys().hasOnly(['name', 'perms', 'pages'])
+        && request.resource.data.keys().hasOnly(['name', 'perms', 'pages', 'v'])
+        && (!('v' in request.resource.data) || request.resource.data.v is int)
         && (!('pages' in request.resource.data) || (request.resource.data.pages is list
           && request.resource.data.pages.hasOnly(['prices', 'builder', 'offers', 'review', 'fix', 'calendar', 'posted', 'database'])))
         && request.resource.data.name is string

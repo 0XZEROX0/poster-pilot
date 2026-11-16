@@ -545,6 +545,8 @@ export const ar: Record<string, string> = {
   'Edit prices': 'تعديل الأسعار',
   'Change prices, add, hide and delete products in the price list.': 'تغيير الأسعار وإضافة وإخفاء وحذف المنتجات في قائمة الأسعار.',
   'See and edit cost': 'رؤية وتعديل التكلفة',
+  'See website prices': 'رؤية أسعار الموقع',
+  'See Price before and Price after (the static-eg.com prices) in Prices, the product form and the price changes. Hidden from everyone else. The owner always sees them.': 'رؤية السعر قبل والسعر بعد (أسعار static-eg.com) في الأسعار وفي صفحة المنتج وفي تغييرات الأسعار. مخفية عن الباقي. المالك يشوفها دايمًا.',
   'See and change what each product costs the shop, in Prices and in the Builder, with the profit. Hidden from everyone else.': 'رؤية وتعديل تكلفة كل منتج على المحل، في الأسعار وفي التجميعات، مع الربح. مخفية عن أي شخص آخر.',
   'Warranty': 'الضمان',
   'Specs': 'المواصفات',

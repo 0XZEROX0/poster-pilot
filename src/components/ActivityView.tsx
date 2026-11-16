@@ -9,6 +9,8 @@ import { CostEye } from './PricesView'
 import { Chip, Empty, Icon, SearchBox } from './ui'
 
 /** How many lines one "Load more" adds. Each line is about one database read. */
+/** Price list lines for the website prices, left out for roles without 'See website prices'. */
+const WEB_LABELS = ['Price before', 'Price after']
 const PAGE = 100
 const RANGES = [
   { id: 'today', label: 'Today', days: 0 },
@@ -48,6 +50,7 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
   const [errors, setErrors] = useState<string[]>([])
   const feed = useRef<ActivityFeed | null>(null)
   const seeCost = allowed('cost')
+  const seeWeb = allowed('prices.web')
   const costOn = useCostShown()
 
   const pick = (id: Range) => {
@@ -170,7 +173,7 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
                       : <span className="act-what" dir="auto">{r.what}</span>
                   )}
                   {r.note && <p className="small" dir="auto">{r.note}</p>}
-                  {r.changes?.map((c, i) => (
+                  {r.changes?.filter((c) => seeWeb || r.app !== 'prices' || !WEB_LABELS.includes(c.f)).map((c, i) => (
                     <p key={i} className="small log-change" dir="auto">
                       <span className="muted">{t(c.f)}:</span> {r.act === 'cost.edit' && !costOn ? <span>{t('Hidden. Press the eye to see it.')}</span> : <>{c.from && <><s dir="auto">{c.from}</s> → </>}<span dir="auto">{c.to || '-'}</span></>}
                     </p>

@@ -21,6 +21,10 @@ const savedView = (): ViewMode => {
   }
 }
 
+/** Price before / Price after (the website prices) show only to roles with 'See website prices'. The owner always sees them. */
+const seeWeb = () => allowed('prices.web')
+const WEB_FIELDS = ['online', 'onlineSale']
+
 /** The price list: find a product, change a price where it is shown, and see who changed what. */
 export function PricesView() {
   const { loaded, cats, error } = usePrices()
@@ -114,17 +118,19 @@ export function PricesView() {
             <label className="check-line"><input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> {t('Show hidden products')} ({hiddenCount})</label>
           )}
           {rows.length === 0 ? <Empty icon="search" text={t('Nothing matches.')} /> : view === 'list' ? (
-            <div className={`ptable${showCost ? ' with-cost' : ''}`} role="table">
+            <div className={`ptable${showCost ? ' with-cost' : ''}${seeWeb() ? '' : ' no-web'}`} role="table">
               <div className="ptable-row ptable-head" role="row">
                 <span role="columnheader">{t('Product')}</span>
                 <span role="columnheader" className="ptable-specs">{t('Specs')}</span>
                 <span role="columnheader" className="ptable-stock">{t('Stock')}</span>
                 <span role="columnheader" className="ptable-num">{t('In build')}</span>
                 <span role="columnheader" className="ptable-num">{t('Alone')}</span>
-                <span className="ptable-web ptable-web-head" title={t('Website prices')}>
-                  <span role="columnheader" className="ptable-num">{t('Price before')}</span>
-                  <span role="columnheader" className="ptable-num">{t('Price after')}</span>
-                </span>
+                {seeWeb() && (
+                  <span className="ptable-web ptable-web-head" title={t('Website prices')}>
+                    <span role="columnheader" className="ptable-num">{t('Price before')}</span>
+                    <span role="columnheader" className="ptable-num">{t('Price after')}</span>
+                  </span>
+                )}
                 {showCost && <span role="columnheader" className="ptable-num ptable-cost">{t('Cost')}</span>}
               </div>
               {shown.map(({ cat: c, item }, i) => (
@@ -212,10 +218,12 @@ function ListRow({ cat, item, canEdit, cost, catHead, groupHead, onOpen }: RowPr
         <span className="ptable-stock" role="cell"><StockToggle cat={cat} item={item} canEdit={canEdit} /></span>
         <PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} />
         <PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} />
-        <span className="ptable-web" title={t('Website prices')}>
-          <PriceCell value={item.online ?? null} label={t('Price before')} canEdit={canEdit} onSave={(v) => save('online', v)} />
-          <PriceCell value={item.onlineSale ?? null} label={t('Price after')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} />
-        </span>
+        {seeWeb() && (
+          <span className="ptable-web" title={t('Website prices')}>
+            <PriceCell value={item.online ?? null} label={t('Price before')} canEdit={canEdit} onSave={(v) => save('online', v)} />
+            <PriceCell value={item.onlineSale ?? null} label={t('Price after')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} />
+          </span>
+        )}
         {cost && <CostCell cat={cat} item={item} cost={cost} />}
       </div>
     </>
@@ -244,11 +252,11 @@ function PriceCard({ cat, item, canEdit, cost, catHead, groupHead, onOpen }: Row
         <div className="pcard-prices">
           <label><span>{t('In build')}</span><PriceCell value={item.in} label={t('In build')} canEdit={canEdit} onSave={(v) => save('in', v)} /></label>
           <label><span>{t('Alone')}</span><PriceCell value={item.alone} label={t('Alone')} canEdit={canEdit} onSave={(v) => save('alone', v)} /></label>
-          <div className="pcard-web">
+          {seeWeb() && <div className="pcard-web">
             <span className="pcard-web-tag"><Icon name="globe" size={12} />{t('Website')}</span>
             <label><span>{t('Price before')}</span><PriceCell value={item.online ?? null} label={t('Price before')} canEdit={canEdit} onSave={(v) => save('online', v)} /></label>
             <label><span>{t('Price after')}</span><PriceCell value={item.onlineSale ?? null} label={t('Price after')} canEdit={canEdit} onSave={(v) => save('onlineSale', v)} /></label>
-          </div>
+          </div>}
           {cost && <label className="pcard-cost"><span>{t('Cost')}</span><CostCell cat={cat} item={item} cost={cost} /></label>}
           {cost && <div className="pcard-profit"><span>{t('Profit')}</span><b>{profitText(profitOf(item.alone ?? item.in, cost[costKey(cat.id, item.id)]))}</b></div>}
         </div>
@@ -424,13 +432,13 @@ function ProductSheet({ cats, cat: startCat, item, canEdit, canCost, costMap, on
           <label><span>{t('In build')}</span><input inputMode="numeric" value={inb} readOnly={ro} onChange={(e) => setIn(e.target.value)} /></label>
           <label><span>{t('Alone')}</span><input inputMode="numeric" value={alone} readOnly={ro} onChange={(e) => setAlone(e.target.value)} /></label>
         </div>
-        <fieldset className="web-prices">
+        {seeWeb() && <fieldset className="web-prices">
           <legend><Icon name="globe" size={14} />{t('Website prices')}</legend>
           <div className="form-row two">
             <label><span>{t('Price before')}</span><input inputMode="numeric" value={online} readOnly={ro} placeholder={t('Website price')} onChange={(e) => setOnline(e.target.value)} /></label>
             <label><span>{t('Price after')}</span><input inputMode="numeric" value={onlineSale} readOnly={ro} placeholder={t('Empty = no sale')} onChange={(e) => setOnlineSale(e.target.value)} /></label>
           </div>
-        </fieldset>
+        </fieldset>}
         {canCost && (
           <div className="cost-field">
             <label><span>{t('Cost')} <small className="muted">({t('only people allowed to see cost see this')})</small></span>
@@ -529,7 +537,7 @@ function WebSection({ cat, item, canEdit, onName }: { cat: string; item: PriceIt
           </div>
           <div dir="auto" className="web-name">{w.url ? <a href={w.url} target="_blank" rel="noreferrer">{w.name}</a> : w.name}</div>
           <div className="muted">
-            {t('On the website')}: {money(w.price ?? null)}{w.sale != null ? ` · ${t('Sale')} ${money(w.sale)}` : ''} · {w.stock === 'outofstock' ? t('Out of stock') : w.stock ? t('In stock') : '—'}
+            {t('On the website')}: {seeWeb() && <>{money(w.price ?? null)}{w.sale != null ? ` · ${t('Sale')} ${money(w.sale)}` : ''} · </>}{w.stock === 'outofstock' ? t('Out of stock') : w.stock ? t('In stock') : '—'}
           </div>
           {w.ok && w.error && <p className="hint bad">{t('Last send failed')}: {w.error}</p>}
           {w.ok && !w.error && pending.length > 0 && <p className="hint">{t('Waiting to send to the website')}: {pending.map(what).join(', ')}</p>}
@@ -635,7 +643,7 @@ function OptionList({ options, current, disabled, onPick }: { options: WebOption
       {options.map((o) => (
         <button key={o.id} type="button" className={o.id === current ? 'on' : ''} aria-pressed={o.id === current} disabled={disabled} onClick={() => onPick(o)}>
           <strong dir="auto">{o.name || '—'}</strong>
-          <span className="muted">{money(o.price)}{o.sale != null ? ` · ${t('Sale')} ${money(o.sale)}` : ''} · {o.stock === 'outofstock' ? t('Out of stock') : t('In stock')}</span>
+          <span className="muted">{seeWeb() && <>{money(o.price)}{o.sale != null ? ` · ${t('Sale')} ${money(o.sale)}` : ''} · </>}{o.stock === 'outofstock' ? t('Out of stock') : t('In stock')}</span>
         </button>
       ))}
     </div>
@@ -659,7 +667,7 @@ function WebPicker({ start, onPick }: { start: string; onPick: (p: WebProduct, o
             <li key={p.id}>
               <button onClick={() => (p.options?.length ? setOpen(open === p.id ? null : p.id) : onPick(p))}>
                 <span dir="auto">{p.name}</span>
-                <span className="muted">{p.options?.length ? tn('%n options: %o', { n: p.options.length, o: p.options.map((o) => o.name).join(', ') }) : <>{money(p.price)}{p.sale != null ? ` · ${t('Sale')} ${money(p.sale)}` : ''} · {p.stock === 'outofstock' ? t('Out of stock') : t('In stock')}</>}</span>
+                <span className="muted">{p.options?.length ? tn('%n options: %o', { n: p.options.length, o: p.options.map((o) => o.name).join(', ') }) : <>{seeWeb() && <>{money(p.price)}{p.sale != null ? ` · ${t('Sale')} ${money(p.sale)}` : ''} · </>}{p.stock === 'outofstock' ? t('Out of stock') : t('In stock')}</>}</span>
               </button>
               {open === p.id && p.options && <div className="web-picker-opts"><p className="hint">{t('Choose the option this product is:')}</p><OptionList options={p.options} onPick={(o) => onPick(p, o)} /></div>}
             </li>
@@ -704,9 +712,15 @@ function ChangeList({ log, cats }: { log: PriceChange[]; cats?: PriceCategory[] 
   // Cost lines only show the numbers while the cost eye is open.
   const costOn = useCostShown()
   const ACT: Record<string, string> = { add: 'Added', remove: 'Deleted', bulk: 'Changed all by %', cost: 'Cost' }
+  // Without 'See website prices' the Price before / after changes are left out, and a line with nothing else goes.
+  const web = seeWeb()
+  const shown = web ? log : log.flatMap((l) => {
+    const changes = l.changes.filter((c) => !WEB_FIELDS.includes(c.f))
+    return changes.length || !l.changes.length || l.act === 'add' || l.act === 'remove' ? [{ ...l, changes }] : []
+  })
   return (
     <ul className="changes">
-      {log.map((l) => (
+      {shown.map((l) => (
         <li key={l.id}>
           <div className="row-sub">
             <b>{l.byName || t('Someone')}</b>
