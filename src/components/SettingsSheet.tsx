@@ -115,7 +115,7 @@ function General({ session, onClose }: { session: Session; onClose: () => void }
       </section>
       {session.mode === 'cloud' && postWork() && (
         <section className="set-card">
-          <header className="set-card-head"><h3>{t('Engine')}</h3>{health && <Chip tone={Date.now() - health.lastSync < 30 * 60_000 ? 'good' : 'bad'}>{agoLabel(health.lastSync)}</Chip>}</header>
+          <header className="set-card-head"><h3>{t('Engine')}</h3>{health && <Chip tone={Date.now() - health.lastSync < 75 * 60_000 ? 'good' : 'bad'}>{agoLabel(health.lastSync)}</Chip>}</header>
           <p className="hint">{health ? `${t('Last sync')}: ${agoLabel(health.lastSync)}. ${t('The engine (n8n) builds the posters, keeps prices up to date and posts to Facebook and Instagram.')}` : t('No signal from the engine yet.')}</p>
           {backend.runNow && <RunNow />}
         </section>
