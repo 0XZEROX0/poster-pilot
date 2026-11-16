@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quoteLabel, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
-import { casePsu, matches, money, parseMoney, specChips, usePrices, type PriceCategory, type PriceItem } from '../data/prices'
+import { casePsu, matches, photoOf, money, parseMoney, specChips, usePrices, useWebPhotos, type PriceCategory, type PriceItem } from '../data/prices'
 import { buildCost, costKey, profitOf, profitText, useCosts, useCostShown } from '../data/costs'
 import { allowed, isOwner, myId, myName } from '../data/store'
 import { CostEye } from './PricesView'
@@ -38,12 +38,15 @@ const SHORT: Record<string, string> = { mb: 'MB', cpu: 'CPU', ram: 'RAM', gpu: '
 
 export function BuilderView() {
   const { loaded, cats, error } = usePrices()
+  useWebPhotos()
   const [build, setBuild] = useState<Build>(loadDraft)
   const [picking, setPicking] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
   const [sure, setSure] = useState(false)
   const [watching, setWatching] = useState(false)
+  // The search over every part in the price list, at the top of the Builder.
+  const [find, setFind] = useState('')
   const lastShared = useRef('')
   // An extra discount someone gave on this quote from Live quotes. It counts until the quote is saved or cleared.
   const [grant, setGrant] = useState<Grant | null>(null)
@@ -167,12 +170,12 @@ export function BuilderView() {
     return { ...b, lines: [...b.lines.slice(0, i + 1), emptyLine(line.slot), ...b.lines.slice(i + 1)] }
   })
   /** A row of any kind, placed with the others of its kind. */
-  const addSlot = (slot: string) => setBuild((b) => {
+  const addSlot = (slot: string, row: Line = emptyLine(slot)) => setBuild((b) => {
     const order = SLOTS.findIndex((s) => s.key === slot)
     let at = b.lines.length
     for (let i = b.lines.length - 1; i >= 0; i--) if (SLOTS.findIndex((s) => s.key === b.lines[i].slot) <= order) { at = i + 1; break }
     if (at === b.lines.length && !b.lines.some((l) => SLOTS.findIndex((s) => s.key === l.slot) <= order)) at = 0
-    return { ...b, lines: [...b.lines.slice(0, at), emptyLine(slot), ...b.lines.slice(at)] }
+    return { ...b, lines: [...b.lines.slice(0, at), row, ...b.lines.slice(at)] }
   })
   /** The last row of a kind a build starts with always stays: removing it only empties it. */
   const keeps = (line: Line) => START_SLOTS.includes(line.slot) && build.lines.filter((l) => l.slot === line.slot).length <= 1
@@ -250,6 +253,30 @@ export function BuilderView() {
     if (drop) showToast(t('Took the PSU off: this case comes with its own.'))
   }
   const pickingLine = lines.find((l) => l.id === picking)
+  /**
+   * A product found with the search over all parts goes into its kind's row: it replaces the one motherboard, CPU,
+   * case... already chosen, fills an empty row of its kind, or adds a row for one more (a second SSD).
+   */
+  const addFound = (cat: string, item: PriceItem) => {
+    const key = (SLOTS.find((s) => s.cats.includes(cat)) ?? slotOf('extra')).key
+    const rows = build.lines.filter((l) => l.slot === key)
+    let target = slotOf(key).single ? rows[0] : rows.find((l) => !l.name)
+    if (!target) {
+      target = emptyLine(key)
+      const last = rows.at(-1)
+      if (last) {
+        const row = target
+        setBuild((b) => {
+          const i = b.lines.findIndex((l) => l.id === last.id)
+          return { ...b, lines: [...b.lines.slice(0, i + 1), row, ...b.lines.slice(i + 1)] }
+        })
+      } else addSlot(key, target)
+    }
+    const replaced = target.name && target.pid !== item.id ? target.name : ''
+    choose(target, cat, item)
+    setFind('')
+    showToast(replaced ? tn('%s: replaced %old', { s: t(slotOf(key).label), old: replaced }) : tn('Added to %s', { s: t(slotOf(key).label) }))
+  }
   const unused = SLOTS.filter((s) => !build.lines.some((l) => l.slot === s.key))
 
   return (
@@ -291,6 +318,11 @@ export function BuilderView() {
                 )}
               </div>
             )}
+          </section>
+
+          <section className="bx-find">
+            <SearchBox value={find} onChange={setFind} placeholder={t('Search all parts: name, company, socket…')} />
+            {find.trim() && <FindResults cats={cats} search={find} parts={parts} lines={build.lines} onAdd={addFound} />}
           </section>
 
           {PART_GROUPS.map((g) => {
@@ -339,7 +371,7 @@ export function BuilderView() {
                     <Fragment key={line.id}>
                     <div className={`bx-part${bad ? ' bx-bad' : ''}`}>
                       <button className="bx-pick" onClick={() => setPicking(line.id)} title={t('Change')}>
-                        <span className="bx-tile on">{SHORT[slot.key] ?? '•'}</span>
+                        <Thumb src={photoOf(live?.item)} label={SHORT[slot.key] ?? '•'} />
                         <span className="bx-what">
                           <span className="bx-label">{t(slot.label)}</span>
                           <span className="bx-name" dir="auto">{line.name}</span>
@@ -433,6 +465,53 @@ export function BuilderView() {
 }
 
 /** Pick a product for one row: the ones that fit come first, then the ones in stock. */
+/** The product's website photo, or the short name of its kind when there is none (or it fails to load). */
+function Thumb({ src, label, small }: { src: string; label: string; small?: boolean }) {
+  const [broken, setBroken] = useState('')
+  if (!src || broken === src) return <span className={`bx-tile on${small ? ' sm' : ''}`}>{label}</span>
+  return <span className={`bx-tile bx-photo${small ? ' sm' : ''}`}><img src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBroken(src)} /></span>
+}
+
+/** Every product that matches the search, from all kinds, with the row it would go into. */
+function FindResults({ cats, search, parts, lines, onAdd }: { cats: PriceCategory[]; search: string; parts: { cat: string; item: PriceItem; line: string }[]; lines: Line[]; onAdd: (cat: string, item: PriceItem) => void }) {
+  const found: { cat: PriceCategory; item: PriceItem; bad: string }[] = []
+  for (const c of cats) for (const item of c.items) if (!item.hidden && item.name && matches(item, search)) found.push({ cat: c, item, bad: misfit(c.id, item, parts) })
+  found.sort((a, b) => Number(Boolean(a.bad)) - Number(Boolean(b.bad)) || Number(Boolean(a.item.out)) - Number(Boolean(b.item.out)))
+  if (!found.length) return <p className="muted small bx-find-none">{t('Nothing matches.')}</p>
+  return (
+    <ul className="pick-list bx-find-list">
+      {found.slice(0, 30).map(({ cat: c, item, bad }) => {
+        const slot = SLOTS.find((s) => s.cats.includes(c.id)) ?? slotOf('extra')
+        const taken = slot.single && lines.some((l) => l.slot === slot.key && l.name)
+        const inQuote = lines.some((l) => l.pid === item.id)
+        return (
+          <li key={`${c.id}/${item.id}`}>
+            <button className={`pick-item${bad ? ' pick-bad' : ''}`} onClick={() => onAdd(c.id, item)}>
+              <Thumb src={photoOf(item)} label={SHORT[slot.key] ?? '•'} small />
+              <span className="pick-main">
+                <span className="row-title" dir="auto">{item.name}</span>
+                <span className="pick-tags">
+                  <Chip>{c.name}</Chip>
+                  {item.company && <span className="muted" dir="auto">{item.company}</span>}
+                  {specChips(item).map((x) => <Chip key={x} tone="info">{x}</Chip>)}
+                  {item.out && <Chip tone="warn">{t('Out of stock')}</Chip>}
+                  {inQuote && <Chip tone="good">{t('In the quote')}</Chip>}
+                  {bad && <Chip tone="bad">{bad}</Chip>}
+                </span>
+              </span>
+              <span className="bx-find-side">
+                <b>{money(item.alone ?? item.in)}</b>
+                <small className="bx-find-act">{taken ? tn('Replace %s', { s: t(slot.label) }) : tn('Add as %s', { s: t(slot.label) })}</small>
+              </span>
+            </button>
+          </li>
+        )
+      })}
+      {found.length > 30 && <li className="muted small bx-find-more">{tn('%n more: type more of the name', { n: found.length - 30 })}</li>}
+    </ul>
+  )
+}
+
 function PickSheet({ cats, line, others, onPick, onClear, onClose }: { cats: PriceCategory[]; line: Line; others: { cat: string; item: PriceItem }[]; onPick: (cat: string, item: PriceItem) => void; onClear: () => void; onClose: () => void }) {
   const slot = slotOf(line.slot)
   const pool = slot.cats.length ? cats.filter((c) => slot.cats.includes(c.id)) : cats
@@ -465,6 +544,7 @@ function PickSheet({ cats, line, others, onPick, onClear, onClose }: { cats: Pri
           {list.slice(0, 300).map(({ cat: c, item, bad }) => (
             <li key={`${c.id}/${item.id}`}>
               <button className={`pick-item${item.id === line.pid ? ' on' : ''}${bad ? ' pick-bad' : ''}`} onClick={() => onPick(c.id, item)}>
+                <Thumb src={photoOf(item)} label={SHORT[slot.key] ?? '•'} small />
                 <span className="pick-main">
                   <span className="row-title" dir="auto">{item.name}</span>
                   <span className="pick-tags">

@@ -309,10 +309,11 @@ service cloud.firestore {
         && request.resource.data.ask is int && request.resource.data.by == uid;
       allow delete: if false;
     }
-    // What the engine read from static-eg.com (web/products: every website product, for linking by hand).
+    // What the engine read from static-eg.com (web/products: every website product, for linking by hand, and its
+    // photos for the Builder). Public website information, so every member may read it.
     // Only the engine writes it.
     match /web/{id} {
-      allow read: if can('prices.edit');
+      allow read: if isMember();
       allow write: if false;
     }
     match /priceLog/{id} {

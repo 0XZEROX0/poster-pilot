@@ -4,6 +4,7 @@ static-eg.com is WordPress + WooCommerce. n8n reads and writes it with the REST 
 "Static website" (`wooCommerceApi`, Read/Write). The app never talks to the website itself.
 
 ## Link (n8n `zZJe1FsfFeVkWQy2` "Static OS - Website link", run by hand)
+- `photos.js` is the "Add photos" Code node after it: puts each product's main photo (from the same read, field `images`) into `web/products` items.<id>.i for the Builder. Live workflow runs hourly with 1.5 s between pages (set by hand; build.cjs still says 15 min / 0.5 s).
 - `link.js` is the "Match website products" Code node; `node n8n/website/build.cjs` prints the workflow.
 - Reads every website product (`/wp-json/wc/v3/products`, 100 a page) and the price list, suggests a website product for
   each app product by name (`prices/{cat}.items.<pid>.web`, `ok: false`), and saves the whole website list in
