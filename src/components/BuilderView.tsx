@@ -205,10 +205,7 @@ export function BuilderView() {
   }
   const print = () => {
     if (!filled.length) return showToast(t('Pick at least one product first.'))
-    const title = document.title
-    document.title = ['Quotation', build.customer.trim(), today().replace(/\//g, '-')].filter(Boolean).join(' ')
-    window.print()
-    document.title = title
+    printQuote(['Quotation', build.customer.trim(), today().replace(/\//g, '-')].filter(Boolean).join(' '))
   }
   const startEditing = (one: LiveBuild) => {
     mine.current = build
@@ -646,6 +643,46 @@ function GiveDiscount({ uid, whose }: { uid: string; whose: string }) {
 
 /** The paper the customer gets, laid out like the sheet's quotation. Only shown when printing. */
 const PRINT_PRICES_KEY = 'posterpilot.builder.printPrices'
+
+/** The width the quotation is laid out at for paper: A4 landscape in CSS pixels. */
+const PAPER_WIDTH = 1123
+
+/**
+ * Prints the quotation. Phone browsers print the page at the phone's screen width and cut off whatever is wider,
+ * so on a narrow screen the page is laid out at paper width for the print, and the browser then fits it to the paper.
+ */
+function printQuote(name: string) {
+  const title = document.title
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]')
+  const viewport = meta?.content ?? ''
+  const narrow = !!meta && window.innerWidth < PAPER_WIDTH - 100
+  let done = false
+  const restore = () => {
+    if (done) return
+    done = true
+    document.title = title
+    if (narrow && meta) meta.content = viewport
+  }
+  document.title = name
+  if (!narrow) {
+    window.print()
+    restore()
+    return
+  }
+  meta!.content = `width=${PAPER_WIDTH}`
+  // Let the page lay out at the new width before the print dialog takes its picture.
+  setTimeout(() => {
+    const started = Date.now()
+    window.print()
+    // A computer's print dialog holds the page until it closes: then all is done.
+    if (Date.now() - started > 1000) return restore()
+    // Phones return from print() at once while the print screen still reads the page, so the screen is put back
+    // only when the person comes back from the print screen (or after a minute with the page in front).
+    const back = () => { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', back); setTimeout(restore, 300) } }
+    document.addEventListener('visibilitychange', back)
+    setTimeout(() => { if (!done && document.hasFocus()) restore() }, 60_000)
+  }, 350)
+}
 
 function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean }) {
   const logo = `${import.meta.env.BASE_URL}static-logo.png`
