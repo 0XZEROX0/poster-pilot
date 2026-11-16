@@ -95,7 +95,8 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       const ref = doc(collection(db, 'posts'))
       const me = getAuth(db.app).currentUser
       await commit((b) => b.set(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), zone: 'offer', createdBy: me?.uid ?? '', createdByName: me?.displayName || me?.email || '', appNew: true, appDirty: true, appEditedAt: serverTimestamp() }), ref.id, describeNew(post))
-      nudgeEngine(getAuth(db.app))
+      // A new offer gets its competitor prices at once; the competitor workflow's timer is only a slow fallback.
+      nudgeEngine(getAuth(db.app), ['app', 'market'])
     },
     async updatePost(id, patch) {
       const edits: Record<string, unknown> = {}
@@ -111,7 +112,8 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       // "Check prices again", the website photo reader for the photo picker.
       const jobs: EngineJob[] = []
       if (edits.appDirty) jobs.push('app')
-      if (patch.marketAsk) jobs.push('market')
+      // A changed offer (items or price) or one sent for approval again needs a new competitor check.
+      if (patch.marketAsk || patch.items || patch.priceBefore !== undefined || patch.priceAfter !== undefined || patch.offer === '') jobs.push('market')
       if (patch.photoAsk) jobs.push('photos')
       if (jobs.length) nudgeEngine(getAuth(db.app), jobs)
     },
