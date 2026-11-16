@@ -20,15 +20,16 @@ export const ACTIVITY_ACTS = {
   builder: ['quote.saved', 'quote.updated', 'quote.deleted', 'quote.discount', 'quote.discount_removed', 'quote.live_edit'],
   people: ['join.accepted', 'join.declined', 'member.removed', 'member.role', 'role.saved', 'role.deleted', 'code.reset'],
   settings: ['templates.saved', 'engine.run'],
+  tickets: ['ticket.opened', 'ticket.step', 'ticket.edited', 'ticket.deleted', 'ticket.step_removed'],
 } as const
 type AppWrites = typeof ACTIVITY_ACTS
 export type WriteApp = keyof AppWrites
 
 /** The apps the Activity page filters by. Engine and website lines carry their own app. */
-export const APPS = ['posters', 'prices', 'builder', 'people', 'settings', 'website', 'engine'] as const
+export const APPS = ['posters', 'prices', 'builder', 'tickets', 'people', 'settings', 'website', 'engine'] as const
 export type ActivityApp = (typeof APPS)[number]
 export const APP_LABEL: Record<ActivityApp, string> = {
-  posters: 'Offers and posters', prices: 'Prices', builder: 'Builder', people: 'People', settings: 'Settings', website: 'Website', engine: 'Engine',
+  posters: 'Offers and posters', prices: 'Prices', builder: 'Builder', tickets: 'Maintenance', people: 'People', settings: 'Settings', website: 'Website', engine: 'Engine',
 }
 
 /** English text for each kind of line that is not a post's history line (those are in history.ts). */
@@ -48,6 +49,11 @@ export const ACTIVITY_TEXT: Record<string, string> = {
   'code.reset': 'New system code made',
   'templates.saved': 'Caption templates saved',
   'engine.run': 'Engine started by hand',
+  'ticket.opened': 'Maintenance ticket opened',
+  'ticket.step': 'Maintenance step added',
+  'ticket.edited': 'Maintenance ticket changed',
+  'ticket.deleted': 'Maintenance ticket deleted',
+  'ticket.step_removed': 'Maintenance step taken out',
   'website.sent': 'Sent to the website',
   'website.error': 'Website refused a change',
   'price.edit': 'Price list changed',

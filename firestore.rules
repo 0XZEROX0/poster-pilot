@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -31,7 +31,7 @@ service cloud.firestore {
       return role == 'owner' ? allPerms()
         : exists(rolePath(role)) ? get(rolePath(role)).data.perms
         : role == 'admin' ? allPerms()
-        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit', 'brainstorm']
+        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit', 'brainstorm', 'tickets']
         : [];
     }
     // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
@@ -257,7 +257,9 @@ service cloud.firestore {
               || (d.act == 'quote.live_edit' && can('quotes.edit'))))
           || (d.app == 'people' && ((d.act in ['join.accepted', 'join.declined', 'member.removed'] && isAdmin())
               || (d.act in ['member.role', 'role.saved', 'role.deleted', 'code.reset'] && isOwner())))
-          || (d.app == 'settings' && ((d.act == 'templates.saved' && can('templates.edit')) || d.act == 'engine.run')));
+          || (d.app == 'settings' && ((d.act == 'templates.saved' && can('templates.edit')) || d.act == 'engine.run'))
+          || (d.app == 'tickets' && ((d.act in ['ticket.opened', 'ticket.step', 'ticket.edited'] && can('tickets'))
+              || (d.act in ['ticket.deleted', 'ticket.step_removed'] && isOwner()))));
     }
     match /activity/{id} {
       allow read: if can('activity.view');
@@ -408,6 +410,51 @@ service cloud.firestore {
         && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
         && request.resource.data.at == request.time;
       allow delete: if can('brainstorm');
+    }
+    // Maintenance: warranty and repair tickets, one document each with its whole event log inside
+    // (tickets/T<no>). counters/tickets holds the last number; a new ticket must raise it by one in the same write.
+    // Steps can only be added; only the owner may take a step out or delete a ticket.
+    function ticketOk(d) {
+      return d.keys().hasOnly(['no', 'customer', 'phone', 'product', 'productId', 'serial', 'problem', 'items', 'provider', 'providerRef', 'receivedOn', 'dueOn', 'closed', 'createdAt', 'createdBy', 'createdByName', 'updatedAt', 'steps'])
+        && d.no is int
+        && d.customer is string && d.customer.size() <= 120
+        && d.phone is string && d.phone.size() <= 40
+        && d.product is string && d.product.size() <= 300
+        && d.productId is string && d.productId.size() <= 40
+        && d.serial is string && d.serial.size() <= 120
+        && d.problem is string && d.problem.size() <= 2000
+        && d.items is string && d.items.size() <= 500
+        && d.provider is string && d.provider.size() <= 120
+        && d.providerRef is string && d.providerRef.size() <= 120
+        && d.receivedOn is string && d.receivedOn.size() <= 10
+        && d.dueOn is string && d.dueOn.size() <= 10
+        && d.closed is bool
+        && d.createdByName is string && d.createdByName.size() <= 200
+        && d.steps is list && d.steps.size() <= 300
+        && d.updatedAt == request.time;
+    }
+    match /tickets/{id} {
+      allow read: if can('tickets');
+      allow create: if can('tickets') && ticketOk(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && id == 'T' + string(request.resource.data.no)
+        && getAfter(/databases/$(database)/documents/counters/tickets).data.n == request.resource.data.no;
+      allow update: if can('tickets') && ticketOk(request.resource.data)
+        && request.resource.data.no == resource.data.no
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdByName == resource.data.createdByName
+        && (request.resource.data.steps.size() > resource.data.steps.size() || request.resource.data.steps == resource.data.steps || isOwner());
+      allow delete: if isOwner();
+    }
+    match /counters/tickets {
+      allow read: if can('tickets');
+      allow create, update: if can('tickets')
+        && request.resource.data.keys().hasOnly(['n'])
+        && request.resource.data.n == (resource == null ? 0 : resource.data.n) + 1
+        && existsAfter(/databases/$(database)/documents/tickets/$('T' + string(request.resource.data.n)))
+        && !exists(/databases/$(database)/documents/tickets/$('T' + string(request.resource.data.n)));
     }
     match /catalog/{id} {
       allow read: if isMember();
