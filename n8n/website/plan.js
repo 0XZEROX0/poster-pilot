@@ -40,7 +40,8 @@ for (const d of (list.documents || [])) {
     // A name chosen in the app for the website product ("Keep the price list name" or "New name").
     const rename = w.rename && String(w.rename).replace(/\s+/g, ' ').trim() !== String(w.name || '').replace(/\s+/g, ' ').trim() ? String(w.rename).trim() : null;
     if (rename) { send.name = rename; want.name = rename; }
-    if (!Object.keys(send).length && !test) continue;
+    // In step with the website, but an old error is still shown: sent once more so the error is cleared (or renewed).
+    if (!Object.keys(send).length && !test && !w.error) continue;
     // A send that failed is tried again after 30 minutes, not every minute (or at once when the product is changed again).
     const recentFail = w.error && w.triedAt && Date.now() - Date.parse(w.triedAt) < 30 * 60 * 1000;
     if (recentFail && !manual && sd.version === version) { waiting = true; continue; }
