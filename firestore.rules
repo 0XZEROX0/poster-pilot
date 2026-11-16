@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -258,7 +258,7 @@ service cloud.firestore {
           || (d.app == 'people' && ((d.act in ['join.accepted', 'join.declined', 'member.removed'] && isAdmin())
               || (d.act in ['member.role', 'role.saved', 'role.deleted', 'code.reset'] && isOwner())))
           || (d.app == 'settings' && ((d.act == 'templates.saved' && can('templates.edit')) || d.act == 'engine.run'))
-          || (d.app == 'tickets' && ((d.act in ['ticket.opened', 'ticket.step', 'ticket.edited'] && can('tickets'))
+          || (d.app == 'tickets' && ((d.act == 'ticket.opened' && can('tickets')) || (d.act in ['ticket.step', 'ticket.edited'] && can('tickets.edit'))
               || (d.act in ['ticket.deleted', 'ticket.step_removed'] && isOwner()))));
     }
     match /activity/{id} {
@@ -413,6 +413,7 @@ service cloud.firestore {
     }
     // Maintenance: warranty and repair tickets, one document each with its whole event log inside
     // (tickets/T<no>). counters/tickets holds the last number; a new ticket must raise it by one in the same write.
+    // 'Open maintenance tickets' sees and opens them; 'Edit maintenance tickets' changes them and adds steps.
     // Steps can only be added; only the owner may take a step out or delete a ticket.
     function ticketOk(d) {
       return d.keys().hasOnly(['no', 'customer', 'phone', 'product', 'productId', 'serial', 'problem', 'items', 'provider', 'providerRef', 'receivedOn', 'dueOn', 'closed', 'createdAt', 'createdBy', 'createdByName', 'updatedAt', 'steps'])
@@ -434,13 +435,13 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
     match /tickets/{id} {
-      allow read: if can('tickets');
-      allow create: if can('tickets') && ticketOk(request.resource.data)
+      allow read: if can('tickets') || can('tickets.edit');
+      allow create: if (can('tickets') || can('tickets.edit')) && ticketOk(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time
         && id == 'T' + string(request.resource.data.no)
         && getAfter(/databases/$(database)/documents/counters/tickets).data.n == request.resource.data.no;
-      allow update: if can('tickets') && ticketOk(request.resource.data)
+      allow update: if can('tickets.edit') && ticketOk(request.resource.data)
         && request.resource.data.no == resource.data.no
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
@@ -449,8 +450,8 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
     match /counters/tickets {
-      allow read: if can('tickets');
-      allow create, update: if can('tickets')
+      allow read: if can('tickets') || can('tickets.edit');
+      allow create, update: if (can('tickets') || can('tickets.edit'))
         && request.resource.data.keys().hasOnly(['n'])
         && request.resource.data.n == (resource == null ? 0 : resource.data.n) + 1
         && existsAfter(/databases/$(database)/documents/tickets/$('T' + string(request.resource.data.n)))

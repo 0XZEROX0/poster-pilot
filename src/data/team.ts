@@ -11,7 +11,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
@@ -30,7 +30,8 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   'quotes.all': ["See everyone's quotes", "Watch the quote each person is building, live, and see everyone's saved quotes with who made them. Without it, people see only their own."],
   'quotes.discount': ['Give extra discount', "Add an extra discount to someone's quote while they build it (from Live quotes). It shows in their quote at once, with your name."],
   'activity.view': ['See the activity log', 'Open Activity: everything everyone did in the app (offers, prices, quotes, people, settings, engine and website), with filters. Nobody can change or remove a line. The owner always sees it.'],
-  tickets: ['Maintenance tickets', 'Open Maintenance: open warranty and repair tickets, add steps to their log, edit them, message the customer on WhatsApp and print the receipt. Only the owner can delete a ticket or take a step out.'],
+  tickets: ['Open maintenance tickets', 'See the Maintenance page, open new tickets, print the receipt and message the customer on WhatsApp. Without Edit tickets, a ticket cannot be changed after it is opened.'],
+  'tickets.edit': ['Edit maintenance tickets', 'Change a ticket\'s details and add steps to its log (given to warranty, fixed, replaced, delivered and so on). Only the owner can delete a ticket or take a step out.'],
   'quotes.edit': ['Edit live quotes', "Change someone's quote while they build it (from Live quotes): parts, quantities, build discount and extra discount. They see each change at once, with your name."],
 }
 /** 'owner', or the id of a role in `roles`. */
@@ -55,7 +56,7 @@ export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
   { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit'), pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }

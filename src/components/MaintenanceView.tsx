@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { track } from '../data/activity'
 import { cairoNow } from '../data/logic'
 import { matches, usePrices, type PriceItem } from '../data/prices'
-import { isOwner } from '../data/store'
+import { allowed, isOwner } from '../data/store'
 import {
   ADDABLE, dueDate as dueOf, matchesTicket, outcomeOf, paperDate, progressOf, stageOf, STAGE_LABEL, STAGES, stepBy, TICKET_DAYS, ticketNo, tickets, waMessage, waNumber, workdaysLeft,
   type Stage, type StepKind, type Ticket, type TicketFields,
@@ -179,6 +179,7 @@ function TicketDetail({ tk, today, onEdit, onPrint, onDeleted, onClosed }: { tk:
   const done = progressOf(tk.steps)
   const choices = ADDABLE.filter((k) => !(k === 'received' && tk.steps.some((x) => x.kind === 'received')))
   const owner = isOwner()
+  const canEdit = allowed('tickets.edit')
 
   async function add() {
     if (!kind) return
@@ -221,7 +222,7 @@ function TicketDetail({ tk, today, onEdit, onPrint, onDeleted, onClosed }: { tk:
         <div className="mt-acts">
           <button className="btn btn-sm" onClick={onPrint}><Icon name="print" size={18} />{t('Print receipt')}</button>
           {wa && <a className="btn btn-sm mt-wa" href={`https://wa.me/${wa}?text=${encodeURIComponent(waMessage(tk))}`} target="_blank" rel="noreferrer"><Icon name="whatsapp" size={18} />WhatsApp</a>}
-          <button className="btn btn-sm" onClick={onEdit}><Icon name="edit" size={18} />{t('Edit')}</button>
+          {canEdit && <button className="btn btn-sm" onClick={onEdit}><Icon name="edit" size={18} />{t('Edit')}</button>}
           {owner && <button className="btn btn-sm mt-del" onClick={remove} aria-label={t('Delete')}><Icon name="trash" size={18} /></button>}
         </div>
       </div>
@@ -243,7 +244,7 @@ function TicketDetail({ tk, today, onEdit, onPrint, onDeleted, onClosed }: { tk:
           <span>{tk.dueOn ? <><DueChip tk={tk} today={today} /> {tn('due %d', { d: dayShort(tk.dueOn) })}</> : t('Starts when the product is received')}</span>
         </div>
       )}
-      <div className="mt-add">
+      {canEdit && <div className="mt-add">
         <b>{t('Add a step')}</b>
         <div className="mt-quick">
           {choices.map((k) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(kind === k ? null : k)}>{t(STEP_BUTTON[k])}</button>)}
@@ -263,7 +264,7 @@ function TicketDetail({ tk, today, onEdit, onPrint, onDeleted, onClosed }: { tk:
             </div>
           </div>
         )}
-      </div>
+      </div>}
       <div>
         <h3 className="mt-h3">{t('Event log')}</h3>
         <ol className="mt-log">
