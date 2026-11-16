@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { resetDemo } from '../data/localBackend'
 import { setTheme, useTheme, type Theme } from '../theme'
 import { allowed, backend, editsTemplates, postWork, restartDemo, signOutNow, type Session } from '../data/store'
-import type { EngineJob } from '../data/nudge'
+import { useEngineSignal, type EngineJob } from '../data/nudge'
 import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
 import { PeoplePanel, RolesPanel, useTeam } from './MembersSection'
@@ -117,11 +117,23 @@ function General({ session, onClose }: { session: Session; onClose: () => void }
         <section className="set-card">
           <header className="set-card-head"><h3>{t('Engine')}</h3>{health && <Chip tone={Date.now() - health.lastSync < 75 * 60_000 ? 'good' : 'bad'}>{agoLabel(health.lastSync)}</Chip>}</header>
           <p className="hint">{health ? `${t('Last sync')}: ${agoLabel(health.lastSync)}. ${t('The engine (n8n) builds the posters, keeps prices up to date and posts to Facebook and Instagram.')}` : t('No signal from the engine yet.')}</p>
+          <SignalLine />
           {backend.runNow && <RunNow />}
         </section>
       )}
     </div>
   )
+}
+
+// How the app's last signal to the engine went: changes in the app start the engine's work at once only when it arrives.
+function SignalLine() {
+  const signal = useEngineSignal()
+  if (!signal) return null
+  const text = signal.state === 'heard' ? t('Received')
+    : signal.state === 'sent' ? t('Sent')
+    : signal.state === 'trying' ? t('Not received yet, trying again')
+    : t('Not received. The change waits for the engine\'s next check.')
+  return <p className="hint"><b>{t('Last signal from this app')}:</b> {text} ({agoLabel(signal.at)})</p>
 }
 
 // The engine's timed workflows, so someone can start one now instead of waiting for its next check.

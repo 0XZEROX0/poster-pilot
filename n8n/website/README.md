@@ -23,10 +23,14 @@ static-eg.com is WordPress + WooCommerce. n8n reads and writes it with the REST 
 - `gate.js` "Anything new?": reads `prices/_meta` (1 read a minute) and stops unless the version moved or a retry is due.
 - `plan.js` "What to send": confirmed links (`web.ok`) whose online price / sale / stock differ from `web.*`
   (same rule as `webPending`). At most 40 a run. Failed ones retry after 30 minutes.
-- "Read website product" (the product, or its options for a product with options) → `prepare.js` picks the option
+- `reads.js` "Website reads": one request for all simple products (`products?include=`) and one per product with
+  options (`variations`), instead of one per product (2026-11-16).
+- "Read website product" → `prepare.js` picks the option
   whose words are all in the app product's name and builds the WooCommerce change (`regular_price`, `sale_price`,
   `stock_status`; a product whose stock the website counts gets `stock_quantity: 0` for out of stock).
-- "Send it?" → "Send to website" (PUT) → `results.js` writes what the website answered back into `web.*`
+- `batch.js` "Group into batches": all changes go in WooCommerce batch requests (POST `products/batch`, and
+  `products/{id}/variations/batch` per product with options; up to 100 changes each) instead of one PUT per product.
+- "Send it?" → "Send to website" (POST batch) → `results.js` (matches each change to the batch answer by id) writes what the website answered back into `web.*`
   (`sentAt`, or `error`), plus one line per real send in the app's activity log (`activity/{id}`, by `website`).
   `Settings.dryRun` = true works everything out and sends nothing; `testNames` treats
   those suggested links as confirmed in a dry run.
