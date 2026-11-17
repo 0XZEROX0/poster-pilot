@@ -2,6 +2,13 @@
 export const ar: Record<string, string> = {
   'Static OS': 'Static OS',
   Apps: 'التطبيقات',
+  'Good morning': 'صباح الخير',
+  'Good afternoon': 'مساء الخير',
+  'Good evening': 'مساء الخير',
+  Layout: 'شكل التطبيق',
+  'App grid': 'شبكة التطبيقات',
+  'Sidebar (old)': 'القائمة الجانبية (القديم)',
+  'App grid: a home screen with every app as an icon, and each app opens on its own screen. Sidebar: the old layout with every page in one menu. Saved on this device.': 'شبكة التطبيقات: صفحة رئيسية فيها كل تطبيق كأيقونة، وكل تطبيق يفتح في شاشته الخاصة. القائمة الجانبية: الشكل القديم وكل الصفحات في قائمة واحدة. يُحفظ على هذا الجهاز.',
   'Edit bar': 'تعديل الشريط',
   'Pick up to 3 apps for the bottom bar. Home and Apps are always there.': 'اختر حتى 3 تطبيقات للشريط السفلي. الرئيسية والتطبيقات موجودتان دائمًا.',
   'Shop': 'المحل',
