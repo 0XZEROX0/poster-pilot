@@ -135,6 +135,19 @@ export type CaptionTemplate = { name: string; text: string }
 /** Written by the engine so the app can show that it is alive. */
 export type Health = { lastSync: number; note: string }
 
+/** Facebook numbers for one published post (any can be missing: Meta did not give it, or the token may not read it). */
+export type FbResults = { reach?: number; views?: number; reactions?: number; comments?: number; shares?: number; clicks?: number }
+/** Instagram numbers for one published post. */
+export type IgResults = { reach?: number; views?: number; likes?: number; comments?: number; saved?: number; shares?: number; interactions?: number }
+/** One post's numbers. `at` = when the engine last got them (ms). */
+export type PostResults = { fb?: FbResults; ig?: IgResults; igLink?: string; at?: number }
+/**
+ * Written twice a day by the engine (workflow "Static OS - Post results") to status/results.
+ * `need` lists what the Meta token may not read yet: 'fbIns' (Facebook reach), 'fbEng' (Facebook reactions,
+ * comments, shares), 'igIns' (Instagram reach, saves, shares).
+ */
+export type Results = { at: number; need: string[]; posts: Record<string, PostResults> }
+
 export type Data = {
   loaded: boolean
   posts: Post[]
@@ -142,11 +155,13 @@ export type Data = {
   styles: string[]
   templates: CaptionTemplate[]
   health: Health | null
+  /** Facebook and Instagram numbers of the published posts. Null until the engine has written them. */
+  results: Results | null
 }
 
 export type NewPost = Pick<Post, 'items' | 'variants' | 'title' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime' | 'story'>
 
-export const emptyData: Data = { loaded: false, posts: [], products: [], styles: [], templates: [], health: null }
+export const emptyData: Data = { loaded: false, posts: [], products: [], styles: [], templates: [], health: null, results: null }
 
 /** One field that changed in a log entry, as short text. */
 export type LogChange = { f: string; from: string; to: string }

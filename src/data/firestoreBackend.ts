@@ -5,7 +5,7 @@ import { track } from './activity'
 import type { Backend } from './backend'
 import { describe, describeDelete, describeNew } from './history'
 import { engineReachable, nudgeEngine, runEngineNow, type EngineJob } from './nudge'
-import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product, type VersionPhotos } from './types'
+import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product, type Results, type VersionPhotos } from './types'
 
 // Firestore layout (the engine, n8n, reads and writes the same documents with a service account):
 //   posts/{id}          one post; see Post in types.ts
@@ -13,6 +13,7 @@ import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry,
 //   catalog/styles      { names: string[] }
 //   catalog/templates   { items: CaptionTemplate[] }
 //   status/engine       { lastSync: number, note: string }
+//   status/results      { at, need, posts: { [postId]: { fb, ig, igLink, at } } }  Facebook/Instagram numbers, twice a day
 //   config/access       { emails: string[] }   who may open the app (see firestore.rules)
 //   log/{id}            one line of a post's history; see LogEntry in types.ts. Never changed or removed.
 //
@@ -89,6 +90,8 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
           })
         }, fail),
         onSnapshot(doc(db, 'status', 'engine'), (snap) => push({ health: (snap.data() as Health | undefined) ?? null }), fail),
+        // One small document, written twice a day: costs one read per change. Only for roles that see posts.
+        !source ? () => {} : onSnapshot(doc(db, 'status', 'results'), (snap) => push({ results: (snap.data() as Results | undefined) ?? null }), () => push({ results: null })),
       ]
       return () => stops.forEach((stop) => stop())
     },
