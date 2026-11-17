@@ -8,7 +8,7 @@ import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
 import { PeoplePanel, RolesPanel, useTeam } from './MembersSection'
 import { Sheet } from './Sheet'
-import { setStoryByDefault, storyByDefault } from './StoryBox'
+import { STORIES_ON, setStoryByDefault, storyByDefault } from './StoryBox'
 import { Avatar, Chip, Icon, showToast } from './ui'
 import { backToGoogleName, backToGooglePhoto, myNameFor, removeMyPhoto, setMyName, setMyPhoto, useProfiles } from '../data/profiles'
 import type { User } from 'firebase/auth'
@@ -208,7 +208,7 @@ function PosterSettings({ session }: { session: Session }) {
         <section className="set-card">
           <header className="set-card-head"><h3>{t('Posting rules')}</h3></header>
           <p className="hint">{t('An approved post is scheduled only once it has a date and a time. Set them in the post or drag it onto a time in the Planner. Nothing is scheduled automatically.')}</p>
-          {allowed('schedule') && <StoryDefault />}
+          {STORIES_ON && allowed('schedule') && <StoryDefault />}
         </section>
       )}
       {editsTemplates() && (

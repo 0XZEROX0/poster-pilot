@@ -4,7 +4,7 @@ import { allowed, backend } from '../data/store'
 import type { Data, NewPost, Post, PostItem, Product } from '../data/types'
 import { t } from '../i18n'
 import { Sheet } from './Sheet'
-import { storyByDefault } from './StoryBox'
+import { STORIES_ON, storyByDefault } from './StoryBox'
 import { Icon, dayLabel, showToast } from './ui'
 import { VersionPicker, type PickedVersion } from './VersionPicker'
 
@@ -54,7 +54,7 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
     ...(variants ? { variants: true, title: title.trim() || (fromPhotos ? picked[0].name : commonTitle(picked.map((p) => p.name))) } : {}),
     company: [...new Set((fromPhotos ? picked.slice(0, 1) : picked).map((p) => p.company).filter(Boolean))].join(' + '),
     priceBefore: before, priceAfter, style, details, captionStyle, postDate, postTime,
-    ...(story ? { story: 'fb+ig' as const } : {}),
+    ...(STORIES_ON && story ? { story: 'fb+ig' as const } : {}),
   }
   // Posts that already use these products, so the same offer is not made twice by accident.
   const dup = duplicatesOf(picked.map((p) => p.name), data.posts)
@@ -149,7 +149,7 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
           <label><span>{t('Time')}</span><input type="time" value={postTime} onChange={(e) => setPostTime(e.target.value)} /></label>
         </div>
         <p className="hint">{t('A post goes out only when it has a date and a time. You can also set them in the Planner.')}</p>
-        {allowed('schedule') && (
+        {STORIES_ON && allowed('schedule') && (
           <label className="check">
             <input type="checkbox" checked={story} onChange={(e) => setStory(e.target.checked)} />
             <span>{t('Also post as a story')} (Facebook + Instagram)</span>

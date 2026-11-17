@@ -33,7 +33,11 @@ export function StoryPreview({ post }: { post: Post }) {
 
 const DEFAULT_KEY = 'pp-story-default'
 /** This person's choice in Settings: new posts start with "Also post as a story" ticked. Off unless they turned it on. */
+/** Stories are switched off until further notice (user, 2026-11-17). true brings every story part back. */
+export const STORIES_ON = false
+
 export function storyByDefault(): boolean {
+  if (!STORIES_ON) return false
   try { return localStorage.getItem(DEFAULT_KEY) === 'yes' } catch { return false }
 }
 export function setStoryByDefault(on: boolean): void {
