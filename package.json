@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:n8n": "node scripts/check-n8n-code.mjs",
+    "test:rules": "firebase emulators:exec --project demo-pp --only firestore \"node tests/rules/rules.test.mjs\""
   },
   "dependencies": {
     "firebase": "^13.1.0",

@@ -1,0 +1,60 @@
+name: Checks
+
+# Runs on every pull request (and can be started by hand). A pull request is merged
+# only when both jobs are green and it has no conflicts.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App (lint, tests, build, n8n code)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Type-check and build
+        run: npm run build
+      - name: n8n code files can be read
+        run: npm run check:n8n
+
+  rules:
+    name: Database rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # The Firestore emulator needs Java.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-15.36.0
+      - run: npm ci
+      # Only needed here, so they are not part of package.json.
+      - run: npm install --no-save --legacy-peer-deps firebase-tools@15.36.0 @firebase/rules-unit-testing@5.0.2
+      - name: Rules checks against the Firestore emulator
+        run: npm run test:rules
