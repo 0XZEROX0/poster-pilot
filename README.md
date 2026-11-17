@@ -109,8 +109,7 @@ Firebase console (Project settings, Your apps, Web app). Then:
 Everyone else joins with the system code: the owner copies it from Settings, the new person pastes
 it after signing in, and an owner or admin accepts the request. The code alone opens nothing.
 The owner can make custom roles, each with its own permissions and pages. `tests/rules/rules.test.mjs` checks the rules against the Firestore
-emulator (`firebase emulators:exec --only firestore "node tests/rules/rules.test.mjs"`, with
-`firebase-tools` and `@firebase/rules-unit-testing` installed).
+emulator (`npm run test:rules`, with Java, `firebase-tools` and `@firebase/rules-unit-testing` installed).
 
 The published site reads the same values from `.env.production`, which is committed: they are the
 web app's public identifiers, not secrets. Access is protected by the rules and the access list.
@@ -150,6 +149,12 @@ The n8n workflows themselves are kept as code in `n8n/`.
 | `npm test` | Unit tests |
 | `npm run build` | Type-check and build into `dist` |
 | `npm run lint` | Lint |
+| `npm run check:n8n` | Check that every n8n code file in `n8n/` can be read by JavaScript |
+| `npm run test:rules` | Database rules checks against the Firestore emulator |
+
+Every pull request runs `.github/workflows/checks.yml`: lint, unit tests, type-check and build,
+the n8n code check, and the database rules checks. A pull request is merged only when these
+are green and it has no conflicts.
 
 Every push to `main` is tested, built and published to GitHub Pages by
 `.github/workflows/deploy.yml` (the badge at the top shows its last result).
