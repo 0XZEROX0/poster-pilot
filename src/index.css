@@ -1323,7 +1323,7 @@ button.stock:hover { filter: brightness(1.15); }
 .se-safe-top { top: 0; border-bottom-width: 1px; }
 .se-safe-bottom { bottom: 0; border-top-width: 1px; }
 .se-note { position: absolute; left: 10px; right: 10px; bottom: 10px; margin: 0; padding: 8px 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.7); font-size: 13px; text-align: center; }
-.se-bottom { min-height: 64px; padding: 8px 12px max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.se-bottom { height: 164px; justify-content: flex-end !important; min-height: 64px; padding: 8px 12px max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; justify-content: center; gap: 8px; }
 .se-row { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px; scrollbar-width: none; justify-content: safe center; }
 .se-row::-webkit-scrollbar { display: none; }
 .se-swatch { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.7); cursor: pointer; }
@@ -1344,3 +1344,35 @@ button.stock:hover { filter: brightness(1.15); }
 .se-dot { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; }
 .se-a-box { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 2px solid currentColor; border-radius: 5px; font-size: 14px; }
 @media (min-width: 900px) { .se-stage { padding: 0 24px; } }
+.se-round:disabled { opacity: 0.35; cursor: default; }
+.se-flip { display: grid; transform: scaleX(-1); }
+.se-pens { gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; justify-content: safe center; }
+.se-guide { position: absolute; background: #facc15; pointer-events: none; }
+.se-guide-v { top: 0; bottom: 0; left: calc(50% - 0.5px); width: 1px; }
+.se-guide-h { left: 0; right: 0; top: calc(50% - 0.5px); height: 1px; }
+.se-bin { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.45); border: 2px solid #fff; color: #fff; pointer-events: none; transition: transform 0.12s; }
+.se-bin.hot { transform: scale(1.3); background: #ef4444; }
+.se-width { display: flex; align-items: center; gap: 10px; justify-content: center; font-size: 13px; color: rgba(255, 255, 255, 0.8); }
+.se-width input { width: min(260px, 60vw); accent-color: #fff; }
+.se-words { align-self: center; width: min(420px, 100%); border: 0; border-radius: 12px; padding: 10px 12px; background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 16px; }
+.se-tray-back { position: fixed; inset: 0; z-index: 210; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end; justify-content: center; }
+.se-tray { width: min(560px, 100%); max-height: 72vh; display: flex; flex-direction: column; background: rgba(28, 28, 30, 0.97); border-radius: 22px 22px 0 0; padding: 10px 14px max(14px, env(safe-area-inset-bottom)); }
+.se-tray-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 8px; }
+.se-tray-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.se-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.se-chip { border: 0; border-radius: 12px; padding: 9px 14px; font: 800 15px/1.1 Inter, Cairo, system-ui, sans-serif; background: #fff; color: #111; cursor: pointer; transform: rotate(-2deg); }
+.se-chip:nth-child(even) { transform: rotate(2deg); }
+.se-chip img { height: 20px; display: block; }
+.se-chip-location { background: #fff; color: #c13584; }
+.se-chip-website { background: #fff; color: #1d6ef2; }
+.se-emoji { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 4px; }
+.se-emoji button { border: 0; background: transparent; font-size: 30px; line-height: 46px; cursor: pointer; border-radius: 10px; }
+.se-emoji button:hover { background: rgba(255, 255, 255, 0.1); }
+@media (max-width: 480px) {
+  .se-top { gap: 6px; padding-inline: 8px; }
+  .se-tools { gap: 5px; }
+  .se-round { width: 36px; height: 36px; }
+  .se-round .icon { width: 19px; height: 19px; }
+  .se-done { padding: 8px 13px; margin-inline-start: 0; }
+  .se-dot { width: 26px; height: 26px; }
+}

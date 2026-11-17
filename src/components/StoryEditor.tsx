@@ -1,18 +1,23 @@
 import Konva from 'konva'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Group, Image as KImage, Label, Layer, Rect, Stage, Tag, Text, Transformer } from 'react-konva'
+import { Group, Image as KImage, Label, Layer, Line, Rect, Stage, Tag, Text, Transformer } from 'react-konva'
 import { backend } from '../data/store'
 import { titleOf } from '../data/logic'
-import { COLORS, hasArabic, layerId, readDesign, SAFE_BOTTOM, SAFE_TOP, saveStoryPicture, loadPoster, shownText, STORY_H, STORY_W, storySaving, TEXT_STYLES, type StoryBg, type StoryDesign, type StoryLayer, type TextStyle } from '../data/storyDesign'
+import { COLORS, hasArabic, layerId, readDesign, SAFE_BOTTOM, SAFE_TOP, saveStoryPicture, loadPoster, shownText, STORY_H, STORY_W, storySaving, TEXT_STYLES, type StoryBg, type StoryDesign, type PenKind, type StoryLayer, type TextStyle } from '../data/storyDesign'
 import type { Post } from '../data/types'
 import { t } from '../i18n'
+import { COLOURED, ink, LOGO_URL, StickerShape, stickerSize, StickerTray, WORDED, type StickerLayer } from './StoryStickers'
 import { Icon } from './ui'
 
+// Two fingers on a sticker while it is being dragged resize and turn it.
+Konva.hitOnDragEnabled = true
+
 type TextLayer = Extract<StoryLayer, { kind: 'text' }>
+type DrawLayer = Extract<StoryLayer, { kind: 'draw' }>
 
 // The editor's fonts, loaded only when it opens (the rest of the app uses the phone's own fonts).
-const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&family=Inter:wght@500;600;800&family=Pacifico&family=Tajawal:wght@500;700&display=swap'
+const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&family=Inter:wght@500;600;700;800&family=Pacifico&family=Tajawal:wght@500;700&display=swap'
 function useEditorFonts(): number {
   const [ready, setReady] = useState(0)
   useEffect(() => {
@@ -22,7 +27,7 @@ function useEditorFonts(): number {
       link.href = FONT_CSS
       document.head.appendChild(link)
     }
-    const wanted = ['600 40px Cairo', '800 40px Cairo', '500 40px Tajawal', '700 40px Tajawal', '40px Pacifico', '600 40px Inter', '500 40px Inter']
+    const wanted = ['800 40px Inter', '700 40px Inter', '600 40px Cairo', '800 40px Cairo', '500 40px Tajawal', '700 40px Tajawal', '40px Pacifico', '600 40px Inter', '500 40px Inter']
     let live = true
     Promise.all(wanted.map((f) => document.fonts.load(f, 'Aa ب').catch(() => []))).then(() => live && setReady((n) => n + 1))
     return () => { live = false }
@@ -39,12 +44,6 @@ function useImage(url: string | null): HTMLImageElement | null {
     i.src = url
   }, [url])
   return img
-}
-
-const ink = (c: string) => {
-  const h = c.replace('#', '')
-  const [r, g, b] = [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16))
-  return r * 0.299 + g * 0.587 + b * 0.114 > 160 ? '#000000' : '#ffffff'
 }
 
 /** How a text layer is drawn: its font, fill, box and size (measured, so it can be centred on its x / y). */
@@ -105,7 +104,7 @@ const GRADIENTS: [string, string][] = [['#0b1f3a', '#f97316'], ['#f97316', '#ec4
  */
 export default function StoryEditor({ post, onClose }: { post: Post; onClose: () => void }) {
   const fonts = useEditorFonts()
-  const [design, setDesign] = useState<StoryDesign>(() => {
+  const [design, setDesignState] = useState<StoryDesign>(() => {
     const d = readDesign(post.storyDesign)
     if (post.storyDesign) return d
     // A new design gets the shop's website and address under the poster, as text that can be moved or removed.
@@ -116,7 +115,18 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
   const poster = useImage(posterUrl)
   const [selected, setSelected] = useState<string | null>(null)
   const [editing, setEditing] = useState<TextLayer | null>(null)
-  const [tool, setTool] = useState<'' | 'bg'>('')
+  const [tool, setTool] = useState<'' | 'bg' | 'draw' | 'stickers'>('')
+  const [pen, setPen] = useState<{ pen: PenKind; color: string; width: number }>({ pen: 'pen', color: '#ffffff', width: 14 })
+  const [line, setLine] = useState<number[] | null>(null)
+  const [binHot, setBinHot] = useState(false)
+  const [guides, setGuides] = useState({ v: false, h: false })
+  const logo = useImage(LOGO_URL)
+  // Undo and redo: the designs before and after this one.
+  const designRef = useRef(design)
+  const past = useRef<StoryDesign[]>([])
+  const future = useRef<StoryDesign[]>([])
+  const [steps, setSteps] = useState({ back: 0, forward: 0 })
+  const pinch = useRef<{ dist: number; angle: number; scale: number; rotation: number } | null>(null)
   const [dragging, setDragging] = useState(false)
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState('')
@@ -179,7 +189,25 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
   }, [selected, design, fonts, poster])
 
   const change = (fn: (d: StoryDesign) => StoryDesign) => {
-    setDesign(fn)
+    const next = fn(designRef.current)
+    past.current = [...past.current.slice(-59), designRef.current]
+    future.current = []
+    designRef.current = next
+    setDesignState(next)
+    setSteps({ back: past.current.length, forward: 0 })
+    setDirty(true)
+  }
+  const step = (back: boolean) => {
+    const from = back ? past : future
+    const to = back ? future : past
+    const next = from.current[from.current.length - 1]
+    if (!next) return
+    from.current = from.current.slice(0, -1)
+    to.current = [...to.current, designRef.current]
+    designRef.current = next
+    setDesignState(next)
+    setSteps({ back: past.current.length, forward: future.current.length })
+    setSelected(null)
     setDirty(true)
   }
   const patchLayer = (id: string, patch: Partial<StoryLayer>) => change((d) => ({ ...d, layers: d.layers.map((l) => (l.id === id ? ({ ...l, ...patch } as StoryLayer) : l)) }))
@@ -208,6 +236,59 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
   }
 
   const scale = view.w / STORY_W
+  const addSticker = (l: StickerLayer) => {
+    change((d) => ({ ...d, layers: [...d.layers, l] }))
+    setTool('')
+    setSelected(l.id)
+  }
+
+  // Drawing: a line follows the finger; it becomes a layer when the finger lifts.
+  const storyPoint = () => {
+    const p = stageRef.current?.getPointerPosition()
+    return p ? [Math.round(p.x / scale), Math.round(p.y / scale)] : null
+  }
+  const drawStart = () => { if (tool === 'draw') { const p = storyPoint(); if (p) setLine(p) } }
+  const drawMove = () => { if (tool === 'draw' && line) { const p = storyPoint(); if (p) setLine([...line, ...p]) } }
+  const drawEnd = () => {
+    if (tool !== 'draw' || !line) return
+    const points = line.length === 2 ? [...line, line[0] + 1, line[1] + 1] : line
+    setLine(null)
+    change((d) => ({ ...d, layers: [...d.layers, { id: layerId(), kind: 'draw', x: 0, y: 0, scale: 1, rotation: 0, points, ...pen }] }))
+  }
+
+  // Two fingers: resize and turn the selected layer, as on Instagram.
+  const touchMove = (e: Konva.KonvaEventObject<TouchEvent>) => {
+    const ts = e.evt.touches
+    const node = selected ? stageRef.current?.findOne(`#${selected}`) : null
+    if (ts.length !== 2 || !node) return
+    e.evt.preventDefault()
+    if (node.isDragging()) node.stopDrag()
+    const dx = ts[1].clientX - ts[0].clientX, dy = ts[1].clientY - ts[0].clientY
+    const dist = Math.hypot(dx, dy), angle = (Math.atan2(dy, dx) * 180) / Math.PI
+    if (!pinch.current) { pinch.current = { dist, angle, scale: node.scaleX(), rotation: node.rotation() }; return }
+    const k = Math.max(0.15, Math.min(6, (pinch.current.scale * dist) / pinch.current.dist))
+    node.scale({ x: k, y: k })
+    node.rotation(pinch.current.rotation + angle - pinch.current.angle)
+    node.getLayer()?.batchDraw()
+  }
+  const touchEnd = () => {
+    const node = selected ? stageRef.current?.findOne(`#${selected}`) : null
+    if (pinch.current && node && selected) patchLayer(selected, { scale: node.scaleX(), rotation: node.rotation() })
+    pinch.current = null
+  }
+
+  // While dragging: snap to the middle lines and show them, and light the bin when the finger is over it.
+  const BIN = { x: () => view.w / 2, y: () => view.h - 56, r: 46 }
+  const dragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    const n = e.target
+    const v = Math.abs(n.x() - STORY_W / 2) < 14, h = Math.abs(n.y() - STORY_H / 2) < 14
+    if (v) n.x(STORY_W / 2)
+    if (h) n.y(STORY_H / 2)
+    if (v !== guides.v || h !== guides.h) setGuides({ v, h })
+    const p = stageRef.current?.getPointerPosition()
+    const hot = !!p && Math.hypot(p.x - BIN.x(), p.y - BIN.y()) < BIN.r
+    if (hot !== binHot) setBinHot(hot)
+  }
   const selectedLayer = design.layers.find((l) => l.id === selected)
 
   async function save() {
@@ -242,33 +323,52 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
     if (dirty && !window.confirm(t('Close without saving the story?'))) return
     onClose()
   }
-  useEffect(() => { escape.current = () => (editing ? finishText() : selected ? setSelected(null) : close()) })
+  useEffect(() => { escape.current = () => (editing ? finishText() : tool ? setTool('') : selected ? setSelected(null) : close()) })
 
   return createPortal(
     <div className="se" role="dialog" aria-modal="true" aria-label={t('Story editor')}>
       <header className="se-top">
         <button type="button" className="se-round" onClick={close} aria-label={t('Close')}><Icon name="close" /></button>
+        {tool === 'draw' ? (
+          <div className="se-tools se-pens">
+            {(['pen', 'marker', 'neon', 'eraser'] as const).map((k) => <button key={k} type="button" className={`se-style${pen.pen === k ? ' on' : ''}`} onClick={() => setPen({ ...pen, pen: k })}>{t(PEN_LABEL[k])}</button>)}
+          </div>
+        ) : (
         <div className="se-tools">
+          <button type="button" className="se-round" onClick={() => step(true)} disabled={!steps.back} aria-label={t('Undo')} title={t('Undo')}><span className="se-flip"><Icon name="redo" /></span></button>
+          <button type="button" className="se-round" onClick={() => step(false)} disabled={!steps.forward} aria-label={t('Redo the step')} title={t('Redo the step')}><Icon name="redo" /></button>
+          <button type="button" className="se-round" onClick={() => { setSelected(null); setTool('draw') }} aria-label={t('Draw')} title={t('Draw')}><Icon name="edit" /></button>
+          <button type="button" className="se-round" onClick={() => { setSelected(null); setTool('stickers') }} aria-label={t('Stickers')} title={t('Stickers')}><svg className="icon" width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 12.5V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h5.5zM20 12.5 12.5 20M20 12.5h-4.5a3 3 0 0 0-3 3V20M8.5 9.5h.01M14.5 9.5h.01M8.5 13.5c1 1 2.2 1.4 3.5 1.2" /></svg></button>
           <button type="button" className={`se-round${tool === 'bg' ? ' on' : ''}`} onClick={() => { setSelected(null); setTool(tool === 'bg' ? '' : 'bg') }} aria-label={t('Background')} title={t('Background')}><Icon name="image" /></button>
           <button type="button" className="se-round se-aa" onClick={newText} aria-label={t('Add text')} title={t('Add text')}>Aa</button>
         </div>
-        <button type="button" className="se-done" onClick={save} disabled={saving || posterState === 'loading'}>{saving ? t('Saving…') : t('Done')}</button>
+        )}
+        {tool === 'draw'
+          ? <button type="button" className="se-done" onClick={() => setTool('')}>{t('Done')}</button>
+          : <button type="button" className="se-done" onClick={save} disabled={saving || posterState === 'loading'}>{saving ? t('Saving…') : t('Done')}</button>}
       </header>
 
       <div className="se-stage" ref={boxRef}>
         <div className="se-canvas" style={{ width: view.w, height: view.h }}>
           <Stage ref={stageRef} width={view.w} height={view.h} scaleX={scale} scaleY={scale}
-            onMouseDown={(e) => { if (e.target === e.target.getStage() || e.target.name() === 'bg') { setSelected(null); setTool('') } }}
-            onTouchStart={(e) => { if (e.target === e.target.getStage() || e.target.name() === 'bg') { setSelected(null); setTool('') } }}>
+            onMouseDown={(e) => { if (tool !== 'draw' && (e.target === e.target.getStage() || e.target.name() === 'bg')) { setSelected(null); setTool('') } }}
+            onTouchStart={(e) => { if (tool !== 'draw' && e.evt.touches.length === 1 && (e.target === e.target.getStage() || e.target.name() === 'bg')) { setSelected(null); setTool('') } }}
+            onPointerDown={drawStart} onPointerMove={drawMove} onPointerUp={drawEnd} onPointerLeave={drawEnd}
+            onTouchMove={touchMove} onTouchEnd={touchEnd}>
             <Layer>
               <Background bg={design.bg} poster={poster} />
               <Rect name="bg" width={STORY_W} height={STORY_H} fill="rgba(0,0,0,0)" />
-              {design.layers.map((l) => {
+              {design.layers.filter((l) => l.kind !== 'draw').map((l) => {
                 const common = {
-                  id: l.id, x: l.x, y: l.y, scaleX: l.scale, scaleY: l.scale, rotation: l.rotation, draggable: true,
+                  id: l.id, x: l.x, y: l.y, scaleX: l.scale, scaleY: l.scale, rotation: l.rotation, draggable: tool !== 'draw', listening: tool !== 'draw',
                   onMouseDown: () => setSelected(l.id), onTouchStart: () => setSelected(l.id),
                   onDragStart: () => { setSelected(l.id); setDragging(true) },
-                  onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => { setDragging(false); patchLayer(l.id, { x: e.target.x(), y: e.target.y() }) },
+                  onDragMove: dragMove,
+                  onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
+                    setDragging(false)
+                    setGuides({ v: false, h: false })
+                    if (binHot) { setBinHot(false); removeLayer(l.id) } else patchLayer(l.id, { x: e.target.x(), y: e.target.y() })
+                  },
                   onTransformEnd: (e: Konva.KonvaEventObject<Event>) => { const n = e.target; patchLayer(l.id, { x: n.x(), y: n.y(), scale: n.scaleX(), rotation: n.rotation() }) },
                 }
                 if (l.kind === 'poster') {
@@ -287,6 +387,15 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
                     </Group>
                   )
                 }
+                if (l.kind === 'sticker') {
+                  const sz = stickerSize(l)
+                  return (
+                    <Group key={l.id} {...common} offsetX={sz.w / 2} offsetY={sz.h / 2}>
+                      <StickerShape l={l} logo={logo} />
+                    </Group>
+                  )
+                }
+                if (l.kind !== 'text') return null
                 const k = textLook(l)
                 return (
                   <Label key={l.id} {...common} offsetX={k.width / 2} offsetY={k.height / 2} onDblClick={() => setEditing(l)} onDblTap={() => setEditing(l)}>
@@ -301,10 +410,18 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
                 anchorSize={14} anchorCornerRadius={7} borderStroke="#ffffff" anchorStroke="#ffffff" anchorFill="#f97316" rotateAnchorOffset={36}
                 boundBoxFunc={(old, next) => (next.width < 30 || next.height < 20 ? old : next)} />
             </Layer>
+            {/* Drawings sit above everything, and the eraser only rubs out drawing, as in Instagram. */}
+            <Layer listening={false}>
+              {design.layers.filter((l): l is DrawLayer => l.kind === 'draw').map((l) => <Stroke key={l.id} points={l.points} pen={l.pen} color={l.color} width={l.width} />)}
+              {line && <Stroke points={line.length === 2 ? [...line, line[0] + 1, line[1] + 1] : line} {...pen} />}
+            </Layer>
           </Stage>
           {dragging && <>
             <div className="se-safe se-safe-top" style={{ height: SAFE_TOP * scale }} />
             <div className="se-safe se-safe-bottom" style={{ height: SAFE_BOTTOM * scale }} />
+            {guides.v && <div className="se-guide se-guide-v" />}
+            {guides.h && <div className="se-guide se-guide-h" />}
+            <div className={`se-bin${binHot ? ' hot' : ''}`} style={{ left: BIN.x(), top: BIN.y() }} aria-hidden="true"><Icon name="trash" /></div>
           </>}
           {posterState === 'missing' && post.posterUrl && storySaving() && <p className="se-note">{t('The poster could not be loaded. Check that the engine is on.')}</p>}
         </div>
@@ -323,6 +440,23 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
             ))}
           </div>
         )}
+        {tool === 'draw' && (
+          <>
+            <div className="se-row">
+              {COLORS.map((c) => <button key={c} type="button" className={`se-dot${pen.color === c ? ' on' : ''}`} style={{ background: c }} onClick={() => setPen({ ...pen, color: c, pen: pen.pen === 'eraser' ? 'pen' : pen.pen })} aria-label={c} />)}
+            </div>
+            <label className="se-width"><span>{t('Size')}</span><input type="range" min={4} max={60} value={pen.width} onChange={(e) => setPen({ ...pen, width: +e.target.value })} /></label>
+          </>
+        )}
+        {!tool && selectedLayer?.kind === 'sticker' && WORDED.includes(selectedLayer.sticker) && (
+          <input className="se-words" dir="auto" value={selectedLayer.sticker === 'price' ? selectedLayer.sub ?? '' : selectedLayer.text} aria-label={t('Sticker words')}
+            onChange={(e) => patchLayer(selectedLayer.id, selectedLayer.sticker === 'price' ? { sub: e.target.value } : { text: e.target.value })} />
+        )}
+        {!tool && selectedLayer?.kind === 'sticker' && COLOURED.includes(selectedLayer.sticker) && (
+          <div className="se-row">
+            {COLORS.map((c) => <button key={c} type="button" className={`se-dot${selectedLayer.color === c ? ' on' : ''}`} style={{ background: c }} onClick={() => patchLayer(selectedLayer.id, { color: c })} aria-label={c} />)}
+          </div>
+        )}
         {!tool && selectedLayer && (
           <div className="se-row">
             {selectedLayer.kind === 'text' && <button type="button" className="se-pill" onClick={() => setEditing(selectedLayer)}><Icon name="edit" size={18} />{t('Edit text')}</button>}
@@ -331,13 +465,25 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
             <button type="button" className="se-pill danger" onClick={() => removeLayer(selectedLayer.id)}><Icon name="trash" size={18} />{t('Remove')}</button>
           </div>
         )}
-        {!tool && !selectedLayer && <p className="se-hint">{t('Drag to move. Tap something to resize or turn it. Double-tap text to change it.')}</p>}
+        {!tool && !selectedLayer && <p className="se-hint">{t('Drag to move, or to the bin to remove. Tap something to resize or turn it (or use two fingers). Double-tap text to change it.')}</p>}
       </footer>
 
       {editing && <TextEntry value={editing} onChange={setEditing} onDone={finishText} />}
+      {tool === 'stickers' && <StickerTray post={post} onPick={addSticker} onClose={() => setTool('')} />}
     </div>,
     document.body,
   )
+}
+
+const PEN_LABEL: Record<PenKind, string> = { pen: 'Pen', marker: 'Marker', neon: 'Neon', eraser: 'Eraser' }
+
+/** One drawn line: a pen, a see-through marker, a glowing neon line, or the eraser. */
+function Stroke({ points, pen, color, width }: { points: number[]; pen: PenKind; color: string; width: number }) {
+  const base = { points, lineCap: 'round' as const, lineJoin: 'round' as const, tension: 0.35 }
+  if (pen === 'eraser') return <Line {...base} stroke="#000" strokeWidth={width * 2} globalCompositeOperation="destination-out" />
+  if (pen === 'marker') return <Line {...base} stroke={color} strokeWidth={width * 2.2} opacity={0.55} lineCap="square" />
+  if (pen === 'neon') return <Line {...base} stroke="#ffffff" strokeWidth={width} shadowColor={color} shadowBlur={width * 2.2} shadowOpacity={1} />
+  return <Line {...base} stroke={color} strokeWidth={width} />
 }
 
 /** Typing text, as in Instagram: the story dims, the text is typed in the middle with its style, colour and box. */
