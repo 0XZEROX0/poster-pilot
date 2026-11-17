@@ -1,4 +1,21 @@
-import type { CaptionTemplate, PhotoChoiceItem, Post, PostItem } from './types'
+import type { CaptionTemplate, PhotoChoiceItem, Post, PostItem, PostKind } from './types'
+
+// ---------- text, photo and video posts (post.kind) ----------
+/** Where a text, photo or video post goes: a text post goes to Facebook only (Instagram needs a picture). */
+export function placesOf(p: Pick<Post, 'kind' | 'places'>): ('fb' | 'ig')[] {
+  if (p.kind === 'text') return ['fb']
+  const list = (p.places ?? '').split('+').filter((w): w is 'fb' | 'ig' => w === 'fb' || w === 'ig')
+  return list.length ? [...new Set(list)] : ['fb', 'ig']
+}
+const outText = (s: string | undefined) => /^(published|posted)/i.test((s ?? '').trim())
+/** A text, photo or video post that is out on every place it goes to. */
+const customPosted = (p: Post) => placesOf(p).every((w) => outText(w === 'fb' ? p.fbStatus : p.igStatus))
+/** The words for a kind of post. */
+export const KIND_LABEL: Record<PostKind, string> = { text: 'Text post', image: 'Photo post', video: 'Video post' }
+/** The first line of the caption, for lists. */
+const firstLine = (s: string | undefined) => (s ?? '').split('\n').map((l) => l.trim()).find(Boolean) ?? ''
+/** A Drive file id as a picture the browser can show (Drive makes one for videos too). */
+export const driveThumb = (id: string, width = 900) => `https://lh3.googleusercontent.com/d/${id}=w${width}`
 
 /** Where a post is in its life. Each post is in exactly one stage. */
 export type Stage = 'offer' | 'building' | 'fix' | 'review' | 'scheduled' | 'posted' | 'skipped'
@@ -51,13 +68,14 @@ export function redoFailed(p: Post, now = Date.now()): boolean {
 }
 const isRedoing = (p: Post) => isRedo(p) && !redoFailed(p)
 
-export const isBuilding = (p: Post) => isRedoing(p) || isBusy(p) || (!anyProblemOf(p) && (!p.posterUrl || !p.photoStatus))
+export const isBuilding = (p: Post) => !p.kind && (isRedoing(p) || isBusy(p) || (!anyProblemOf(p) && (!p.posterUrl || !p.photoStatus)))
 
 /**
  * Where the offer stands before a poster is made: waiting for someone to approve it, sent back to
  * its maker, or null once approved. A post from before offers existed has no `offer` and counts as approved.
  */
-export function offerOf(p: Pick<Post, 'offer' | 'appNew'>): 'waiting' | 'rejected' | null {
+export function offerOf(p: Pick<Post, 'offer' | 'appNew'> & Partial<Pick<Post, 'kind'>>): 'waiting' | 'rejected' | null {
+  if (p.kind) return null
   if (p.offer === 'Rejected') return 'rejected'
   return p.offer === '' || (p.offer === undefined && p.appNew === true) ? 'waiting' : null
 }
@@ -66,6 +84,14 @@ export function offerOf(p: Pick<Post, 'offer' | 'appNew'>): 'waiting' | 'rejecte
 export const onFacebook = (p: Pick<Post, 'fbStatus' | 'fbPostId'>) => /^(scheduled|published)/i.test(p.fbStatus.trim()) || p.fbPostId !== ''
 
 export function stageOf(p: Post): Stage {
+  if (p.kind) {
+    // No offer and no poster: it is written and uploaded in the app, then reviewed and given a time.
+    if (customPosted(p) || p.takeDown === 'done') return 'posted'
+    if (problemOf(p)) return 'fix'
+    if (p.feedback === 'ignore') return 'skipped'
+    if (p.feedback === 'Done' || p.feedback === 'Cancel') return 'scheduled'
+    return 'review'
+  }
   if (p.fbStatus.trim() === 'Published') return 'posted'
   if (offerOf(p)) return 'offer'
   if (isRedoing(p) || isBusy(p)) return 'building'
@@ -81,7 +107,8 @@ export function stageOf(p: Post): Stage {
 /** An item's name as the poster and caption show it: the price list name plus the version, when it has one. */
 export const itemName = (i: Pick<PostItem, 'name' | 'label'>) => [i.name.trim(), (i.label ?? '').trim()].filter(Boolean).join(' ')
 
-export const titleOf = (p: Pick<Post, 'items' | 'variants' | 'title'>) => p.variants ? variantsName(p) : p.items.map((i) => i.name.trim()).filter(Boolean).join(' + ')
+export const titleOf = (p: Pick<Post, 'items' | 'variants' | 'title'> & Partial<Pick<Post, 'kind' | 'caption'>>) =>
+  p.kind ? (firstLine(p.caption).slice(0, 120) || KIND_LABEL[p.kind]) : p.variants ? variantsName(p) : p.items.map((i) => i.name.trim()).filter(Boolean).join(' + ')
 
 /** Most items a post can hold: 3 products, or 4 versions of one product. */
 export const maxItems = (variants?: boolean) => (variants ? 4 : 3)
@@ -280,7 +307,7 @@ const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
 export function matchesSearch(p: Post, query: string): boolean {
   const words = norm(query).split(' ').filter(Boolean)
   if (!words.length) return true
-  const hay = norm(`${p.items.map((i) => `${i.category} ${i.name}`).join(' ')} ${p.company} ${p.style}`)
+  const hay = norm(`${p.items.map((i) => `${i.category} ${i.name}`).join(' ')} ${p.company} ${p.style} ${p.kind ? p.caption : ''}`)
   return words.every((w) => hay.includes(w))
 }
 

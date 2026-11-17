@@ -681,5 +681,21 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'posts/pub1'), { takeDown: '' }) })
   await ok('owner deletes from Facebook', updateDoc(doc(boss, 'posts/pub1'), ask('B')))
 }
+// Text, photo and video posts (kind, media, places).
+{
+  const media = [{ id: 'A'.repeat(33), type: 'image' }]
+  const base = { items: [], createdBy: 'u-boss', zone: 'offer', feedback: '', caption: 'Hello' }
+  await ok('owner makes a photo post', setDoc(doc(boss, 'posts/k1'), { ...base, kind: 'image', media, places: 'fb+ig' }))
+  await ok('owner makes a text post for Facebook', setDoc(doc(boss, 'posts/k2'), { ...base, kind: 'text', places: 'fb' }))
+  await no('a text post cannot go to Instagram', setDoc(doc(boss, 'posts/k3'), { ...base, kind: 'text', places: 'fb+ig' }))
+  await no('an unknown kind', setDoc(doc(boss, 'posts/k4'), { ...base, kind: 'reel' }))
+  await no('more than 10 files', setDoc(doc(boss, 'posts/k5'), { ...base, kind: 'image', media: Array.from({ length: 11 }, () => media[0]) }))
+  await no('a new post cannot start approved', setDoc(doc(boss, 'posts/k6'), { ...base, kind: 'image', media, feedback: 'Done' }))
+  await ok('approve it and give it a time', updateDoc(doc(boss, 'posts/k1'), { feedback: 'Done', postDate: '2026-12-01', postTime: '18:00', 'appEdits.feedback': 'Done', 'appEdits.postDate': '2026-12-01', 'appEdits.postTime': '18:00' }))
+  await ok('change its places and files', updateDoc(doc(boss, 'posts/k1'), { places: 'ig', media: [], 'appEdits.places': 'ig', 'appEdits.media': [] }))
+  await no('places that do not exist', updateDoc(doc(boss, 'posts/k1'), { places: 'tiktok', 'appEdits.places': 'tiktok' }))
+  await no('the kind never changes', updateDoc(doc(boss, 'posts/k1'), { kind: 'video', 'appEdits.kind': 'video' }))
+  await no('a text post cannot be moved to Instagram later', updateDoc(doc(boss, 'posts/k2'), { places: 'ig', 'appEdits.places': 'ig' }))
+}
 console.log(`${n} checks, ${bad} wrong`)
 await env.cleanup(); process.exit(bad ? 1 : 0)

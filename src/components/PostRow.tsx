@@ -1,6 +1,7 @@
-import { formatPrice, hasOffer, priceOf, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
+import { formatPrice, hasOffer, placesOf, priceOf, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
 import type { Post, PostResults } from '../data/types'
 import { t } from '../i18n'
+import { kindText } from './CustomPost'
 import { Poster } from './Poster'
 import { ResultsLine } from './Results'
 import { Chip, Icon, dayLabel, timeLabel } from './ui'
@@ -19,8 +20,22 @@ export function StageChip({ post }: { post: Post }) {
   if (stage === 'skipped') return <Chip>{t('Skipped')}</Chip>
   if (stage === 'scheduled' && post.feedback === 'Cancel') return <Chip tone="warn">{t('Cancelling the schedule')}</Chip>
   if (stage === 'scheduled' && post.postNow === 'yes') return <Chip tone="info">{t('Posting now')}</Chip>
+  // A text, photo or video post that goes to Instagram only is not held by Facebook: its time is enough.
+  if (stage === 'scheduled' && post.kind && /^posting/i.test(post.igStatus)) return <Chip tone="info">{t('Posting now')}</Chip>
+  if (stage === 'scheduled' && post.kind && !placesOf(post).includes('fb')) return when ? <Chip tone="good">{dayLabel(when.date)} · {timeLabel(when.time)}</Chip> : <Chip tone="warn">{t('Needs a time')}</Chip>
   if (stage === 'scheduled') return when && post.fbStatus === 'Scheduled' ? <Chip tone="good">{dayLabel(when.date)} · {timeLabel(when.time)}</Chip> : <Chip tone="warn">{t(when ? 'Being scheduled' : 'Needs a time')}</Chip>
   return <Chip tone="warn">{t('To review')}</Chip>
+}
+
+/** The price on a product post; the kind of post (and where it goes) on a text, photo or video post. */
+export function PriceText({ post, style = false }: { post: Post; style?: boolean }) {
+  if (post.kind) return <span className="price-kind">{kindText(post.kind, post.media)} <span className="muted">· {placesOf(post).map((w) => (w === 'fb' ? 'Facebook' : 'Instagram')).join(' + ')}</span></span>
+  return (
+    <>
+      <span className="price" dir="ltr">{hasOffer(post) && <s>{formatPrice(post.priceBefore)}</s>} {formatPrice(priceOf(post))} EGP</span>
+      {style && <span className="muted"> · {post.style}</span>}
+    </>
+  )
 }
 
 /** One post as a compact line: small poster, name, price and state. Opens the post when tapped. */
@@ -31,9 +46,7 @@ export function PostRow({ post, onOpen }: { post: Post; onOpen: (id: string) => 
       <span className="row-main">
         <span className="row-title" dir="auto">{titleOf(post)}</span>
         <span className="row-sub">
-          <span className="price" dir="ltr">
-            {hasOffer(post) && <s>{formatPrice(post.priceBefore)}</s>} {formatPrice(priceOf(post))} EGP
-          </span>
+          <PriceText post={post} />
           <StageChip post={post} />
         </span>
       </span>
@@ -50,9 +63,7 @@ export function PostCard({ post, onOpen, results }: { post: Post; onOpen: (id: s
       <Poster post={post} />
       <span className="card-body">
         <span className="card-title" dir="auto">{titleOf(post)}</span>
-        <span className="price" dir="ltr">
-          {hasOffer(post) && <s>{formatPrice(post.priceBefore)}</s>} {formatPrice(priceOf(post))} EGP
-        </span>
+        <PriceText post={post} />
         {posted && when ? <span className="card-when"><Icon name="posted" size={15} />{timeLabel(when.time)}</span> : <StageChip post={post} />}
         {posted && <ResultsLine r={results} />}
       </span>

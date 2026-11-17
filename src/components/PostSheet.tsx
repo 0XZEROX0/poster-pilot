@@ -1,8 +1,9 @@
 import { lazy, Suspense, useState } from 'react'
-import { buildCaption, cairoNow, itemName, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
+import { buildCaption, cairoNow, itemName, nextFreeSlot, placesOf, stageOf, titleOf, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
-import type { Data, Post } from '../data/types'
+import type { Data, Post, PostPlaces } from '../data/types'
 import { t } from '../i18n'
+import { customProblem, MediaPicker, PlacesPicker } from './CustomPost'
 import { problemText } from './FixView'
 import { PostHistory } from './History'
 import { ResultsBox } from './Results'
@@ -26,6 +27,8 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const [busy, setBusy] = useState(false)
   const [designing, setDesigning] = useState(false)
   const stage = stageOf(post)
+  // A text, photo or video post: no poster, no prices; its caption, files and places are edited here.
+  const custom = post.kind
   const posted = stage === 'posted'
   const problem = problemText(post)
   // Only a post that Facebook does not hold yet can be deleted from here.
@@ -42,6 +45,8 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     // A new date or time replaces a "Post now" the engine has not carried out yet.
     if (post.postNow && ('postDate' in out || 'postTime' in out)) out.postNow = ''
     if (post.variants && (draft.title ?? '') !== (post.title ?? '')) out.title = draft.title ?? ''
+    if (custom && JSON.stringify(draft.media ?? []) !== JSON.stringify(post.media ?? [])) out.media = draft.media ?? []
+    if (custom && (draft.places ?? 'fb+ig') !== (post.places ?? 'fb+ig')) out.places = draft.places ?? 'fb+ig'
     // The story choice: where it goes and how long after the post.
     if ((draft.story ?? '') !== (post.story ?? '')) out.story = draft.story ?? ''
     if ((draft.storyDelay ?? '') !== (post.storyDelay ?? '')) out.storyDelay = draft.storyDelay ?? ''
@@ -49,6 +54,10 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   }
   async function save(extra: Partial<Post>, message: string) {
     const patch = { ...changes(), ...extra }
+    if (custom) {
+      const missing = customProblem(custom, draft.caption, draft.media ?? [])
+      if (missing) return showToast(t(missing))
+    }
     // A new price or style means a new poster, as in the sheet.
     if (!extra.feedback && !posted && stage !== 'offer' && ('priceBefore' in patch || 'priceAfter' in patch || 'style' in patch || 'items' in patch || 'title' in patch)) patch.feedback = 'Redo'
     if (Object.keys(patch).length) await backend.updatePost(post.id, patch)
@@ -120,11 +129,13 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const mayEdit = allowed('offers.create') || allowed('fix') || mayReview
   const dirty = Object.keys(changes()).length > 0
   // Post now: an approved post with its poster, not on Facebook yet, no unsaved changes, not already asked for.
-  const mayPostNow = mayPlan && stage === 'scheduled' && post.feedback === 'Done' && !onFacebook && post.postNow !== 'yes' && !!post.posterUrl && !dirty
+  const mayPostNow = mayPlan && stage === 'scheduled' && post.feedback === 'Done' && !onFacebook && post.postNow !== 'yes' && (custom ? !/^posting/i.test(post.igStatus) : !!post.posterUrl) && !dirty
+  const where = custom ? placesOf(draft).map((w) => (w === 'fb' ? 'Facebook' : 'Instagram')).join(t(' and ')) : t('Facebook and Instagram')
   // Delete from Facebook and Instagram: a published post, not asked for already (a failed try can be asked again).
   const removing = post.takeDown === 'asked' || post.takeDown === 'working'
   const removed = post.takeDown === 'done'
-  const mayTakeDown = posted && allowed('social.delete') && !removing && !removed
+  // The engine finds the post by its Facebook post; a post that went to Instagram only is not taken down from here.
+  const mayTakeDown = posted && allowed('social.delete') && !removing && !removed && post.fbStatus.trim() === 'Published'
   const confirmWord = /^(delete|حذف)$/i.test(typed.trim())
 
   const footer = posted ? (
@@ -146,7 +157,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
         </>
       ) : stage === 'fix' || stage === 'building' ? (
         <>
-          {mayEdit && <button className="btn btn-primary" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Retry')}</button>}
+          {mayEdit && !custom && <button className="btn btn-primary" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Retry')}</button>}
+          {/* The engine clears the error when the post is approved again, and tries once more. */}
+          {custom && (mayReview || mayPlan) && <button className="btn btn-primary" onClick={() => save({ feedback: 'Done' }, 'It will be tried again')}><Icon name="redo" size={18} />{t('Try again')}</button>}
           {dirty && <button className="btn" onClick={() => save({}, 'Saved')}>{t('Save')}</button>}
           {mayPlan && post.feedback === 'Done' && (onFacebook || when) && (
             <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Schedule cancelled. The post stays approved.')}>{t('Cancel schedule')}</button>
@@ -154,7 +167,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
         </>
       ) : stage === 'scheduled' && confirmPost ? (
         <div className="confirm-post" role="alertdialog" aria-labelledby="confirm-post-q">
-          <p id="confirm-post-q"><b>{t('Publish to Facebook and Instagram now?')}</b><br /><span className="muted small">{t('It goes out within a minute and cannot be taken back from here.')}{STORIES_ON && post.story ? ` ${t('Its story goes out too.')}` : ''}</span></p>
+          <p id="confirm-post-q"><b>{custom ? `${t('Publish now on')} ${where}?` : t('Publish to Facebook and Instagram now?')}</b><br /><span className="muted small">{t('It goes out within a minute and cannot be taken back from here.')}{STORIES_ON && post.story ? ` ${t('Its story goes out too.')}` : ''}</span></p>
           <div className="confirm-post-actions">
             <button className="btn btn-primary" disabled={busy} onClick={postNow}><Icon name="send" size={18} />{t('Yes, post now')}</button>
             <button className="btn btn-ghost" disabled={busy} onClick={() => setConfirmPost(false)}>{t('Cancel')}</button>
@@ -175,7 +188,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
       ) : (
         <>
           {mayReview && <button className="btn btn-primary" onClick={() => save({ feedback: 'Done' }, draft.postDate && draft.postTime ? 'Approved' : 'Approved. Give it a time in the Planner.')}><Icon name="check" size={18} />{t('Approve')}</button>}
-          {mayEdit && <button className="btn" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Redo')}</button>}
+          {mayEdit && !custom && <button className="btn" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Redo')}</button>}
           {dirty ? <button className="btn btn-ghost" onClick={() => save({}, 'Saved')}>{t('Save')}</button> : mayReview && <button className="btn btn-ghost" onClick={() => save({ feedback: 'ignore' }, 'Skipped')}>{t('Skip')}</button>}
         </>
       )}
@@ -219,8 +232,16 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               {mayEdit && <PhotoPicker post={post} index={i} current={photoInUse(post, i)} busy={busy} onPick={(src) => choosePhoto(i, src)} />}
             </fieldset>
           ))}
+          {!posted && custom && (
+            <>
+              {custom !== 'text' && <MediaPicker kind={custom} toInstagram={placesOf(draft).includes('ig')} value={draft.media ?? []} disabled={!mayEdit} onChange={(media) => set({ media })} />}
+              <PlacesPicker kind={custom} value={draft.places ?? 'fb+ig'} disabled={!mayEdit} onChange={(places: PostPlaces) => set({ places })} />
+              {locked && <p className="hint">{t('A change here takes the post off the Facebook schedule and schedules it again with the change.')}</p>}
+            </>
+          )}
           {!posted && (
             <>
+              {!custom && <>
               <div className="two">
                 <label><span>{t('Price before')}</span><input inputMode="numeric" dir="ltr" value={draft.priceBefore} onChange={(e) => set({ priceBefore: e.target.value })} /></label>
                 <label><span>{t('Price after')}</span><input inputMode="numeric" dir="ltr" value={draft.priceAfter} onChange={(e) => set({ priceAfter: e.target.value })} /></label>
@@ -238,6 +259,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
                   </select>
                 </label>
               </div>
+              </>}
               <div className="two">
                 <label><span>{t('Date')}</span><input type="date" disabled={!mayPlan} value={draft.postDate} onChange={(e) => set({ postDate: e.target.value })} /></label>
                 <label><span>{t('Time')}</span><input type="time" disabled={!mayPlan} value={draft.postTime} onChange={(e) => set({ postTime: e.target.value })} /></label>
@@ -247,13 +269,13 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               </p>
             </>
           )}
-          {STORIES_ON && stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} onDesign={() => setDesigning(true)} />}
+          {STORIES_ON && !custom && stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} onDesign={() => setDesigning(true)} />}
           {designing && <Suspense fallback={null}><StoryEditor post={post} onClose={() => setDesigning(false)} /></Suspense>}
           <label>
-            <span>{t('Caption')}</span>
+            <span>{t(custom === 'text' ? 'Text' : 'Caption')}</span>
             <textarea dir="auto" rows={9} readOnly={posted} value={draft.caption} onChange={(e) => set({ caption: e.target.value })} />
           </label>
-          {!posted && <button className="link" onClick={() => set({ caption: buildCaption(draft, data.templates) })}>{t('Rebuild from template')}</button>}
+          {!posted && !custom && <button className="link" onClick={() => set({ caption: buildCaption(draft, data.templates) })}>{t('Rebuild from template')}</button>}
           {posted && (removing || removed || post.takeDown === 'failed') && (
             <div className={post.takeDown === 'failed' ? 'alert' : 'note-box'} role="status">
               <b><Icon name={removed ? 'check' : post.takeDown === 'failed' ? 'fix' : 'send'} size={18} />{t(removed ? 'Removed from Facebook and Instagram' : post.takeDown === 'failed' ? 'Not fully removed from Facebook and Instagram' : 'Being removed from Facebook and Instagram')}</b>

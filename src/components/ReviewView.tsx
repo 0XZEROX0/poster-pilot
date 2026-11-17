@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { formatPrice, hasOffer, matchesSearch, priceOf, stageOf, titleOf, onFacebook } from '../data/logic'
+import { matchesSearch, stageOf, titleOf, onFacebook } from '../data/logic'
 import { allowed, backend } from '../data/store'
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { CardSize } from './CardSize'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { Poster } from './Poster'
+import { PriceText } from './PostRow'
 import { Empty, Icon, SearchBox, showToast } from './ui'
 
 /** An approved post goes out only once it has a date and a time, so say when one is still needed. */
@@ -21,13 +22,11 @@ export function ReviewCard({ post: p, onOpen }: { post: Post; onOpen: (id: strin
       </button>
       <div className="card-body">
         <h3 dir="auto">{titleOf(p)}</h3>
-        <p className="price">
-          <span dir="ltr">{hasOffer(p) && <s>{formatPrice(p.priceBefore)}</s>} {formatPrice(priceOf(p))} EGP</span> <span className="muted">· {p.style}</span>
-        </p>
+        <p className="price"><PriceText post={p} style /></p>
         {allowed('designs.approve') && (
         <div className="actions">
           <button className="btn btn-primary" onClick={() => decide('Done', 'Approved')}><Icon name="check" size={18} />{t('Approve')}</button>
-          <button className="btn" onClick={() => decide('Redo', 'Sent for redo')}><Icon name="redo" size={18} />{t('Redo')}</button>
+          {!p.kind && <button className="btn" onClick={() => decide('Redo', 'Sent for redo')}><Icon name="redo" size={18} />{t('Redo')}</button>}
           <button className="btn btn-ghost" onClick={() => decide('ignore', 'Skipped')}><Icon name="skip" size={18} />{t('Skip')}</button>
         </div>
         )}
@@ -64,7 +63,8 @@ function SwipeDeck({ posts, onOpen }: { posts: Post[]; onOpen: (id: string) => v
   const toward = leaving ?? (move ? aim(move.x, move.y) : null)
 
   const decide = useCallback((dir: Swipe) => {
-    if (!top || leaving) return
+    // A text, photo or video post has no poster to make again.
+    if (!top || leaving || (dir === 'left' && top.kind)) return
     setLeaving(dir)
     // The card flies off first, then the decision is saved and the next card takes its place.
     setTimeout(() => {
@@ -121,15 +121,13 @@ function SwipeDeck({ posts, onOpen }: { posts: Post[]; onOpen: (id: string) => v
           <div className="card-poster"><Poster post={top} zoom /></div>
           <div className="card-body">
             <h3 dir="auto">{titleOf(top)}</h3>
-            <p className="price">
-              <span dir="ltr">{hasOffer(top) && <s>{formatPrice(top.priceBefore)}</s>} {formatPrice(priceOf(top))} EGP</span> <span className="muted">· {top.style}</span>
-            </p>
+            <p className="price"><PriceText post={top} style /></p>
           </div>
           {toward && <span className={`stamp stamp-${toward}`}><Icon name={SWIPES[toward].icon} size={20} />{t(SWIPES[toward].label)}</span>}
         </article>
       </div>
       <div className="deck-actions">
-        <button className="btn" onClick={() => decide('left')}><Icon name="left" size={18} />{t('Redo with next photo')}</button>
+        <button className="btn" disabled={!!top.kind} onClick={() => decide('left')}><Icon name="left" size={18} />{t('Redo with next photo')}</button>
         <button className="btn btn-primary" onClick={() => decide('up')}><Icon name="check" size={18} />{t('Approve')}</button>
         <button className="btn" onClick={() => decide('right')}>{t('Skip')}<Icon name="right" size={18} /></button>
       </div>
@@ -162,7 +160,7 @@ export function ReviewView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   const [query, setQuery] = useState('')
   const posts = data.posts.filter((p) => stageOf(p) === 'review')
   // Skipped posters that do have a poster: the ones worth a second look.
-  const skipped = data.posts.filter((p) => stageOf(p) === 'skipped' && p.posterUrl)
+  const skipped = data.posts.filter((p) => stageOf(p) === 'skipped' && (p.posterUrl || p.kind))
   const counts = new Map<string, number>()
   for (const p of posts) counts.set(p.style, (counts.get(p.style) ?? 0) + 1)
   // A style whose last poster was just decided falls back to all styles.
@@ -178,7 +176,7 @@ export function ReviewView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   const actions: BulkAction[] = active === SKIPPED
     ? [...(allowed('designs.approve') ? [{ label: 'Back to review', icon: 'redo', tone: 'primary' as const, run: set('') }] : []), ...(allowed('delete') ? [remove] : [])]
     : [
-        ...(allowed('designs.approve') ? [{ label: 'Approve', icon: 'check', tone: 'primary' as const, run: set('Done') }, { label: 'Redo', icon: 'redo', run: set('Redo') }, { label: 'Skip', icon: 'skip', run: set('ignore') }] : []),
+        ...(allowed('designs.approve') ? [{ label: 'Approve', icon: 'check', tone: 'primary' as const, run: set('Done') }, { label: 'Redo', icon: 'redo', run: (id: string) => (post(id)?.kind ? false : set('Redo')(id)) }, { label: 'Skip', icon: 'skip', run: set('ignore') }] : []),
         ...(allowed('delete') ? [remove] : []),
       ]
   const pickMode = (next: 'cards' | 'swipe') => {

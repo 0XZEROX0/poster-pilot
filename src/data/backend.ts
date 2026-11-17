@@ -5,7 +5,8 @@ import type { CaptionTemplate, Data, LogEntry, NewPost, Post, VersionPhotos } fr
 export interface Backend {
   /** Calls back with the whole data set now and after every change. Returns the function that stops it. */
   subscribe(onData: (data: Data) => void, onError: (message: string) => void): () => void
-  addPost(post: NewPost): Promise<void>
+  /** Resolves to the new post's id. */
+  addPost(post: NewPost): Promise<string>
   updatePost(id: string, patch: Partial<Post>): Promise<void>
   removePost(id: string): Promise<void>
   saveTemplates(templates: CaptionTemplate[]): Promise<void>

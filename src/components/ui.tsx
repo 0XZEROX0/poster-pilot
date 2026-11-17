@@ -47,6 +47,9 @@ const paths: Record<string, string> = {
   apps: 'M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z',
   heart: 'M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z',
   grip: 'M9 6v.01M15 6v.01M9 12v.01M15 12v.01M9 18v.01M15 18v.01',
+  text: 'M5 6h14M5 11h14M5 16h9',
+  video: 'M3 6h12v12H3zM15 10.5l6-3.5v10l-6-3.5',
+  play: 'M8 5.5v13l10.5-6.5z',
 }
 
 export function Icon({ name, size = 22 }: { name: keyof typeof paths | string; size?: number }) {

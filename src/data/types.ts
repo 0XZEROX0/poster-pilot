@@ -18,12 +18,29 @@ export type PostItem = {
   label?: string
 }
 
+/**
+ * A post the person writes and uploads in the app instead of a product poster: 'text' (Facebook only, Instagram does
+ * not allow a post without a picture), 'image' (1 to 10 photos; more than one is an album on Facebook and a carousel
+ * on Instagram) or 'video' (a video on Facebook and a Reel on Instagram).
+ */
+export type PostKind = 'text' | 'image' | 'video'
+/** Where such a post goes. A text post always goes to Facebook only. */
+export type PostPlaces = 'fb+ig' | 'fb' | 'ig'
+/** One uploaded file of a post: its Google Drive id (in AI Designs / Uploads, shared by link), and its size in pixels. */
+export type PostMedia = { id: string; type: 'image' | 'video'; w?: number; h?: number }
+
 /** What the person decided about a finished poster (sheet: Feedback). */
 export type Feedback = '' | 'Done' | 'Redo' | 'Redo next image' | 'ignore' | 'Cancel'
 
 /** One row of the Posts sheet. Dates and times are Cairo local strings, as the engine writes them. */
 export type Post = {
   id: string
+  /** Set for a text, photo or video post made in the app (no product poster). Missing for a product poster. Never changes. */
+  kind?: PostKind
+  /** With kind 'image' or 'video': the uploaded photos (up to 10) or the video. */
+  media?: PostMedia[]
+  /** With kind: where it goes. Missing = Facebook and Instagram (a text post: Facebook only). */
+  places?: PostPlaces
   /** Position in the list, lowest first. */
   order: number
   items: PostItem[]
@@ -169,7 +186,7 @@ export type Data = {
   results: Results | null
 }
 
-export type NewPost = Pick<Post, 'items' | 'variants' | 'title' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime' | 'story'>
+export type NewPost = Pick<Post, 'items' | 'variants' | 'title' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime' | 'story' | 'kind' | 'media' | 'places'> & Partial<Pick<Post, 'caption'>>
 
 export const emptyData: Data = { loaded: false, posts: [], products: [], styles: [], templates: [], health: null, results: null }
 
