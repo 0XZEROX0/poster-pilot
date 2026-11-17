@@ -1,4 +1,5 @@
-import { useSyncExternalStore, type ReactNode } from 'react'
+import { useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useProfiles } from '../data/profiles'
 import { addDays, cairoNow, categoryOf } from '../data/logic'
 import type { Post } from '../data/types'
 import { locale, t } from '../i18n'
@@ -147,5 +148,23 @@ export function CategoryChips({ posts, value, onChange, className = '' }: { post
         <button key={name} className={active === name ? 'filter on' : 'filter'} aria-pressed={active === name} onClick={() => onChange(name)}><span dir="auto">{name === 'Bundle' || name === 'Other' ? t(name) : name}</span> <i>{n}</i></button>
       ))}
     </div>
+  )
+}
+
+/**
+ * A round picture of a person: their Google picture or the one they chose, else the first letter of
+ * their name. `photo` wins over the saved one (the signed-in person's own Google picture).
+ */
+export function Avatar({ uid, name, photo, size, title }: { uid?: string; name: string; photo?: string; size?: number; title?: string }) {
+  const saved = useProfiles()
+  const mine = uid !== undefined ? saved.get(uid) : undefined
+  const src = mine ? mine.photo : photo || ''
+  const [broken, setBroken] = useState('')
+  const style = size ? { width: size, height: size, fontSize: Math.round(size * 0.42) } : undefined
+  const letter = (name || '?').trim().slice(0, 1).toUpperCase()
+  return (
+    <span className="avatar" style={style} title={title}>
+      {src && broken !== src ? <img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(src)} /> : letter}
+    </span>
   )
 }

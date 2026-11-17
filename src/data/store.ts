@@ -4,6 +4,7 @@ import type { Backend } from './backend'
 import { auth, firebaseConfigured, firestore } from './firebase'
 import { createFirestoreBackend } from './firestoreBackend'
 import { createLocalBackend } from './localBackend'
+import { loadProfiles, syncMyProfile } from './profiles'
 import { askToJoin, cancelRequest, findAccess, POST_PAGES, watchMembership, zonesFor, type Access, type Page, type Perm } from './team'
 import { emptyData, type Data } from './types'
 import { showToast } from '../components/ui'
@@ -106,7 +107,10 @@ async function enter() {
     if (state.user !== user) return
     const access = found.access
     set(found)
-    if (inside()) listen()
+    if (inside()) {
+      listen()
+      void syncMyProfile(user).then(loadProfiles)
+    }
     // Someone waiting gets in the moment an owner or admin accepts, without reloading.
     else if (access === 'waiting') stopWaiting = watchMembership(firestore, user.uid, () => { stopWaiting(); void enter() })
   } catch (e) {

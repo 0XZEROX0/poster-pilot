@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { resetDemo } from '../data/localBackend'
 import { setTheme, useTheme, type Theme } from '../theme'
 import { setLayout, useLayout } from '../layout'
@@ -8,7 +8,9 @@ import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
 import { PeoplePanel, RolesPanel, useTeam } from './MembersSection'
 import { Sheet } from './Sheet'
-import { Chip, Icon, showToast } from './ui'
+import { Avatar, Chip, Icon, showToast } from './ui'
+import { backToGooglePhoto, removeMyPhoto, setMyPhoto, useProfiles } from '../data/profiles'
+import type { User } from 'firebase/auth'
 
 /** "5 min ago" for the engine's last sign of life. */
 export function agoLabel(ms: number): string {
@@ -89,14 +91,17 @@ function General({ session, onClose }: { session: Session; onClose: () => void }
             <div className="actions"><button className="btn" onClick={() => { resetDemo(); restartDemo(); onClose() }}><Icon name="redo" size={18} />{t('Reset the demo')}</button></div>
           </>
         ) : (
-          <div className="person me">
-            <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
-            <span className="person-main"><b dir="auto">{name}</b><span className="muted small" dir="ltr">{session.user?.email}</span></span>
-            <span className="person-acts">
-              {session.roleName && <Chip tone={session.role === 'owner' ? 'good' : 'neutral'}>{t(session.roleName)}</Chip>}
-              <button className="btn" onClick={() => signOutNow()}>{t('Sign out')}</button>
-            </span>
-          </div>
+          <>
+            <div className="person me">
+              <Avatar uid={session.user?.uid} name={name} photo={session.user?.photoURL ?? ''} />
+              <span className="person-main"><b dir="auto">{name}</b><span className="muted small" dir="ltr">{session.user?.email}</span></span>
+              <span className="person-acts">
+                {session.roleName && <Chip tone={session.role === 'owner' ? 'good' : 'neutral'}>{t(session.roleName)}</Chip>}
+                <button className="btn" onClick={() => signOutNow()}>{t('Sign out')}</button>
+              </span>
+            </div>
+            {session.user && <PhotoControls user={session.user} />}
+          </>
         )}
       </section>
       <section className="set-card">
@@ -221,6 +226,33 @@ function PosterSettings({ session }: { session: Session }) {
           </div>
         </section>
       )}
+    </div>
+  )
+}
+
+/** Change your own picture: pick one from the phone or computer, go back to the Google one, or remove it. */
+function PhotoControls({ user }: { user: User }) {
+  const mine = useProfiles().get(user.uid)
+  const [busy, setBusy] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+  const run = async (job: () => Promise<void>) => {
+    setBusy(true)
+    try {
+      await job()
+      showToast(t('Saved'))
+    } catch (e) {
+      showToast((e as Error).message === 'not-image' ? t('Pick a picture file.') : t('Could not save the picture. Try again.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const custom = mine?.custom ?? false
+  return (
+    <div className="photo-acts">
+      <input ref={input} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void run(() => setMyPhoto(user, f)) }} />
+      <button className="btn" disabled={busy} onClick={() => input.current?.click()}><Icon name="edit" size={18} />{t('Change photo')}</button>
+      {custom && user.photoURL && <button className="btn" disabled={busy} onClick={() => run(() => backToGooglePhoto(user))}>{t('Use my Google photo')}</button>}
+      {(mine ? mine.photo : user.photoURL) && <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => removeMyPhoto(user))}>{t('Remove photo')}</button>}
     </div>
   )
 }
