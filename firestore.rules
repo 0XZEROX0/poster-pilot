@@ -64,12 +64,14 @@ service cloud.firestore {
     function isAdmin() {
       return can('people');
     }
-    // Who may set which Feedback. Taking a post off the schedule belongs to scheduling.
-    function feedbackOk(value, was) {
-      return value == 'Cancel' ? can('schedule')
-        : (value == 'Done' && was == 'Cancel') ? (can('schedule') || can('designs.approve'))
-        : value in ['Redo', 'Redo next image'] ? (can('designs.approve') || can('fix') || can('offers.create'))
-        : can('designs.approve');
+    // Who may set which Feedback. Taking a post off the schedule belongs to scheduling. Text, photo and video
+    // posts (`custom`) are made and approved in the Planner, by the people who schedule.
+    function feedbackOk(value, was, custom) {
+      return (custom && (can('schedule') || can('designs.approve')))
+        || (value == 'Cancel' ? can('schedule')
+          : (value == 'Done' && was == 'Cancel') ? (can('schedule') || can('designs.approve'))
+          : value in ['Redo', 'Redo next image'] ? (can('designs.approve') || can('fix') || can('offers.create'))
+          : can('designs.approve'));
     }
     // Text, photo and video posts (`kind`): the kind is set when the post is made and never changes; up to 10
     // uploaded files (Drive ids); where it goes. A text post goes to Facebook only.
@@ -91,7 +93,7 @@ service cloud.firestore {
         && (!keys.hasAny(['postNow']) || can('schedule'))
         // Also posting it as a story (where, and how long after the post) belongs to scheduling too.
         && (!keys.hasAny(['story', 'storyDelay', 'storyDesign']) || can('schedule'))
-        && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', '')) && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''))))
+        && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', ''), was.get('kind', '') != '') && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''), was.get('kind', '') != '')))
         && (!keys.hasAny(['appDeleted']) || can('delete'))
         // "Delete from Facebook and Instagram" takes a published post off the Page and Instagram for good: only with
         // its own permission, only as a new ask ('asked', with the time and the name of who asked), and only once
@@ -103,7 +105,7 @@ service cloud.firestore {
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
         // Asking for the website photos of the items, for the photo picker.
         && (!keys.hasAny(['photoAsk']) || can('offers.create') || can('fix') || can('designs.approve'))
-        && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle', 'media', 'places']) || can('offers.create') || can('fix') || can('designs.approve'))
+        && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle', 'media', 'places']) || can('offers.create') || can('fix') || can('designs.approve') || (was.get('kind', '') != '' && can('schedule')))
         && customOk(now) && customOk(edits)
         // An offer is approved by someone other than the person who made it. The owner always may.
         && (!keys.hasAny(['offer', 'offerNote', 'offerBy'])
@@ -242,7 +244,8 @@ service cloud.firestore {
     match /posts/{id} {
       allow read: if isMember() && mayReadPost();
       // A new post always starts as an offer waiting for approval: nothing approved, scheduled or posted.
-      allow create: if can('offers.create')
+      // Text, photo and video posts (`kind`) are made in the Planner, only by the people who schedule.
+      allow create: if (request.resource.data.get('kind', '') != '' ? can('schedule') : can('offers.create'))
         && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid
         && request.resource.data.get('zone', 'offer') == 'offer'
         && request.resource.data.get('feedback', '') == ''

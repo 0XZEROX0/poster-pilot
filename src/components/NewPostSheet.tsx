@@ -1,23 +1,16 @@
 import { useMemo, useState } from 'react'
-import { buildCaption, commonTitle, duplicatesOf, formatPrice, maxItems, nextFreeSlot, stageOf, toNumber, whenOf } from '../data/logic'
+import { buildCaption, commonTitle, duplicatesOf, formatPrice, maxItems, stageOf, toNumber, whenOf } from '../data/logic'
 import { allowed, backend } from '../data/store'
-import type { Data, NewPost, Post, PostItem, PostKind, PostMedia, PostPlaces, Product } from '../data/types'
+import type { Data, NewPost, Post, PostItem, Product } from '../data/types'
 import { t } from '../i18n'
-import { customProblem, KindPicker, MediaPicker, PlacesPicker } from './CustomPost'
 import { Sheet } from './Sheet'
 import { STORIES_ON, storyByDefault } from './StoryBox'
 import { Icon, dayLabel, showToast } from './ui'
 import { VersionPicker, type PickedVersion } from './VersionPicker'
 
 /** Start a post: pick 1 to 3 products (or up to 4 versions of one product) by searching the product list, then price, style and time. */
+// Text, photo and video posts are made in the Planner (NewCustomPostSheet), by the people who schedule.
 export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => void }) {
-  // A product offer (poster made by the engine), or a text, photo or video post written and uploaded here.
-  const [kind, setKind] = useState<'' | PostKind>('')
-  if (kind) return <NewCustomPost key={kind} kind={kind} onKind={setKind} data={data} onClose={onClose} />
-  return <NewOffer onKind={setKind} data={data} onClose={onClose} />
-}
-
-function NewOffer({ data, onClose, onKind }: { data: Data; onClose: () => void; onKind: (k: '' | PostKind) => void }) {
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<Product[]>([])
   // Versions of one product (colours, switches...): one name and one price on the poster, up to 4 items.
@@ -85,7 +78,6 @@ function NewOffer({ data, onClose, onKind }: { data: Data; onClose: () => void; 
   return (
     <Sheet title={t('New offer')} onClose={onClose} footer={<button className="btn btn-primary" onClick={create}><Icon name="plus" size={18} />{t(dup.same.length ? 'Create anyway' : 'Create offer')}</button>}>
       <div className="form narrow">
-        <KindPicker value="" onChange={onKind} />
         <label>
           <span>{t('Products')}</span>
           {picked.length > 0 && (
@@ -170,80 +162,6 @@ function NewOffer({ data, onClose, onKind }: { data: Data; onClose: () => void; 
             <pre className="caption-preview" dir="auto">{buildCaption(draft, data.templates)}</pre>
           </label>
         )}
-      </div>
-    </Sheet>
-  )
-}
-
-/**
- * A text, photo or video post: no offer and no poster. It goes to Review (or straight to the Planner with "Approve
- * now"), and the engine posts it on Facebook and Instagram at its date and time.
- */
-function NewCustomPost({ kind, onKind, data, onClose }: { kind: PostKind; onKind: (k: '' | PostKind) => void; data: Data; onClose: () => void }) {
-  const [caption, setCaption] = useState('')
-  const [media, setMedia] = useState<PostMedia[]>([])
-  const [places, setPlaces] = useState<PostPlaces>('fb+ig')
-  const [postDate, setPostDate] = useState('')
-  const [postTime, setPostTime] = useState('')
-  const mayPlan = allowed('schedule')
-  const mayApprove = allowed('designs.approve')
-  const [approve, setApprove] = useState(mayApprove)
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const toInstagram = kind !== 'text' && places !== 'fb'
-
-  async function create() {
-    const missing = customProblem(kind, caption, media)
-    if (missing) return setError(t(missing))
-    if ((postDate && !postTime) || (!postDate && postTime)) return setError(t('Give both a date and a time, or neither.'))
-    setBusy(true)
-    try {
-      const draft: NewPost = {
-        kind, caption, items: [], company: '', priceBefore: '', priceAfter: '', style: '', details: '', captionStyle: '', postDate: '', postTime: '',
-        ...(kind === 'text' ? { places: 'fb' as const } : { places, media }),
-      }
-      const id = await backend.addPost(draft)
-      // The database takes a new post only as "to review" without a time; approving and the time follow at once.
-      const then: Partial<Post> = { ...(approve && mayApprove ? { feedback: 'Done' as const } : {}), ...(mayPlan && postDate && postTime ? { postDate, postTime } : {}) }
-      if (Object.keys(then).length) await backend.updatePost(id, then)
-      showToast(t(approve && mayApprove ? (postDate && postTime ? 'Approved' : 'Approved. Give it a time in the Planner.') : 'Post created. It is waiting in Review.'))
-      onClose()
-    } finally {
-      setBusy(false)
-    }
-  }
-  const useNextSlot = () => {
-    const slot = nextFreeSlot(data.posts)
-    setPostDate(slot.date)
-    setPostTime(slot.time)
-  }
-
-  return (
-    <Sheet title={t('New post')} onClose={onClose} footer={<button className="btn btn-primary" disabled={busy} onClick={create}><Icon name="plus" size={18} />{t('Create post')}</button>}>
-      <div className="form narrow">
-        <KindPicker value={kind} onChange={onKind} />
-        {kind !== 'text' && <MediaPicker kind={kind} toInstagram={toInstagram} value={media} onChange={(m) => { setMedia(m); setError('') }} />}
-        <label>
-          <span>{t(kind === 'text' ? 'Text' : 'Caption')}</span>
-          <textarea dir="auto" rows={kind === 'text' ? 8 : 6} value={caption} placeholder={t(kind === 'text' ? 'What should the post say?' : 'Optional')} onChange={(e) => { setCaption(e.target.value); setError('') }} />
-        </label>
-        <PlacesPicker kind={kind} value={places} onChange={setPlaces} />
-        {mayPlan && (
-          <>
-            <div className="two">
-              <label><span>{t('Date')}</span><input type="date" value={postDate} onChange={(e) => setPostDate(e.target.value)} /></label>
-              <label><span>{t('Time')}</span><input type="time" value={postTime} onChange={(e) => setPostTime(e.target.value)} /></label>
-            </div>
-            <p className="hint">{t('A post goes out only when it has a date and a time. You can also set them in the Planner.')} <button className="link" type="button" onClick={useNextSlot}>{t('Next free slot')}</button></p>
-          </>
-        )}
-        {mayApprove && (
-          <label className="check">
-            <input type="checkbox" checked={approve} onChange={(e) => setApprove(e.target.checked)} />
-            <span>{t('Approve now (skip Review)')}</span>
-          </label>
-        )}
-        {error && <p className="hint"><b className="bad">{error}</b></p>}
       </div>
     </Sheet>
   )

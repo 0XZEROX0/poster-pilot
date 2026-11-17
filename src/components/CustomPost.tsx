@@ -1,21 +1,22 @@
 import { useRef, useState } from 'react'
-import { driveThumb, KIND_LABEL } from '../data/logic'
+import { addMinutes, cairoNow, driveThumb, KIND_LABEL, whenOf } from '../data/logic'
 import { checkFile, isVideoFile, MAX_PHOTOS, mediaUploads, uploadMedia, videoSeconds, type MediaProblem } from '../data/media'
-import type { PostKind, PostMedia, PostPlaces } from '../data/types'
+import { allowed, backend } from '../data/store'
+import type { Data, NewPost, PostKind, PostMedia, PostPlaces } from '../data/types'
 import { t, tn } from '../i18n'
-import { Icon } from './ui'
+import { Sheet } from './Sheet'
+import { dayLabel, Icon, showToast, timeLabel } from './ui'
 
 // Text, photo and video posts: written and uploaded in the app instead of a product poster.
 
-export const KINDS: { kind: '' | PostKind; label: string; icon: string }[] = [
-  { kind: '', label: 'Offer', icon: 'offer' },
+export const KINDS: { kind: PostKind; label: string; icon: string }[] = [
   { kind: 'text', label: 'Text', icon: 'text' },
   { kind: 'image', label: 'Photos', icon: 'image' },
   { kind: 'video', label: 'Video', icon: 'video' },
 ]
 
-/** Product offer, or a text, photo or video post. */
-export function KindPicker({ value, onChange }: { value: '' | PostKind; onChange: (k: '' | PostKind) => void }) {
+/** A text, photo or video post. */
+export function KindPicker({ value, onChange }: { value: PostKind; onChange: (k: PostKind) => void }) {
   return (
     <div className="seg kind-seg" role="group" aria-label={t('Kind of post')}>
       {KINDS.map((k) => (
@@ -166,3 +167,111 @@ export function kindText(kind: PostKind, media?: PostMedia[]): string {
   return t(KIND_LABEL[kind]) + (kind === 'image' && n > 1 ? ` (${n})` : '')
 }
 
+
+/** Facebook needs some notice before a scheduled post goes out (as in the Planner). */
+const NOTICE_MIN = 20
+
+/** The first free quarter hour on `day` that Facebook still takes, from 17:00 (or from now, today). */
+function freeTimeOn(day: string, data: Data): string {
+  const now = cairoNow()
+  if (day < now.date) return ''
+  const taken = new Set(data.posts.map(whenOf).filter((w) => w?.date === day).map((w) => w!.time))
+  for (let mins = 17 * 60; mins < 24 * 60; mins += 15) {
+    const time = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
+    if (day === now.date && time <= addMinutes(now.time, NOTICE_MIN)) continue
+    if (!taken.has(time)) return time
+  }
+  return ''
+}
+
+/**
+ * The Planner's "New post": a text, photo or video post, written and uploaded here, then scheduled for a date and
+ * time or posted at once. Only people who may schedule see it; the post is approved as it is made (no Review).
+ */
+export function NewCustomPostSheet({ data, day, onClose }: { data: Data; day: string; onClose: () => void }) {
+  const [kind, setKind] = useState<PostKind>(mediaUploads() ? 'image' : 'text')
+  const [caption, setCaption] = useState('')
+  const [media, setMedia] = useState<PostMedia[]>([])
+  const [places, setPlaces] = useState<PostPlaces>('fb+ig')
+  const [postDate, setPostDate] = useState(day)
+  const [postTime, setPostTime] = useState(() => freeTimeOn(day, data))
+  const [confirmNow, setConfirmNow] = useState(false)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const toInstagram = kind !== 'text' && places !== 'fb'
+  const where = (kind === 'text' ? ['fb'] : places === 'fb+ig' ? ['fb', 'ig'] : [places]).map((w) => (w === 'fb' ? 'Facebook' : 'Instagram')).join(t(' and '))
+
+  const pickKind = (k: PostKind) => {
+    setKind(k)
+    // Photos and a video do not mix: a new kind starts with no files.
+    if (k !== kind) setMedia([])
+    setError('')
+    setConfirmNow(false)
+  }
+  function ready(): boolean {
+    const missing = customProblem(kind, caption, media)
+    if (missing) { setError(t(missing)); return false }
+    return true
+  }
+  async function create(now: boolean) {
+    if (!ready()) return
+    const at = cairoNow()
+    if (!now) {
+      if (!postDate || !postTime) return setError(t('Pick a date and a time.'))
+      if (postDate < at.date || (postDate === at.date && postTime <= addMinutes(at.time, NOTICE_MIN))) return setError(tn('Facebook needs at least %n minutes of notice. Pick a later time, or use Post now.', { n: NOTICE_MIN }))
+    }
+    setBusy(true)
+    try {
+      const draft: NewPost = {
+        kind, caption, items: [], company: '', priceBefore: '', priceAfter: '', style: '', details: '', captionStyle: '', postDate: '', postTime: '',
+        ...(kind === 'text' ? { places: 'fb' as const } : { places, media }),
+      }
+      const id = await backend.addPost(draft)
+      // The database takes a new post only without a time; approving it and its time (or Post now) follow at once.
+      await backend.updatePost(id, now ? { feedback: 'Done', postNow: 'yes', postDate: at.date, postTime: at.time } : { feedback: 'Done', postDate, postTime })
+      showToast(now ? `${t('Posting now on')} ${where}` : `${t('Set for')} ${dayLabel(postDate)} · ${timeLabel(postTime)}`)
+      onClose()
+    } catch {
+      showToast(t('Could not save the post. Try again.'))
+      setBusy(false)
+    }
+  }
+
+  const footer = confirmNow ? (
+    <div className="confirm-post" role="alertdialog" aria-labelledby="confirm-new-q">
+      <p id="confirm-new-q"><b>{t('Publish now on')} {where}?</b><br /><span className="muted small">{t('It goes out within a minute and cannot be taken back from here.')}</span></p>
+      <div className="confirm-post-actions">
+        <button className="btn btn-primary" disabled={busy} onClick={() => create(true)}><Icon name="send" size={18} />{t('Yes, post now')}</button>
+        <button className="btn btn-ghost" disabled={busy} onClick={() => setConfirmNow(false)}>{t('Cancel')}</button>
+      </div>
+    </div>
+  ) : (
+    <>
+      <button className="btn btn-primary" disabled={busy} onClick={() => create(false)}><Icon name="calendar" size={18} />{t('Schedule')}</button>
+      <button className="btn" disabled={busy} onClick={() => { if (ready()) setConfirmNow(true) }}><Icon name="send" size={18} />{t('Post now')}</button>
+    </>
+  )
+
+  return (
+    <Sheet title={t('New post')} onClose={onClose} footer={footer}>
+      <div className="form narrow">
+        <KindPicker value={kind} onChange={pickKind} />
+        {kind !== 'text' && <MediaPicker kind={kind} toInstagram={toInstagram} value={media} onChange={(m) => { setMedia(m); setError('') }} />}
+        <label>
+          <span>{t(kind === 'text' ? 'Text' : 'Caption')}</span>
+          <textarea dir="auto" rows={kind === 'text' ? 8 : 6} value={caption} placeholder={t(kind === 'text' ? 'What should the post say?' : 'Optional')} onChange={(e) => { setCaption(e.target.value); setError('') }} />
+        </label>
+        <PlacesPicker kind={kind} value={places} onChange={(p) => { setPlaces(p); setConfirmNow(false) }} />
+        <div className="two">
+          <label><span>{t('Date')}</span><input type="date" value={postDate} min={cairoNow().date} onChange={(e) => { setPostDate(e.target.value); setError('') }} /></label>
+          <label><span>{t('Time')}</span><input type="time" value={postTime} onChange={(e) => { setPostTime(e.target.value); setError('') }} /></label>
+        </div>
+        <p className="hint">{tn('Schedule sends it at that date and time (at least %n minutes from now). Post now sends it at once.', { n: NOTICE_MIN })}</p>
+        {error && <p className="hint"><b className="bad">{error}</b></p>}
+      </div>
+    </Sheet>
+  )
+}
+
+/** True when this person may make text, photo and video posts (the people who schedule). */
+export const mayMakeCustom = () => allowed('schedule')
