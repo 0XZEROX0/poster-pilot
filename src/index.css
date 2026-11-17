@@ -795,6 +795,8 @@ button.stock:hover { filter: brightness(1.15); }
   .qp-zoom { flex: 1; }
   .qp-zoom .btn { min-width: 36px; padding: 8px; }
   .qp-close span { display: none; }
+  .qp-image span { display: none; }
+  .qp-bar .btn-primary { padding-inline: 12px; }
 }
 .bx-bar .bx-bar-preview { flex: none; background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); color: #fff; padding: 8px 10px; }
 @media print { .qp { display: none !important; } }

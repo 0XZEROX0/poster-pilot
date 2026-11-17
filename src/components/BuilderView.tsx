@@ -129,6 +129,7 @@ export function BuilderView() {
   // Whether the printed quotation shows each part's price. Off: only the parts, the discount and the total.
   // The full-screen look at the paper before printing, to show the customer. Nothing is saved.
   const [previewing, setPreviewing] = useState(false)
+  const [shooting, setShooting] = useState(false)
   const [printPrices, setPrintPricesState] = useState(() => { try { return localStorage.getItem(PRINT_PRICES_KEY) !== 'off' } catch { return true } })
   const setPrintPrices = (on: boolean) => { setPrintPricesState(on); try { localStorage.setItem(PRINT_PRICES_KEY, on ? 'on' : 'off') } catch { /* lasts while the page is open */ } }
   const { costs: costMap } = useCosts()
@@ -212,6 +213,21 @@ export function BuilderView() {
   const print = () => {
     if (!filled.length) return showToast(t('Pick at least one product first.'))
     printQuote(['Quotation', build.customer.trim(), today().replace(/\//g, '-')].filter(Boolean).join(' '))
+  }
+  // The quotation as a picture, to paste in WhatsApp or anywhere: copied on a computer, shared on a phone.
+  const shareImage = async () => {
+    if (!filled.length) return showToast(t('Pick at least one product first.'))
+    if (shooting) return
+    setShooting(true)
+    try {
+      const done = await sendQuoteImage(['Quotation', build.customer.trim(), today().replace(/\//g, '-')].filter(Boolean).join(' '))
+      if (done === 'copied') showToast(t('Copied. Paste it in WhatsApp or anywhere.'))
+      else if (done === 'saved') showToast(t('The picture was saved to your downloads.'))
+    } catch {
+      showToast(t('Could not make the picture. Try again.'))
+    } finally {
+      setShooting(false)
+    }
   }
   const preview = () => {
     if (!filled.length) return showToast(t('Pick at least one product first.'))
@@ -452,6 +468,7 @@ export function BuilderView() {
             <div className="actions">
               <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print quotation')}</button>
               <button className="btn" onClick={preview}><Icon name="expand" size={18} />{t('Preview quotation')}</button>
+              <button className="btn" onClick={shareImage} disabled={shooting}><Icon name="image" size={18} />{shooting ? t('Making the picture…') : phonePrint() ? t('Share as picture') : t('Copy as picture')}</button>
               {!editing && <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>}
             </div>
           </div>
@@ -469,7 +486,7 @@ export function BuilderView() {
       {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra + b.grant, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false); void grants.clearMine() }} onEdit={startEditing} onClose={() => setWatching(false)} />}
       {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false); void grants.clearMine() }} onClose={() => setSaved(false)} />}
       {createPortal(<QuotePrint build={build} lines={filled} sum={sum} prices={printPrices} />, document.body)}
-      {previewing && createPortal(<QuotePreview onPrint={print} onClose={() => setPreviewing(false)}><QuotePrint build={build} lines={filled} sum={sum} prices={printPrices} narrow={phonePrint()} /></QuotePreview>, document.body)}
+      {previewing && createPortal(<QuotePreview onPrint={print} onImage={shareImage} shooting={shooting} onClose={() => setPreviewing(false)}><QuotePrint build={build} lines={filled} sum={sum} prices={printPrices} narrow={phonePrint()} /></QuotePreview>, document.body)}
     </div>
   )
 }
@@ -760,6 +777,61 @@ const PRINT_PRICES_KEY = 'posterpilot.builder.printPrices'
  * its print screen (often A5 or A4 portrait): forcing A4 landscape there made Android shrink and cut the page, so the
  * phone leaves the paper alone and the print styles fit the table to whatever width the paper has.
  */
+/**
+ * Makes a picture of the quotation (always the computer's A4 landscape paper, sharp enough to read on a phone) and
+ * hands it on: a computer copies it to the clipboard, a phone opens its share screen (WhatsApp and the rest). Where
+ * neither works the picture is downloaded. Built from the same paper as the print, so cost and profit are never on it.
+ */
+async function sendQuoteImage(name: string): Promise<'copied' | 'shared' | 'saved' | 'cancelled'> {
+  const paper = document.querySelector('body > .quote-print')
+  if (!paper) throw new Error('no quotation')
+  const make = async () => {
+    const wrap = document.createElement('div')
+    wrap.className = 'qp-paper qp-shot'
+    wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:297mm;padding:8mm;transform:none;box-shadow:none;'
+    wrap.appendChild(paper.cloneNode(true))
+    document.body.appendChild(wrap)
+    try {
+      await Promise.all([...wrap.querySelectorAll('img')].map((i) => i.decode().catch(() => undefined)))
+      const { toBlob } = await import('html-to-image')
+      const blob = await toBlob(wrap, { pixelRatio: 2, backgroundColor: '#ffffff', style: { position: 'static', left: '0', top: '0' } })
+      if (!blob) throw new Error('no picture')
+      return blob
+    } finally {
+      wrap.remove()
+    }
+  }
+  const phone = phonePrint()
+  const blob = make()
+  // A computer: straight to the clipboard (the promise keeps the click's permission while the picture is made).
+  if (!phone && navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      return 'copied'
+    } catch {
+      // No clipboard pictures here: share or download below.
+    }
+  }
+  const file = new File([await blob], `${name}.png`, { type: 'image/png' })
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: name })
+      return 'shared'
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return 'cancelled'
+    }
+  }
+  const url = URL.createObjectURL(file)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = file.name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10000)
+  return 'saved'
+}
+
 const phonePrint = () => window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900
 
 function printQuote(name: string) {
@@ -791,7 +863,7 @@ function printQuote(name: string) {
  * A4 portrait with the narrow layout on a phone), scaled to fit the screen. Zoom with the buttons, Ctrl + wheel or two
  * fingers. Nothing here is saved, and cost or profit is never on it.
  */
-function QuotePreview({ children, onPrint, onClose }: { children: ReactNode; onPrint: () => void; onClose: () => void }) {
+function QuotePreview({ children, onPrint, onImage, shooting, onClose }: { children: ReactNode; onPrint: () => void; onImage: () => void; shooting: boolean; onClose: () => void }) {
   const narrow = phonePrint()
   const stage = useRef<HTMLDivElement>(null)
   const paper = useRef<HTMLDivElement>(null)
@@ -874,6 +946,7 @@ function QuotePreview({ children, onPrint, onClose }: { children: ReactNode; onP
           <button className="btn" onClick={() => step(1.25)} aria-label={t('Zoom in')} title={t('Zoom in')}><Icon name="plus" size={18} /></button>
           <button className="btn" onClick={() => setZoom(null)} aria-pressed={zoom === null}>{t('Fit')}</button>
         </div>
+        <button className="btn qp-image" onClick={onImage} disabled={shooting} aria-label={narrow ? t('Share as picture') : t('Copy as picture')} title={narrow ? t('Share as picture') : t('Copy as picture')}><Icon name="image" size={18} /><span>{narrow ? t('Share') : t('Copy as picture')}</span></button>
         <button className="btn btn-primary" onClick={onPrint}><Icon name="print" size={18} />{t('Print')}</button>
         <button className="btn qp-close" onClick={onClose} aria-label={t('Close')}><Icon name="close" size={18} /><span>{t('Close')}</span></button>
       </div>
