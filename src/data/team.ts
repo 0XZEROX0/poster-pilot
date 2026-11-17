@@ -1,4 +1,5 @@
 import { type User } from 'firebase/auth'
+import { myNameFor } from './profiles'
 import { track } from './activity'
 import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch, type Firestore } from 'firebase/firestore'
 
@@ -100,7 +101,7 @@ async function standing(db: Firestore, role: Role): Promise<Standing> {
   return { access: 'in', role, roleName: def.name, perms: def.perms, pages: def.pages }
 }
 
-const profile = (user: User, role: Role) => ({ email: user.email ?? '', name: user.displayName ?? '', role, joinedAt: Date.now() })
+const profile = (user: User, role: Role) => ({ email: user.email ?? '', name: myNameFor(user), role, joinedAt: Date.now() })
 
 /**
  * Finds out where the person stands, and lets the people of the first list in: the owner is its
@@ -134,7 +135,7 @@ export async function findAccess(db: Firestore, user: User): Promise<Standing> {
 /** Asks to join with the system code. Returns false when the code is not the right one. */
 export async function askToJoin(db: Firestore, user: User, code: string): Promise<boolean> {
   try {
-    await setDoc(doc(db, 'requests', user.uid), { email: user.email ?? '', name: user.displayName ?? '', code: code.trim().toUpperCase(), createdAt: serverTimestamp() })
+    await setDoc(doc(db, 'requests', user.uid), { email: user.email ?? '', name: myNameFor(user), code: code.trim().toUpperCase(), createdAt: serverTimestamp() })
     return true
   } catch (e) {
     if (denied(e)) return false

@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth'
+import { myNameFor } from './profiles'
 import { collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, where, type DocumentData } from 'firebase/firestore'
 import { firestore } from './firebase'
 import { addDays, cairoNow } from './logic'
@@ -196,7 +197,7 @@ type Me = { uid: string; name: string }
 function me(): Me {
   if (!firestore) return { uid: 'demo-you', name: 'You' }
   const u = getAuth(firestore.app).currentUser
-  return { uid: u?.uid ?? '', name: u?.displayName || u?.email || '' }
+  return { uid: u?.uid ?? '', name: myNameFor(u) }
 }
 export const stepBy = (kind: StepKind, note: string): Step => {
   const m = me()

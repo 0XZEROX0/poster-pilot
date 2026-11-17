@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { nameOf, useProfiles } from '../data/profiles'
 import { firestore } from '../data/firebase'
 import type { Session } from '../data/store'
 import { accept, BUILT_IN, decline, deleteRole, loadTeam, newRoleId, PAGE_LABEL, PAGES, PERM_LABEL, PERMS, removeMember, resetCode, saveRole, setRole, type Member, type Page, type Perm, type RoleDef, type Team } from '../data/team'
@@ -25,6 +26,7 @@ const roleNameOf = (team: Team, role: string) => (role === 'owner' ? t('Owner') 
 
 /** The system code, the people asking to join and the people inside. Owner and people managers only. */
 export function PeoplePanel({ session, state }: { session: Session; state: TeamState }) {
+  useProfiles()
   const { team, error, run } = state
   const [confirm, setConfirm] = useState('')
   const owner = session.role === 'owner'
@@ -75,8 +77,8 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
         <header className="set-card-head"><h3>{t('Members')}</h3><span className="group-count">{team.members.length}</span></header>
         {team.members.map((m) => (
           <div key={m.uid} className="person">
-            <Avatar uid={m.uid} name={m.name || m.email} />
-            <span className="person-main"><b dir="auto">{m.name || m.email}{m.uid === me && ` (${t('you')})`}</b><span className="muted small" dir="ltr">{m.email}</span></span>
+            <Avatar uid={m.uid} name={nameOf(m.uid, m.name || m.email)} />
+            <span className="person-main"><b dir="auto">{nameOf(m.uid, m.name || m.email)}{m.uid === me && ` (${t('you')})`}</b><span className="muted small" dir="ltr">{m.email}</span></span>
             <span className="person-acts">
               {owner && m.role !== 'owner' ? (
                 <select className="role-pick" aria-label={t('Role')} value={team.roles.some((r) => r.id === m.role) ? m.role : ''} onChange={(e) => e.target.value && act(setRole(db, m, e.target.value, { from: roleNameOf(team, m.role), to: roleNameOf(team, e.target.value) }), 'Saved')}>

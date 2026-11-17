@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth'
+import { myNameFor } from './profiles'
 import { collection, deleteField, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch, type DocumentData, type Firestore, type WriteBatch } from 'firebase/firestore'
 import { track } from './activity'
 import type { Backend } from './backend'
@@ -40,7 +41,7 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
     write(batch)
     if (!entry) return batch.commit()
     const me = getAuth(db.app).currentUser
-    batch.set(doc(collection(db, 'log')), { ...entry, postId, by: me?.uid ?? '', byName: me?.displayName || me?.email || '', at: serverTimestamp() })
+    batch.set(doc(collection(db, 'log')), { ...entry, postId, by: me?.uid ?? '', byName: myNameFor(me), at: serverTimestamp() })
     try {
       await batch.commit()
     } catch (e) {
@@ -94,7 +95,7 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
     async addPost(post) {
       const ref = doc(collection(db, 'posts'))
       const me = getAuth(db.app).currentUser
-      await commit((b) => b.set(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), zone: 'offer', createdBy: me?.uid ?? '', createdByName: me?.displayName || me?.email || '', appNew: true, appDirty: true, appEditedAt: serverTimestamp() }), ref.id, describeNew(post))
+      await commit((b) => b.set(ref, { ...blankPost, ...post, order: -Date.now(), createdAt: Date.now(), zone: 'offer', createdBy: me?.uid ?? '', createdByName: myNameFor(me), appNew: true, appDirty: true, appEditedAt: serverTimestamp() }), ref.id, describeNew(post))
       // A new offer gets its competitor prices at once; the competitor workflow's timer is only a slow fallback.
       nudgeEngine(getAuth(db.app), ['app', 'market'])
     },

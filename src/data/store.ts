@@ -4,7 +4,7 @@ import type { Backend } from './backend'
 import { auth, firebaseConfigured, firestore } from './firebase'
 import { createFirestoreBackend } from './firestoreBackend'
 import { createLocalBackend } from './localBackend'
-import { loadProfiles, syncMyProfile } from './profiles'
+import { loadProfiles, myNameFor, syncMyProfile } from './profiles'
 import { askToJoin, cancelRequest, findAccess, POST_PAGES, watchMembership, zonesFor, type Access, type Page, type Perm } from './team'
 import { emptyData, type Data } from './types'
 import { showToast } from '../components/ui'
@@ -90,7 +90,7 @@ const inside = () => state.access === 'legacy' || state.access === 'in'
 
 /** The signed-in person's id. In the demo there is nobody, so every offer counts as someone else's. */
 export const myId = () => state.user?.uid ?? ''
-export const myName = () => state.user?.displayName || state.user?.email || ''
+export const myName = () => myNameFor(state.user)
 export const isOwner = () => state.mode === 'demo' || state.role === 'owner'
 
 /** Whether the person may do this. Only hides what would be refused anyway: the database rules decide. */

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
+import { nameOf } from '../data/profiles'
 import { bulkPatches, casePsu, fieldLabel, loadWebProducts, matches, money, newProductId, parseMoney, prices, SPEC_FIELDS, SPEC_LABEL, specChips, sameName as sameNameLoose, usePrices, webNameDiff, webNeedsOption, webPending, type ItemPatch, type PriceCategory, type PriceChange, type PriceItem, type WebOption, type WebProduct } from '../data/prices'
 import { costKey, costs, lowestPrice, profitOf, profitText, setCostShown, useCosts, useCostShown, type CostMap } from '../data/costs'
 import { allowed } from '../data/store'
@@ -732,7 +733,7 @@ function ChangeList({ log, cats }: { log: PriceChange[]; cats?: PriceCategory[] 
       {shown.map((l) => (
         <li key={l.id}>
           <div className="row-sub">
-            <b>{l.byName || t('Someone')}</b>
+            <b>{nameOf(l.by, l.byName) || t('Someone')}</b>
             <span className="muted">{new Date(l.at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>
             {ACT[l.act] && <Chip>{t(ACT[l.act])}</Chip>}
             {cats && <Chip>{cats.find((c) => c.id === l.cat)?.name ?? l.cat}</Chip>}

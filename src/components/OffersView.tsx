@@ -1,4 +1,5 @@
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
+import { nameOf, useProfiles } from '../data/profiles'
 import { CardSize } from './CardSize'
 import { useState } from 'react'
 import { formatPrice, hasOffer, marketOf, matchesOffer, offerOf, priceOf, priceQuery, stageOf, titleOf, toNumber } from '../data/logic'
@@ -58,6 +59,7 @@ function MarketBox({ post: p }: { post: Post }) {
 
 /** One offer before any poster exists: what is in it, who made it, and the decision buttons. */
 function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void }) {
+  useProfiles()
   const [note, setNote] = useState<string | null>(null)
   const mine = ownOffer(p)
   const rejected = offerOf(p) === 'rejected'
@@ -76,7 +78,7 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
         </p>
         {p.details && <p className="muted small" dir="auto">{p.details}</p>}
         {!rejected && <MarketBox post={p} />}
-        <p className="muted small">{p.createdByName ? `${t('Made by')} ${p.createdByName}` : t('Added in the sheet')}</p>
+        <p className="muted small">{p.createdByName ? `${t('Made by')} ${nameOf(p.createdBy, p.createdByName)}` : t('Added in the sheet')}</p>
         {rejected && <p className="alert"><b><Icon name="fix" size={18} />{t('Offer sent back')}{p.offerBy ? ` · ${p.offerBy}` : ''}</b>{p.offerNote && <span dir="auto">{p.offerNote}</span>}</p>}
         {note !== null ? (
           <>

@@ -1281,3 +1281,4 @@ button.stock:hover { filter: brightness(1.15); }
 .photo-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .person.me .avatar { width: 56px; height: 56px; font-size: 1.4rem; }
 .photo-acts .btn { min-height: 38px; padding: 0 12px; font-size: 0.875rem; }
+.name-edit { display: grid; gap: 8px; }

@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth'
+import { myNameFor } from './profiles'
 import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp, startAfter, Timestamp, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore'
 import { ACT_TEXT, FIELD_TEXT } from './history'
 import { firestore } from './firebase'
@@ -145,7 +146,7 @@ export function track<A extends WriteApp>(app: A, act: AppWrites[A][number], inf
   }
   const me = getAuth(firestore.app).currentUser
   if (!me) return
-  addDoc(collection(firestore, 'activity'), { app, act, ...extra, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() }).catch(() => {})
+  addDoc(collection(firestore, 'activity'), { app, act, ...extra, by: me.uid, byName: myNameFor(me), at: serverTimestamp() }).catch(() => {})
 }
 
 /** "Changed someone's live quote" is noted once per quote per this long, not on every keystroke. */

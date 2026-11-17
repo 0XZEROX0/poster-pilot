@@ -9,7 +9,7 @@ import { setLang, t, useLang } from '../i18n'
 import { PeoplePanel, RolesPanel, useTeam } from './MembersSection'
 import { Sheet } from './Sheet'
 import { Avatar, Chip, Icon, showToast } from './ui'
-import { backToGooglePhoto, removeMyPhoto, setMyPhoto, useProfiles } from '../data/profiles'
+import { backToGoogleName, backToGooglePhoto, myNameFor, removeMyPhoto, setMyName, setMyPhoto, useProfiles } from '../data/profiles'
 import type { User } from 'firebase/auth'
 
 /** "5 min ago" for the engine's last sign of life. */
@@ -80,7 +80,8 @@ function General({ session, onClose }: { session: Session; onClose: () => void }
   const theme = useTheme()
   const layout = useLayout()
   const health = session.data.health
-  const name = session.user?.displayName || session.user?.email || t('Demo mode')
+  useProfiles()
+  const name = myNameFor(session.user) || t('Demo mode')
   return (
     <div className="set-panel">
       <section className="set-card">
@@ -230,27 +231,51 @@ function PosterSettings({ session }: { session: Session }) {
   )
 }
 
-/** Change your own picture: pick one from the phone or computer, go back to the Google one, or remove it. */
+/**
+ * Change your own picture and the name the app shows for you. Both stay as chosen whatever happens:
+ * signing out and in, another phone, or a new name or picture on the Google account.
+ */
 function PhotoControls({ user }: { user: User }) {
   const mine = useProfiles().get(user.uid)
   const [busy, setBusy] = useState(false)
+  const [naming, setNaming] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
-  const run = async (job: () => Promise<void>) => {
+  const run = async (job: () => Promise<void>, after?: () => void) => {
     setBusy(true)
     try {
       await job()
+      after?.()
       showToast(t('Saved'))
     } catch (e) {
-      showToast((e as Error).message === 'not-image' ? t('Pick a picture file.') : t('Could not save the picture. Try again.'))
+      const m = (e as Error).message
+      showToast(m === 'not-image' ? t('Pick a picture file.') : m === 'empty-name' ? t('Type a name.') : t('Could not save. Try again.'))
     } finally {
       setBusy(false)
     }
   }
   const custom = mine?.custom ?? false
+  const google = user.displayName || user.email || ''
+  if (naming !== null) {
+    return (
+      <form className="form name-edit" onSubmit={(e) => { e.preventDefault(); void run(() => setMyName(user, naming), () => setNaming(null)) }}>
+        <label>
+          <span>{t('Your name in the app')}</span>
+          <input autoFocus dir="auto" maxLength={60} value={naming} onChange={(e) => setNaming(e.target.value)} />
+        </label>
+        <p className="hint">{t('Everyone sees this name next to what you do. It stays even if you sign out or change your Google name.')}</p>
+        <div className="photo-acts">
+          <button className="btn btn-primary" type="submit" disabled={busy || !naming.trim()}>{t('Save name')}</button>
+          {mine?.nameCustom && google && <button className="btn" type="button" disabled={busy} onClick={() => run(() => backToGoogleName(user), () => setNaming(null))}>{t('Use my Google name')}</button>}
+          <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setNaming(null)}>{t('Cancel')}</button>
+        </div>
+      </form>
+    )
+  }
   return (
     <div className="photo-acts">
       <input ref={input} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void run(() => setMyPhoto(user, f)) }} />
       <button className="btn" disabled={busy} onClick={() => input.current?.click()}><Icon name="edit" size={18} />{t('Change photo')}</button>
+      <button className="btn" disabled={busy} onClick={() => setNaming(myNameFor(user))}><Icon name="edit" size={18} />{t('Change name')}</button>
       {custom && user.photoURL && <button className="btn" disabled={busy} onClick={() => run(() => backToGooglePhoto(user))}>{t('Use my Google photo')}</button>}
       {(mine ? mine.photo : user.photoURL) && <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => removeMyPhoto(user))}>{t('Remove photo')}</button>}
     </div>

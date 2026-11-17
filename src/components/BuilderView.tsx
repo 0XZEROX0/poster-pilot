@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { nameOf, useProfiles } from '../data/profiles'
 import { createPortal } from 'react-dom'
 import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quoteLabel, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
 import { casePsu, matches, photoOf, money, parseMoney, specChips, usePrices, useWebPhotos, type PriceCategory, type PriceItem } from '../data/prices'
@@ -217,7 +218,7 @@ export function BuilderView() {
     idle.current = Date.now() - one.at > LIVE_IDLE_MS
     setBuild({ customer: one.customer, sales: one.sales, lines: complete(one.lines), extra: one.extra, buildDiscount: one.buildDiscount })
     setTheirGrant(one.grant)
-    setEditing({ uid: one.uid, name: one.byName || one.sales || t('Someone') })
+    setEditing({ uid: one.uid, name: nameOf(one.uid, one.byName) || one.sales || t('Someone') })
     setWatching(false)
     setSure(false)
   }
@@ -607,7 +608,8 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
   }
   const words = search.trim().toLowerCase()
   // The people who made the quotes in the list, for the filter.
-  const people = [...new Map((list ?? []).map((q) => [q.by, q.byName || q.sales || q.by])).entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  useProfiles()
+  const people = [...new Map((list ?? []).map((q) => [q.by, nameOf(q.by, q.byName) || q.sales || q.by])).entries()].sort((a, b) => a[1].localeCompare(b[1]))
   const shown = (list ?? []).filter((q) => (!person || q.by === person) && (!words || [q.customer, q.sales, q.byName, ...q.lines.map((l) => l.name)].join(' ').toLowerCase().includes(words)))
   return (
     <Sheet title={t('Saved quotes')} onClose={onClose}>
@@ -624,10 +626,10 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
         <ul className="changes">
           {shown.map((q) => (
             <li key={q.id} className="saved-quote">
-              {everyone && <Avatar uid={q.by} name={q.byName || q.sales || '?'} />}
+              {everyone && <Avatar uid={q.by} name={nameOf(q.by, q.byName) || q.sales || '?'} />}
               <button className="saved-open" onClick={() => onOpen(q)}>
                 <span className="row-title" dir="auto">{q.customer || t('No customer name')}</span>
-                {everyone && <span className="saved-by">{tn('Made by %s', { s: mine(q) ? t('you') : q.byName || q.sales || t('Someone') })}</span>}
+                {everyone && <span className="saved-by">{tn('Made by %s', { s: mine(q) ? t('you') : nameOf(q.by, q.byName) || q.sales || t('Someone') })}</span>}
                 <span className="muted">{q.sales || q.byName} · {new Date(q.at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })} · {tn('%n parts', { n: q.lines.length })}</span>
               </button>
               <b className="saved-total">{money(q.total)}</b>
@@ -643,6 +645,7 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
 
 /** The quote each person is building right now, updating as they work. */
 function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void; onEdit: (b: LiveBuild) => void; onClose: () => void }) {
+  useProfiles()
   const [list, setList] = useState<LiveBuild[] | null>(null)
   const [error, setError] = useState('')
   const [open, setOpen] = useState('')
@@ -662,7 +665,7 @@ function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void
   if (one) {
     const sum = totals(one.lines, one.extra + one.grant, one.buildDiscount)
     return (
-      <Sheet title={one.byName || one.sales || t('Someone')} onClose={onClose} footer={<><button className="btn btn-ghost" onClick={() => setOpen('')}>{t('Back')}</button><button className="btn" onClick={() => onCopy(one)}>{t('Copy into my builder')}</button>{allowed('quotes.edit') && <button className="btn btn-primary" onClick={() => onEdit(one)}>{t('Edit this quote')}</button>}</>}>
+      <Sheet title={nameOf(one.uid, one.byName) || one.sales || t('Someone')} onClose={onClose} footer={<><button className="btn btn-ghost" onClick={() => setOpen('')}>{t('Back')}</button><button className="btn" onClick={() => onCopy(one)}>{t('Copy into my builder')}</button>{allowed('quotes.edit') && <button className="btn btn-primary" onClick={() => onEdit(one)}>{t('Edit this quote')}</button>}</>}>
         <p className="live-head"><span className={now - one.at < LIVE_IDLE_MS ? 'live-dot' : 'live-dot idle'} aria-hidden="true" />{t('Updated')} {ago(one.at)}{one.customer ? ` · ${one.customer}` : ''}</p>
         {one.lines.length === 0 ? <Empty icon="builder" text={t('Nothing picked yet.')} /> : (
           <ul className="changes live-lines">
@@ -689,9 +692,9 @@ function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void
         <ul className="changes">
           {others.map((b) => (
             <li key={b.uid} className="saved-quote">
-              <Avatar uid={b.uid} name={b.byName || b.sales || '?'} />
+              <Avatar uid={b.uid} name={nameOf(b.uid, b.byName) || b.sales || '?'} />
               <button className="saved-open" onClick={() => setOpen(b.uid)}>
-                <span className="row-title"><span className={now - b.at < LIVE_IDLE_MS ? 'live-dot' : 'live-dot idle'} aria-hidden="true" />{b.byName || b.sales || t('Someone')}</span>
+                <span className="row-title"><span className={now - b.at < LIVE_IDLE_MS ? 'live-dot' : 'live-dot idle'} aria-hidden="true" />{nameOf(b.uid, b.byName) || b.sales || t('Someone')}</span>
                 <span className="muted">{b.customer ? `${b.customer} · ` : ''}{tn('%n parts', { n: b.lines.length })} · {ago(b.at)}</span>
               </button>
               <b className="saved-total">{money(b.total)}</b>

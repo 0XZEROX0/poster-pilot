@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { nameOf, useProfiles } from '../data/profiles'
 import { ActivityFeed, actText, APP_LABEL, APPS, matches, type ActivityRow } from '../data/activity'
 import { addDays, cairoNow } from '../data/logic'
 import type { Data } from '../data/types'
@@ -92,7 +93,8 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
   }
 
   const all = rows ?? []
-  const people = useMemo(() => [...new Map(all.filter((r) => r.kind === 'person').map((r) => [r.by, r.who])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [all])
+  const profiles = useProfiles()
+  const people = useMemo(() => [...new Map(all.filter((r) => r.kind === 'person').map((r) => [r.by, nameOf(r.by, r.who)])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [all, profiles])
   const kinds = useMemo(() => (['system', 'website', 'sheet'] as const).filter((k) => all.some((r) => r.kind === k)), [all])
   const acts = useMemo(() => [...new Set(all.filter((r) => !app || r.app === app).map((r) => r.act))].sort((a, b) => t(actText(a)).localeCompare(t(actText(b)))), [all, app])
   const shown = all.filter((r) => matches(r, { who, app, act, search }))
@@ -163,8 +165,8 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
                   <div className="log-head">
                     <b>{t(actText(r.act))}</b>
                     <span className="act-meta">
-                      {r.kind === 'person' && <Avatar uid={r.by} name={r.who} size={22} />}
-                      <Chip tone={r.kind === 'person' ? 'neutral' : 'info'}>{r.kind === 'person' ? r.who : t(r.who)}</Chip>
+                      {r.kind === 'person' && <Avatar uid={r.by} name={nameOf(r.by, r.who)} size={22} />}
+                      <Chip tone={r.kind === 'person' ? 'neutral' : 'info'}>{r.kind === 'person' ? nameOf(r.by, r.who) : t(r.who)}</Chip>
                       <span className="muted small">{t(APP_LABEL[r.app])}</span>
                       <time className="muted small" dateTime={new Date(r.at).toISOString()}>{clock(r.at)}</time>
                     </span>
