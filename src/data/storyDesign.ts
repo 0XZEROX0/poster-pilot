@@ -11,9 +11,19 @@ export type TextStyle = 'classic' | 'modern' | 'neon' | 'typewriter' | 'strong'
 export type TextBox = 'none' | 'solid' | 'soft'
 export type TextAlign = 'left' | 'center' | 'right'
 
+/**
+ * Stickers, as in Instagram's sticker tray. `text` is what the sticker says (the emoji itself, the badge words, the
+ * product name); `sub` is the second line (a product's price, a price's old price); `color` is its main colour.
+ */
+export type StickerKind = 'emoji' | 'logo' | 'badge' | 'location' | 'website' | 'product' | 'price'
+export type PenKind = 'pen' | 'marker' | 'neon' | 'eraser'
+
 export type StoryLayer =
   | { id: string; kind: 'poster'; x: number; y: number; scale: number; rotation: number }
   | { id: string; kind: 'text'; x: number; y: number; scale: number; rotation: number; text: string; style: TextStyle; color: string; box: TextBox; align: TextAlign; size: number }
+  | { id: string; kind: 'sticker'; x: number; y: number; scale: number; rotation: number; sticker: StickerKind; text: string; sub?: string; old?: string; color: string }
+  /** A drawn line: points in story pixels (x1, y1, x2, y2, ...). Drawn above everything else, as in Instagram. */
+  | { id: string; kind: 'draw'; x: number; y: number; scale: number; rotation: number; points: number[]; color: string; width: number; pen: PenKind }
 
 export type StoryDesign = { v: 1; bg: StoryBg; layers: StoryLayer[] }
 
@@ -34,6 +44,9 @@ export const TEXT_STYLES: Record<TextStyle, { label: string; font: string; arabi
   typewriter: { label: 'Typewriter', font: '"Courier New", Courier, monospace', arabic: 'Tajawal, sans-serif', weight: '700', upper: false, spacing: 0 },
   strong: { label: 'Strong', font: 'Impact, "Arial Black", Inter, sans-serif', arabic: 'Cairo, sans-serif', weight: '900', upper: true, spacing: 1 },
 }
+
+/** The emoji in the sticker tray. */
+export const EMOJI = ['🔥', '⚡', '💥', '✨', '⭐', '🎉', '🎁', '🛒', '💸', '💰', '🏷️', '📦', '🚚', '⏰', '⏳', '📍', '👉', '👇', '👆', '✅', '❤️', '🧡', '💙', '😍', '🤩', '😎', '🤯', '😱', '👀', '🙌', '👏', '💪', '🎮', '🕹️', '🖥️', '💻', '⌨️', '🖱️', '🎧', '🎤', '📱', '🔌', '🔋', '💡', '🛠️', '🚀', '🏆', '🥇', '💯', '🆕', '🆓', '🔝', '❄️', '🌙', '☀️', '🎄', '🕌', '🇪🇬']
 
 export const hasArabic = (s: string) => /[؀-ۿ]/.test(s)
 
