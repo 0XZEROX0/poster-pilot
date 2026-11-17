@@ -24,12 +24,15 @@ import { allowed, isOwner, myId, ownOffer, postWork, seesPage, signIn, signOutNo
 import type { Perm } from './data/team'
 import { locale, t, tn, useLang } from './i18n'
 import { useEngineSignal } from './data/nudge'
+import { APP_GROUPS, AppIcon, Launcher } from './components/Launcher'
+import { useLayout } from './layout'
 
 /** What a tab needs. A tab the person's role cannot use is not shown. */
 const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view', brainstorm: 'brainstorm', maintenance: 'tickets' }
 
 const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'home' },
   { id: 'prices', label: 'Prices', icon: 'prices' },
   { id: 'builder', label: 'Builder', icon: 'builder' },
   { id: 'maintenance', label: 'Maintenance', icon: 'wrench' },
@@ -60,7 +63,9 @@ export default function App() {
   const session = useSession()
   const signal = useEngineSignal()
   const [wanted, setTab] = useState<Tab>(tabFromHash)
-  const TABS = ALL_TABS.filter((x) => x.id === 'home' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || seesPage(x.id)).filter((x) => (x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
+  // The app grid (default) or the older sidebar layout, chosen in Settings.
+  const solo = useLayout() === 'grid'
+  const TABS = ALL_TABS.filter((x) => (x.id === 'dashboard' ? solo : true)).filter((x) => x.id === 'home' || x.id === 'dashboard' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || seesPage(x.id)).filter((x) => (x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -89,6 +94,8 @@ export default function App() {
     window.scrollTo(0, 0)
     document.querySelector('.desk-main')?.scrollTo(0, 0)
   }
+  // Keep the open app visible in its group's menu (on a phone the menu scrolls sideways).
+  useEffect(() => { document.querySelector('.appbar-menu .on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }, [wanted])
   // A minute tick, so things that depend on the time (a retry that ran out, a quiet engine) update on their own.
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -166,7 +173,9 @@ export default function App() {
   )
   const page = !data.loaded ? (
     <div className="splash">{t('Loading…')}</div>
-  ) : tab === 'home' ? (
+  ) : tab === 'home' && solo ? (
+    <Launcher items={TABS.filter((x) => x.id !== 'home')} counts={counts} name={session.user?.displayName || ''} onGo={(id) => go(id as Tab)} onSettings={() => setOverlay({ kind: 'settings' })} />
+  ) : tab === 'home' || tab === 'dashboard' ? (
     <HomeView data={data} go={go} onOpen={open} desktop={desktop} />
   ) : tab === 'prices' ? (
     <PricesView />
@@ -199,6 +208,68 @@ export default function App() {
       <Toast />
     </>
   )
+
+  // App grid: the home screen is every app as an icon; an open app shows only its own top bar,
+  // with the other apps of its group (the poster stages) as a small menu.
+  if (solo) {
+    const current = TABS.find((x) => x.id === tab)!
+    const group = APP_GROUPS.find((g) => g.ids.includes(tab))
+    const siblings = group ? TABS.filter((x) => group.ids.includes(x.id)) : []
+    const subnav = siblings.length > 1 && (
+      <nav className="appbar-menu" aria-label={t(group!.title)}>
+        {siblings.map((x) => (
+          <button key={x.id} className={x.id === tab ? 'on' : ''} onClick={() => go(x.id)} aria-current={x.id === tab ? 'page' : undefined}>
+            {t(x.label)}
+            {counts[x.id] ? <i className={x.id === 'fix' ? 'count count-bad' : 'count'}>{counts[x.id]}</i> : null}
+          </button>
+        ))}
+      </nav>
+    )
+    const home = tab === 'home'
+    const name = session.user?.displayName || session.user?.email || t('Demo mode')
+    const addHere = canAdd && postWork() && (tab === 'offers' || tab === 'dashboard')
+    const bar = (
+      <header className="appbar">
+        {home ? (
+          <span className="appbar-brand"><Logo size={desktop ? 34 : 30} /><span>Static <b>OS</b></span></span>
+        ) : (
+          <>
+            <button className="icon-btn appbar-home" onClick={() => go('home')} aria-label={t('All apps')} title={t('All apps')}><Icon name="apps" size={20} /></button>
+            <span className="appbar-app"><AppIcon id={tab} icon={current.icon} size={desktop ? 34 : 30} /><h1>{t(current.label)}</h1></span>
+            {desktop && subnav}
+          </>
+        )}
+        <span className="appbar-end">
+          {desktop && addHere && <button className="btn btn-primary" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New offer')}</button>}
+          {session.mode === 'cloud' && postWork() && <span className={`health${dotBad ? ' health-bad' : ''}`} title={dotTitle} />}
+          <button className="icon-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')} title={t('Settings')}><Icon name="settings" /></button>
+          {desktop && <span className="avatar" title={name}>{name.slice(0, 1).toUpperCase()}</span>}
+        </span>
+      </header>
+    )
+    if (desktop) {
+      return (
+        <div className="desk desk-solo">
+          <div className="desk-main">
+            {bar}
+            {banners}
+            <div className={`desk-content page-${tab}`}>{page}</div>
+          </div>
+          {overlays}
+        </div>
+      )
+    }
+    return (
+      <div className="app app-solo">
+        {bar}
+        {!home && subnav}
+        {banners}
+        <main>{page}</main>
+        {addHere && <button className="fab" onClick={() => setOverlay({ kind: 'new' })} aria-label={t('New offer')}><Icon name="plus" size={26} /></button>}
+        {overlays}
+      </div>
+    )
+  }
 
   // Desktop website: a sidebar and a dashboard that fills the window.
   if (desktop) {

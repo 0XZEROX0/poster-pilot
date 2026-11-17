@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { resetDemo } from '../data/localBackend'
 import { setTheme, useTheme, type Theme } from '../theme'
+import { setLayout, useLayout } from '../layout'
 import { allowed, backend, editsTemplates, postWork, restartDemo, signOutNow, type Session } from '../data/store'
 import { useEngineSignal, type EngineJob } from '../data/nudge'
 import type { CaptionTemplate } from '../data/types'
@@ -75,6 +76,7 @@ function useTeamWhen(needed: boolean) {
 function General({ session, onClose }: { session: Session; onClose: () => void }) {
   const lang = useLang()
   const theme = useTheme()
+  const layout = useLayout()
   const health = session.data.health
   const name = session.user?.displayName || session.user?.email || t('Demo mode')
   return (
@@ -112,6 +114,14 @@ function General({ session, onClose }: { session: Session; onClose: () => void }
           ))}
         </div>
         <p className="hint">{t('Auto follows your device. Saved on this device.')}</p>
+      </section>
+      <section className="set-card">
+        <header className="set-card-head"><h3>{t('Layout')}</h3></header>
+        <div className="seg">
+          <button className={layout === 'grid' ? 'on' : ''} onClick={() => setLayout('grid')}>{t('App grid')}</button>
+          <button className={layout === 'classic' ? 'on' : ''} onClick={() => setLayout('classic')}>{t('Sidebar (old)')}</button>
+        </div>
+        <p className="hint">{t('App grid: a home screen with every app as an icon, and each app opens on its own screen. Sidebar: the old layout with every page in one menu. Saved on this device.')}</p>
       </section>
       {session.mode === 'cloud' && postWork() && (
         <section className="set-card">
