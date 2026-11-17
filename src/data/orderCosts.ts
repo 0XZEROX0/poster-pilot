@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase/auth'
-import { doc, getDoc, serverTimestamp, writeBatch, type DocumentData } from 'firebase/firestore'
+import { deleteField, doc, getDoc, serverTimestamp, setDoc, writeBatch, type DocumentData } from 'firebase/firestore'
 import { firestore } from './firebase'
 import { myNameFor } from './profiles'
 
@@ -7,12 +7,17 @@ import { myNameFor } from './profiles'
 // may see cost. Kept apart from orders/* (which everyone handling orders reads), one document per month the orders
 // were placed in (Cairo), so the Sales page reads one or two documents for a period, not one per order.
 //
-//   orderCosts/{YYYY-MM}  { orders: { [orderId]: { lines: [{ n: line name, c: cost of one, or null }], at, byName } } }
+//   orderCosts/{YYYY-MM}  { orders: { [orderId]: { lines: [{ n: line name, c: cost of one, or null, k?: product }], at, byName } } }
+//   orderCosts/links      { web: { 'websiteId:optionId': 'cat/pid' }, names: { [plain line name]: 'cat/pid' } }
+//                         lines picked as a price list product for every order: a website product, or a name
 //
 // A saved cost belongs to the line with the same place and name; if the order's lines change, it no longer applies.
+// k is the price list product (`cat/pid`) picked for that one line.
 
-export type SavedLine = { n: string; c: number | null }
+export type SavedLine = { n: string; c: number | null; k?: string }
 export type SavedCosts = Record<string, SavedLine[]>
+export type CostLinks = { web: Record<string, string>; names: Record<string, string> }
+export const NO_LINKS: CostLinks = { web: {}, names: {} }
 export type CostEntry = { id: string; placedAt: number; lines: SavedLine[] }
 
 /** The Cairo month (YYYY-MM) of a moment. */
@@ -39,14 +44,24 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : n
 export function savedOf(d: DocumentData | undefined, into: SavedCosts) {
   for (const [id, v] of Object.entries((d?.orders ?? {}) as Record<string, DocumentData>)) {
     if (!Array.isArray(v?.lines)) continue
-    into[id] = (v.lines as DocumentData[]).map((l) => ({ n: String(l?.n ?? ''), c: num(l?.c) }))
+    into[id] = (v.lines as DocumentData[]).map((l) => {
+      const line: SavedLine = { n: String(l?.n ?? ''), c: num(l?.c) }
+      if (typeof l?.k === 'string' && l.k) line.k = l.k
+      return line
+    })
   }
 }
+const strMap = (v: unknown): Record<string, string> => Object.fromEntries(Object.entries((v && typeof v === 'object' ? v : {}) as Record<string, unknown>).filter(([, x]) => typeof x === 'string' && x)) as Record<string, string>
+export const linksOf = (d: DocumentData | undefined): CostLinks => ({ web: strMap(d?.web), names: strMap(d?.names) })
 
 export interface OrderCostBackend {
   load(months: string[]): Promise<SavedCosts>
   save(entries: CostEntry[]): Promise<void>
+  loadLinks(): Promise<CostLinks>
+  /** Picks a price list product for every line of a website product (web) or with a name (names); '' unlinks. */
+  link(kind: 'web' | 'names', key: string, product: string): Promise<void>
 }
+const cleanEntry = (l: SavedLine) => (l.k ? { n: l.n.slice(0, 400), c: l.c, k: l.k.slice(0, 120) } : { n: l.n.slice(0, 400), c: l.c })
 
 function firestoreBackend(): OrderCostBackend {
   const db = firestore!
@@ -64,18 +79,27 @@ function firestoreBackend(): OrderCostBackend {
       for (const e of entries) {
         const m = monthOf(e.placedAt)
         if (!months.has(m)) months.set(m, {})
-        months.get(m)![e.id] = { lines: e.lines.map((l) => ({ n: l.n.slice(0, 400), c: l.c })), at: serverTimestamp(), byName }
+        months.get(m)![e.id] = { lines: e.lines.map(cleanEntry), at: serverTimestamp(), byName }
       }
       // A batch takes up to 500 writes; one write per month is far below that.
       const batch = writeBatch(db)
       for (const [m, orders] of months) batch.set(doc(db, 'orderCosts', m), { orders }, { merge: true })
       await batch.commit()
     },
+    async loadLinks() {
+      const s = await getDoc(doc(db, 'orderCosts', 'links'))
+      return linksOf(s.exists() ? s.data() : undefined)
+    },
+    async link(kind, key, product) {
+      await setDoc(doc(db, 'orderCosts', 'links'), { [kind]: { [key.slice(0, 200)]: product ? product : deleteField() } }, { merge: true })
+    },
   }
 }
 
 const DEMO_KEY = 'posterpilot.demo.orderCosts.v1'
+const DEMO_LINKS = 'posterpilot.demo.orderLinks.v1'
 function localBackend(): OrderCostBackend {
+  const readLinks = (): CostLinks => { try { return linksOf(JSON.parse(localStorage.getItem(DEMO_LINKS) || '{}')) } catch { return { web: {}, names: {} } } }
   const read = (): SavedCosts => { try { return JSON.parse(localStorage.getItem(DEMO_KEY) || '{}') as SavedCosts } catch { return {} } }
   return {
     async load() { return read() },
@@ -83,6 +107,13 @@ function localBackend(): OrderCostBackend {
       const all = read()
       for (const e of entries) all[e.id] = e.lines
       try { localStorage.setItem(DEMO_KEY, JSON.stringify(all)) } catch { /* the demo then forgets on reload */ }
+    },
+    async loadLinks() { return readLinks() },
+    async link(kind, key, product) {
+      const l = readLinks()
+      if (product) l[kind][key] = product
+      else delete l[kind][key]
+      try { localStorage.setItem(DEMO_LINKS, JSON.stringify(l)) } catch { /* the demo then forgets on reload */ }
     },
   }
 }

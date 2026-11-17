@@ -103,11 +103,20 @@ describe('sales and profit', () => {
   it('uses the cost the product had on the day of the order, and only suggests a later one', () => {
     const hist = { 'ram/r2': [{ at: 1000, cost: 800 }, { at: 2000, cost: 900 }] }
     const o = (placedAt: number) => ({ id: 'W1', placedAt, items: [line('a', { pid: 500 })] })
-    expect(lineCosts(o(1500), ctx({ hist }))).toEqual([{ unit: 800, from: 'list', suggest: null }])
-    expect(lineCosts(o(2500), ctx({ hist }))).toEqual([{ unit: 900, from: 'list', suggest: null }])
-    expect(lineCosts(o(500), ctx({ hist }))).toEqual([{ unit: null, from: null, suggest: 900 }])
+    expect(lineCosts(o(1500), ctx({ hist }))).toEqual([{ unit: 800, from: 'list', suggest: null, key: 'ram/r2', via: 'own' }])
+    expect(lineCosts(o(2500), ctx({ hist }))).toEqual([{ unit: 900, from: 'list', suggest: null, key: 'ram/r2', via: 'own' }])
+    expect(lineCosts(o(500), ctx({ hist }))).toEqual([{ unit: null, from: null, suggest: 900, key: 'ram/r2', via: 'own' }])
     // another option of a linked website product: a suggestion only
     expect(lineCosts({ id: 'W2', placedAt: 0, items: [line('b', { pid: 600, vid: 602 })] }, ctx())).toEqual([{ unit: null, from: null, suggest: 100 }])
+  })
+  it('uses a product picked for the line, for the website product or for the name', () => {
+    const o = { id: 'MS2', placedAt: 0, items: [line('Kingston  RAM 8GB!'), line('w', { pid: 900, vid: 0 })] }
+    expect(orderCost(o, ctx())).toMatchObject({ missing: 2 })
+    const links = { web: { '900:0': 'ram/r1' }, names: { 'kingston ram 8gb': 'ram/r2' } }
+    expect(orderCost(o, ctx({ links }))).toMatchObject({ cost: 2100, missing: 0 })
+    expect(lineCosts(o, ctx({ links }))[0]).toMatchObject({ key: 'ram/r2', via: 'picked', from: 'list' })
+    const saved = { MS2: [{ n: 'Kingston  RAM 8GB!', c: null, k: 'ram/r1' }] }
+    expect(lineCosts(o, ctx({ links, saved }))[0]).toMatchObject({ key: 'ram/r1', unit: 1200 })
   })
   it('a cost saved on the order wins, while the line keeps its name', () => {
     const o = { id: 'MS1', placedAt: 0, items: [line('Old PC specs', { total: 20000 }), line('a', { qty: 2, pid: 500 })] }
@@ -183,5 +192,21 @@ describe('costs saved on orders', () => {
     const out = {}
     savedOf({ orders: { MS1: { lines: [{ n: 'PC', c: 100 }, { n: 'x', c: null }, { n: 'y' }] }, bad: {} } }, out)
     expect(out).toEqual({ MS1: [{ n: 'PC', c: 100 }, { n: 'x', c: null }, { n: 'y', c: null }] })
+  })
+})
+
+import { bestMatches, nameScore, plainName } from '../src/data/nameMatch'
+describe('matching order lines to price list names', () => {
+  const list = [
+    { name: 'Lenovo Legion R24e 24" FHD IPS 180Hz' }, { name: 'Lenovo Legion 27Q-10 27" 2K IPS 240Hz' }, { name: 'MSI MAG 275QF 27" 2K' }, { name: 'Jedel WKL-102 Keyboard' },
+  ]
+  it('finds the same product under another name', () => {
+    expect(plainName('AMD Ryzen™ 7 5800X ')).toBe('amd ryzen 7 5800x')
+    expect(bestMatches('Lenovo Legion R24e 23.8-inch IPS FHD 180Hz Gaming Monitor', list)[0].item.name).toBe(list[0].name)
+    expect(bestMatches('MSI MAG 275QF E21 27" 2K Rapid IPS 210Hz 0.5ms', list)[0].item.name).toBe(list[2].name)
+    expect(bestMatches('Jedel WKL-102 Gaming Keyboard', list)[0].item.name).toBe(list[3].name)
+    expect(bestMatches('Thermal paste', list)).toEqual([])
+    expect(bestMatches('Lenovo Legion 27Q-10 27" 2K IPS 240Hz 0.5ms', [{ name: 'Lenovo Legion 27Q-11 27" 2K 300Hz' }, list[1]])[0].item).toBe(list[1])
+    expect(nameScore('a', '')).toBe(0)
   })
 })

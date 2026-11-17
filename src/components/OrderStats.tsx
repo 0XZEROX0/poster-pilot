@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useCosts, useCostShown } from '../data/costs'
 import { cairoNow } from '../data/logic'
-import { monthsBetween, orderCosts, type CostEntry, type SavedCosts } from '../data/orderCosts'
+import { monthsBetween, NO_LINKS, orderCosts, type CostEntry, type CostLinks, type SavedCosts } from '../data/orderCosts'
+import { bestMatches, plainName } from '../data/nameMatch'
+import { costKey } from '../data/costMath'
 import { PERIOD_LABEL, PERIODS, periodDays, periodRange, statsOf, sumsBy, webIndex, type CostCtx, type OrderLine, type Period, type Sums } from '../data/orderStats'
-import { orderNo, orders, SOURCE_LABEL, type Order } from '../data/orders'
-import { usePrices } from '../data/prices'
+import { isManual, orderNo, orders, SOURCE_LABEL, stepBy, type Order } from '../data/orders'
+import { matches, usePrices, type PriceItem } from '../data/prices'
 import { allowed } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { CostEye } from './PricesView'
-import { Empty, showToast } from './ui'
+import { Empty, SearchBox, showToast } from './ui'
 
 // Sales (and, for roles that may see cost, profit) of website orders and orders added by hand, for a period.
 
@@ -50,7 +52,9 @@ export function OrderStats({ onOpen }: { onOpen: (o: Order) => void }) {
       </p>
       {error && <p className="banner banner-bad" dir="ltr">{/permission/i.test(error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error}</p>}
       {list === null && !error ? <p className="muted">{t('Loading…')}</p>
-        : list && (seeCost ? <WithCost list={list} days={days} onOpen={onOpen} /> : <Body list={list} ctx={null} onOpen={onOpen} />)}
+        : list && (seeCost
+          ? <WithCost list={list} days={days} onOpen={onOpen} onOrders={(changed) => setList((l) => l && l.map((x) => changed.find((c) => c.id === x.id) ?? x))} />
+          : <Body list={list} ctx={null} onOpen={onOpen} />)}
     </div>
   )
 }
@@ -59,27 +63,79 @@ export function OrderStats({ onOpen }: { onOpen: (o: Order) => void }) {
  * Reads the costs, the website links (to know what website lines cost) and the costs saved on orders, only for
  * roles that may see cost. Saved order costs are one document per month of the period.
  */
-function WithCost({ list, days, onOpen }: { list: Order[]; days: { from: string; to: string }; onOpen: (o: Order) => void }) {
+function WithCost({ list, days, onOpen, onOrders }: { list: Order[]; days: { from: string; to: string }; onOpen: (o: Order) => void; onOrders: (changed: Order[]) => void }) {
   const { costs, hist, loaded } = useCosts()
   const { cats } = usePrices()
   const web = useMemo(() => webIndex(cats), [cats])
   const [saved, setSaved] = useState<SavedCosts | null>(null)
+  const [links, setLinks] = useState<CostLinks | null>(null)
   useEffect(() => {
     let live = true
     setSaved(null)
     orderCosts.load(monthsBetween(days.from, days.to)).then((s) => { if (live) setSaved(s) }, () => { if (live) setSaved({}) })
     return () => { live = false }
   }, [days.from, days.to])
-  const ctx = useMemo<CostCtx | null>(() => (loaded && saved ? { costs, hist, web, saved } : null), [loaded, saved, costs, hist, web])
+  useEffect(() => { orderCosts.loadLinks().then(setLinks, () => setLinks(NO_LINKS)) }, [])
+  const ctx = useMemo<CostCtx | null>(() => (loaded && saved && links ? { costs, hist, web, saved, links } : null), [loaded, saved, links, costs, hist, web])
   const onSaved = useCallback((entries: CostEntry[]) => setSaved((s) => {
     const next = { ...(s ?? {}) }
     for (const e of entries) next[e.id] = e.lines
     return next
   }), [])
-  return <Body list={list} ctx={ctx} onOpen={onOpen} costRole onSaved={onSaved} />
+  const products = useMemo<Product[]>(() => cats.flatMap((c) => c.items.map((it) => ({ key: costKey(c.id, it.id), cat: c.id, ref: it.id, name: it.name, catName: c.name, item: it }))), [cats])
+  const byKey = useMemo(() => Object.fromEntries(products.map((p) => [p.key, p])), [products])
+
+  /**
+   * One line is the price list product p. For one line the choice is kept with the order's costs; for every line of
+   * that website product, or with that name, it goes into orderCosts/links (also for orders still to come). Lines of
+   * orders added in the app or from the old sheet are renamed to the product (with an "edited" step) when the role
+   * may change order details; website orders keep the website's name (changing it would change the website order).
+   */
+  const pick = useCallback(async (target: OrderLine, i: number, p: Product, every: boolean) => {
+    if (!ctx) return
+    const it = target.o.items[i]
+    const kind: 'web' | 'names' = it.pid ? 'web' : 'names'
+    const same = (x: Order['items'][number]) => (it.pid ? x.pid === it.pid && x.vid === it.vid : plainName(x.name) === plainName(it.name))
+    if (every) {
+      const k = it.pid ? `${it.pid}:${it.vid}` : plainName(it.name)
+      await orderCosts.link(kind, k, p.key)
+      setLinks((l) => ({ ...(l ?? NO_LINKS), [kind]: { ...(l ?? NO_LINKS)[kind], [k]: p.key } }))
+    } else {
+      const cur = ctx.saved[target.o.id]
+      const entry: CostEntry = { id: target.o.id, placedAt: target.o.placedAt, lines: target.o.items.map((x, j) => {
+        const was = cur?.[j]?.n === x.name ? cur[j] : undefined
+        const k = j === i ? p.key : was?.k
+        return k ? { n: x.name, c: was?.c ?? null, k } : { n: x.name, c: was?.c ?? null }
+      }) }
+      await orderCosts.save([entry])
+      onSaved([entry])
+    }
+    if (!allowed('orders.change')) return
+    const targets = (every ? list : [target.o]).filter((o) => isManual(o) && o.items.some((x, j) => (every ? same(x) : j === i) && x.name !== p.name))
+    const changed: Order[] = []
+    for (const o of targets) {
+      const items = o.items.map((x, j) => ((every ? same(x) : j === i) ? { ...x, name: p.name, cat: p.cat, ref: p.ref, pid: 0, vid: 0 } : x))
+      const step = stepBy('edited', `${t('Product')}: ${it.name} → ${p.name}`)
+      await orders.relink(o, items, step)
+      changed.push({ ...o, items, steps: [...o.steps, step] })
+    }
+    if (changed.length) onOrders(changed)
+  }, [ctx, list, onSaved, onOrders])
+  const kit = useMemo<Kit | null>(() => (ctx ? { products, byKey, pick, saved: ctx.saved, onSaved, list } : null), [ctx, products, byKey, pick, onSaved, list])
+  return <Body list={list} ctx={ctx} onOpen={onOpen} costRole kit={kit} />
 }
 
-function Body({ list, ctx, onOpen, costRole, onSaved }: { list: Order[]; ctx: CostCtx | null; onOpen: (o: Order) => void; costRole?: boolean; onSaved?: (e: CostEntry[]) => void }) {
+type Product = { key: string; cat: string; ref: string; name: string; catName: string; item: PriceItem }
+type Kit = {
+  products: Product[]
+  byKey: Record<string, Product>
+  pick: (target: OrderLine, i: number, p: Product, every: boolean) => Promise<void>
+  saved: SavedCosts
+  onSaved: (e: CostEntry[]) => void
+  list: Order[]
+}
+
+function Body({ list, ctx, onOpen, costRole, kit }: { list: Order[]; ctx: CostCtx | null; onOpen: (o: Order) => void; costRole?: boolean; kit?: Kit | null }) {
   const shown = useCostShown()
   const s = useMemo(() => statsOf(list, ctx), [list, ctx])
   const showProfit = Boolean(costRole && shown && ctx)
@@ -110,7 +166,7 @@ function Body({ list, ctx, onOpen, costRole, onSaved }: { list: Order[]; ctx: Co
       <Split title="By sales rep" rows={sumsBy(list, ctx, (o) => o.rep).map(([k, x]) => [k || 'No sales rep', x] as [string, Sums])} profit={profit} costRole={costRole} />
       <Split title="By category" rows={sumsBy(list, ctx, (o) => (o.category === 'ACC' ? 'Accessories' : o.category)).map(([k, x]) => [k || 'No category', x] as [string, Sums])} profit={profit} costRole={costRole} />
 
-      {showProfit && ctx && onSaved && s.lines.length > 0 && <CostFix lines={s.lines} onSaved={onSaved} />}
+      {showProfit && kit && s.lines.length > 0 && <CostFix lines={s.lines} kit={kit} />}
 
       {s.lines.length > 0 && (
         <>
@@ -158,7 +214,8 @@ const cleanNum = (v: string) => { const n = Number(v.replace(/[^\d.]/g, '')); re
  * Completed orders whose items do not all have a known cost, to fill in: type what a line cost (for one), or take
  * the suggested cost (today's price list cost of the same product). "All completed" lets a cost be corrected too.
  */
-function CostFix({ lines, onSaved }: { lines: OrderLine[]; onSaved: (e: CostEntry[]) => void }) {
+function CostFix({ lines, kit }: { lines: OrderLine[]; kit: Kit }) {
+  const { onSaved } = kit
   const [all, setAll] = useState(false)
   const [max, setMax] = useState(PAGE)
   const [sure, setSure] = useState(false)
@@ -170,7 +227,7 @@ function CostFix({ lines, onSaved }: { lines: OrderLine[]; onSaved: (e: CostEntr
   async function useAll() {
     if (!sure) { setSure(true); return }
     setBusy(true)
-    const entries: CostEntry[] = bulk.map(({ o, lines: lc }) => ({ id: o.id, placedAt: o.placedAt, lines: o.items.map((it, i) => ({ n: it.name, c: lc![i].from === 'order' ? lc![i].unit : lc![i].unit === null ? lc![i].suggest : null })) }))
+    const entries: CostEntry[] = bulk.map(({ o, lines: lc }) => ({ id: o.id, placedAt: o.placedAt, lines: o.items.map((_, i) => withK(kit, o, i, lc![i].from === 'order' ? lc![i].unit : lc![i].unit === null ? lc![i].suggest : null)) }))
     try {
       await orderCosts.save(entries)
       onSaved(entries)
@@ -197,7 +254,7 @@ function CostFix({ lines, onSaved }: { lines: OrderLine[]; onSaved: (e: CostEntr
       )}
       {!shownList.length ? <p className="muted">{t('Every completed order in these days has a cost.')}</p> : (
         <div className="os-lines">
-          {shownList.map((l) => <FixCard key={l.o.id} line={l} onSaved={onSaved} />)}
+          {shownList.map((l) => <FixCard key={l.o.id} line={l} kit={kit} />)}
         </div>
       )}
       {(all ? lines : missing).length > max && <button className="btn" onClick={() => setMax((m) => m + PAGE)}>{t('Show more')}</button>}
@@ -205,8 +262,17 @@ function CostFix({ lines, onSaved }: { lines: OrderLine[]; onSaved: (e: CostEntr
   )
 }
 
-function FixCard({ line, onSaved }: { line: OrderLine; onSaved: (e: CostEntry[]) => void }) {
+/** A line as saved: its name, cost and the product picked for that one line (kept when the cost changes). */
+function withK(kit: Kit, o: Order, i: number, c: number | null) {
+  const was = kit.saved[o.id]?.[i]
+  const k = was && was.n === o.items[i].name ? was.k : undefined
+  return k ? { n: o.items[i].name, c, k } : { n: o.items[i].name, c }
+}
+
+function FixCard({ line, kit }: { line: OrderLine; kit: Kit }) {
+  const { onSaved } = kit
   const { o, sale, lines } = line
+  const [picking, setPicking] = useState<number | null>(null)
   const lc = lines ?? []
   const start = () => o.items.map((_, i) => (lc[i]?.from === 'order' && lc[i].unit !== null ? String(lc[i].unit) : ''))
   const [vals, setVals] = useState<string[]>(start)
@@ -220,7 +286,7 @@ function FixCard({ line, onSaved }: { line: OrderLine; onSaved: (e: CostEntry[])
   const dirty = vals.some((v, i) => v !== start()[i])
   async function save() {
     setBusy(true)
-    const entry: CostEntry = { id: o.id, placedAt: o.placedAt, lines: o.items.map((it, i) => ({ n: it.name, c: cleanNum(vals[i] ?? '') })) }
+    const entry: CostEntry = { id: o.id, placedAt: o.placedAt, lines: o.items.map((_, i) => withK(kit, o, i, cleanNum(vals[i] ?? ''))) }
     try {
       await orderCosts.save([entry])
       onSaved([entry])
@@ -247,6 +313,12 @@ function FixCard({ line, onSaved }: { line: OrderLine; onSaved: (e: CostEntry[])
             <button type="button" className="btn btn-small" onClick={() => setVals((v) => v.map((x, j) => (j === i ? String(lc[i].suggest) : x)))}>{tn('Use %m', { m: money(lc[i].suggest!) })}</button>
           )}
           {lc[i]?.from === 'list' && !vals[i] && <small className="muted">{t('From the price list')}</small>}
+          <div className="os-fix-link">
+            {lc[i]?.key && kit.byKey[lc[i].key!]
+              ? <small className="muted" dir="auto">= {kit.byKey[lc[i].key!].name}{lc[i].via === 'picked' && <> · <button type="button" className="linkish" onClick={() => setPicking(picking === i ? null : i)}>{t('Change')}</button></>}</small>
+              : <button type="button" className="btn btn-small" onClick={() => setPicking(picking === i ? null : i)}>{t('Pick the product')}</button>}
+          </div>
+          {picking === i && <ProductPick line={line} i={i} kit={kit} onDone={() => setPicking(null)} />}
         </div>
       ))}
       <div className="os-fix-foot">
@@ -255,6 +327,50 @@ function FixCard({ line, onSaved }: { line: OrderLine; onSaved: (e: CostEntry[])
         </span>
         <button className="btn btn-primary btn-small" disabled={busy || !dirty} onClick={save}>{t('Save')}</button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Picks the price list product an order line is: the names most like the line's first, or search. "Every item
+ * like this" links all lines of the same website product (or with the same name), in other orders too.
+ */
+function ProductPick({ line, i, kit, onDone }: { line: OrderLine; i: number; kit: Kit; onDone: () => void }) {
+  const it = line.o.items[i]
+  const [q, setQ] = useState('')
+  const [every, setEvery] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const likely = useMemo(() => bestMatches(it.name, kit.products, 4), [it.name, kit.products])
+  const found = useMemo(() => (q.trim() ? kit.products.filter((p) => matches(p.item, q)).slice(0, 8) : []), [q, kit.products])
+  const same = kit.list.filter((o) => o.items.some((x) => (it.pid ? x.pid === it.pid && x.vid === it.vid : plainName(x.name) === plainName(it.name)))).length
+  async function choose(p: Product) {
+    setBusy(true)
+    try {
+      await kit.pick(line, i, p, every)
+      showToast(t('Saved'))
+      onDone()
+    } catch (e) {
+      showToast(/permission/i.test(String(e)) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : String(e))
+    }
+    setBusy(false)
+  }
+  const row = (p: Product, score?: number) => (
+    <button key={p.key} type="button" className="os-pick-row" disabled={busy} onClick={() => choose(p)}>
+      <span dir="auto">{p.name}</span>
+      <small className="muted">{p.catName}{score !== undefined ? ` · ${Math.round(score * 100)}%` : ''}</small>
+    </button>
+  )
+  return (
+    <div className="os-pick">
+      {likely.length > 0 && !q.trim() && <><small className="muted">{t('Looks like')}</small>{likely.map((m) => row(m.item, m.score))}</>}
+      <SearchBox value={q} onChange={setQ} placeholder={t('Search the price list')} />
+      {found.map((p) => row(p))}
+      {q.trim() && !found.length && <small className="muted">{t('Nothing found')}</small>}
+      <label className="os-pick-all">
+        <input type="checkbox" checked={every} onChange={(e) => setEvery(e.target.checked)} />
+        <span>{it.pid ? t('Every order of this website product') : t('Every item with this name')}{same > 1 ? ` · ${tn('%n orders in these days', { n: same })}` : ''}</span>
+      </label>
+      <small className="muted">{isManual(line.o) ? (allowed('orders.change') ? t('The item is renamed to the product in the order.') : t('Your role cannot change orders, so the name stays; the cost still uses the product.')) : t('Website orders keep the website\'s name; the cost uses the product.')}</small>
     </div>
   )
 }
