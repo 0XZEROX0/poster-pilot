@@ -74,6 +74,14 @@ export function createLocalBackend(): Backend {
       if (!p) return
       // No poster is made for an offer nobody approved yet.
       if (p.offer === '' || p.offer === 'Rejected') return
+      if (p.takeDown === 'asked') {
+        // Delete from Facebook and Instagram: gone from both.
+        const now = cairoNow()
+        patchPost(id, { takeDown: 'done', takeDownNote: `Facebook: removed. Instagram: removed. ${now.date} ${now.time}`, igStatus: `Removed from Instagram ${now.date} ${now.time}` })
+        system(id, 'fb.removed')
+        system(id, 'ig.removed')
+        return
+      }
       if (p.feedback === 'Redo' || !p.posterUrl || !p.photoStatus) {
         patchPost(id, { posterUrl: DEMO_POSTER, photoStatus: 'OK', feedback: '', caption: p.caption || buildCaption(p, data.templates), items: p.items.map((i) => ({ ...i, nextPhoto: false })) })
         system(id, 'poster.built')

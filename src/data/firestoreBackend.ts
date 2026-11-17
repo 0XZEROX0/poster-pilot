@@ -20,7 +20,7 @@ import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry,
 // tell what the person changed and carry it out. `appDirty` is true while something is waiting, so
 // the engine can ask for just those posts. The engine removes each entry when it is done.
 
-const APP_ONLY = new Set(['ignoredProblem', 'offerNote', 'offerBy', 'marketAsk', 'photoAsk', 'storyDesign'])
+const APP_ONLY = new Set(['ignoredProblem', 'offerNote', 'offerBy', 'marketAsk', 'photoAsk', 'storyDesign', 'takeDown', 'takeDownAt', 'takeDownBy'])
 
 const blankPost: Omit<Post, 'id'> = {
   order: 0, items: [], company: '', priceBefore: '', priceAfter: '', style: '', details: '', posterUrl: '', photoStatus: '', feedback: '',
@@ -116,6 +116,8 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       // A changed offer (items or price) or one sent for approval again needs a new competitor check.
       if (patch.marketAsk || patch.items || patch.priceBefore !== undefined || patch.priceAfter !== undefined || patch.offer === '') jobs.push('market')
       if (patch.photoAsk) jobs.push('photos')
+      // "Delete from Facebook and Instagram": its own workflow, started at once.
+      if (patch.takeDown === 'asked') jobs.push('takedown')
       if (jobs.length) nudgeEngine(getAuth(db.app), jobs)
     },
     async removePost(id) {

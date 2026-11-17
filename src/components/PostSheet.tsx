@@ -20,6 +20,8 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const [draft, setDraft] = useState(post)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmPost, setConfirmPost] = useState(false)
+  const [confirmTakeDown, setConfirmTakeDown] = useState(false)
+  const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [designing, setDesigning] = useState(false)
   const stage = stageOf(post)
@@ -69,6 +71,23 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
       setBusy(false)
     }
   }
+  /**
+   * "Delete from Facebook and Instagram": after the person types the confirm word, the engine deletes the published
+   * Page post and the Instagram post. The post itself stays in the app, marked as removed.
+   */
+  async function takeDown() {
+    setBusy(true)
+    try {
+      await backend.updatePost(post.id, { takeDown: 'asked', takeDownAt: Date.now(), takeDownBy: myName() })
+      showToast(t('Being removed from Facebook and Instagram'))
+      setConfirmTakeDown(false)
+      setTyped('')
+    } catch {
+      showToast(t('Could not ask for the delete. Try again.'))
+    } finally {
+      setBusy(false)
+    }
+  }
   /** A story that failed: the same choice is sent again, and the engine tries the places that did not get it. */
   async function retryStory() {
     await backend.updatePost(post.id, { story: post.story ?? '', storyDelay: post.storyDelay ?? '' })
@@ -101,11 +120,16 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const dirty = Object.keys(changes()).length > 0
   // Post now: an approved post with its poster, not on Facebook yet, no unsaved changes, not already asked for.
   const mayPostNow = mayPlan && stage === 'scheduled' && post.feedback === 'Done' && !onFacebook && post.postNow !== 'yes' && !!post.posterUrl && !dirty
+  // Delete from Facebook and Instagram: a published post, not asked for already (a failed try can be asked again).
+  const removing = post.takeDown === 'asked' || post.takeDown === 'working'
+  const removed = post.takeDown === 'done'
+  const mayTakeDown = posted && allowed('social.delete') && !removing && !removed
+  const confirmWord = /^(delete|حذف)$/i.test(typed.trim())
 
   const footer = posted ? (
     <>
       {dirty && <button className="btn btn-primary" onClick={() => save({}, 'Saved')}>{t('Save')}</button>}
-      {post.fbPostId && <a className={dirty ? 'btn' : 'btn btn-primary'} href={`https://www.facebook.com/${post.fbPostId}`} target="_blank" rel="noreferrer"><Icon name="link" size={18} />{t('Open on Facebook')}</a>}
+      {post.fbPostId && !removed && <a className={dirty ? 'btn' : 'btn btn-primary'} href={`https://www.facebook.com/${post.fbPostId}`} target="_blank" rel="noreferrer"><Icon name="link" size={18} />{t('Open on Facebook')}</a>}
     </>
   ) : (
     <>
@@ -228,14 +252,42 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             <textarea dir="auto" rows={9} readOnly={posted} value={draft.caption} onChange={(e) => set({ caption: e.target.value })} />
           </label>
           {!posted && <button className="link" onClick={() => set({ caption: buildCaption(draft, data.templates) })}>{t('Rebuild from template')}</button>}
+          {posted && (removing || removed || post.takeDown === 'failed') && (
+            <div className={post.takeDown === 'failed' ? 'alert' : 'note-box'} role="status">
+              <b><Icon name={removed ? 'check' : post.takeDown === 'failed' ? 'fix' : 'send'} size={18} />{t(removed ? 'Removed from Facebook and Instagram' : post.takeDown === 'failed' ? 'Not fully removed from Facebook and Instagram' : 'Being removed from Facebook and Instagram')}</b>
+              {post.takeDownNote && <p className="small" dir="ltr">{post.takeDownNote}</p>}
+              {post.takeDownBy && <p className="muted small">{t('Asked by')} {post.takeDownBy}</p>}
+            </div>
+          )}
           <PostHistory postId={post.id} />
+          {mayTakeDown && (
+            <div className="danger danger-social">
+              {confirmTakeDown ? (
+                <div className="confirm-takedown" role="alertdialog" aria-labelledby="confirm-takedown-q">
+                  <p id="confirm-takedown-q"><b>{t('Delete this post from Facebook and Instagram?')}</b></p>
+                  <p className="small">{t('It is removed from the Facebook Page and from Instagram for good, with its likes and comments. This cannot be undone. The post stays here in the app.')}</p>
+                  <label>
+                    <span>{t('Type DELETE to confirm')}</span>
+                    <input dir="ltr" autoComplete="off" autoCapitalize="characters" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="DELETE" />
+                  </label>
+                  <div className="confirm-post-actions">
+                    <button className="btn btn-danger" disabled={busy || !confirmWord || dirty} onClick={takeDown}><Icon name="trash" size={18} />{t('Delete from Facebook and Instagram')}</button>
+                    <button className="btn btn-ghost" disabled={busy} onClick={() => { setConfirmTakeDown(false); setTyped('') }}>{t('Cancel')}</button>
+                  </div>
+                  {dirty && <p className="muted small">{t('Save or undo your changes first.')}</p>}
+                </div>
+              ) : (
+                <button className="link link-danger" onClick={() => setConfirmTakeDown(true)}><Icon name="trash" size={16} />{t(post.takeDown === 'failed' ? 'Try deleting from Facebook and Instagram again' : 'Delete from Facebook and Instagram')}</button>
+              )}
+            </div>
+          )}
           {allowed('delete') && (
             <div className="danger">
               {locked ? (
                 <span className="muted">{t('This post is already on the schedule, so it cannot be deleted here.')}</span>
               ) : confirmDelete ? (
                 <>
-                  <span>{t('Delete this post?')}{posted ? ` ${t('It stays on Facebook and Instagram.')}` : ''}</span>
+                  <span>{t('Delete this post?')}{posted && !removed ? ` ${t('It stays on Facebook and Instagram.')}` : ''}</span>
                   <button className="btn btn-danger" onClick={remove}>{t('Delete')}</button>
                   <button className="btn btn-ghost" onClick={() => setConfirmDelete(false)}>{t('Cancel')}</button>
                 </>
