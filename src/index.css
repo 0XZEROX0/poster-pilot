@@ -1406,3 +1406,12 @@ button.stock:hover { filter: brightness(1.15); }
 .se-gif-grid img { width: 100%; height: 100%; object-fit: contain; }
 .se-powered { margin: 0; text-align: center; font-size: 11px; color: rgba(255, 255, 255, 0.5); }
 .se-gif-form { display: flex; gap: 8px; } .se-gif-form .se-words { flex: 1; }
+
+/* Delete from Facebook and Instagram: the confirm asks for a typed word, and the state box after it. */
+.confirm-takedown { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 12px; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 12px; background: rgba(239, 68, 68, 0.06); }
+.confirm-takedown p { margin: 0; }
+.confirm-takedown label { display: flex; flex-direction: column; gap: 4px; }
+.confirm-takedown .btn-danger { flex: 1; }
+.note-box { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
+.note-box b { display: flex; align-items: center; gap: 6px; }
+.note-box p { margin: 0; overflow-wrap: anywhere; }

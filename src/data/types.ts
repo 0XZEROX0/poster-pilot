@@ -85,6 +85,16 @@ export type Post = {
   storyVideo?: string
   /** Engine only: when the designed story picture was saved. */
   storyDesignedAt?: string
+  /**
+   * "Delete from Facebook and Instagram" on a published post: 'asked' after someone confirmed it, then the engine sets
+   * 'working', and 'done' (gone from both) or 'failed' (see takeDownNote; it can be asked again).
+   */
+  takeDown?: '' | 'asked' | 'working' | 'done' | 'failed'
+  /** When it was asked (ms) and who asked. */
+  takeDownAt?: number
+  takeDownBy?: string
+  /** Engine only: what Facebook and Instagram answered, with the Cairo time. */
+  takeDownNote?: string
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
   /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */
