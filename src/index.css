@@ -1537,6 +1537,9 @@ button.stock:hover { filter: brightness(1.15); }
 .os-pick-all { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; justify-content: flex-start; }
 .os-pick-all input { flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; accent-color: var(--accent); }
 .os-pick-all span { flex: 1; }
+.os-fix-log { padding-top: 8px; border-top: 1px solid var(--border); }
+.os-fix-log summary { cursor: pointer; }
+.os-fix-log small { display: block; padding-top: 4px; overflow-wrap: anywhere; }
 .os-fix-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
 .os-fix-foot .good { color: var(--good); }
 .os-fix-foot .bad { color: var(--bad); }
