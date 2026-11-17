@@ -30,11 +30,41 @@ export const profitText = (p: ReturnType<typeof profitOf>) => (p ? `${money(p.pr
 
 const num = (v: unknown) => (typeof v === 'number' && !Number.isNaN(v) ? v : null)
 
-export function costsOf(id: string, d: DocumentData, into: CostMap) {
+/**
+ * When each cost started, oldest first: `${category}/${productId}` -> [{ at, cost }]. A cost counts from its `at`
+ * until the next one, so an order is worked out with what the product cost on the day it was placed. Costs saved
+ * before this history was kept have one entry: the cost from the day it was typed in.
+ */
+export type CostStep = { at: number; cost: number }
+export type CostHist = Record<string, CostStep[]>
+const millis = (v: unknown) => (typeof v === 'number' ? v : (v as { toMillis?: () => number } | null)?.toMillis?.() ?? 0)
+
+export function costsOf(id: string, d: DocumentData, into: CostMap, hist?: CostHist) {
   for (const [pid, v] of Object.entries((d.items ?? {}) as Record<string, DocumentData>)) {
     const c = num(v?.cost)
-    if (c !== null) into[costKey(id, pid)] = c
+    if (c === null) continue
+    into[costKey(id, pid)] = c
+    if (!hist) continue
+    const steps: CostStep[] = Array.isArray(v?.hist)
+      ? (v.hist as DocumentData[]).map((h) => ({ at: millis(h?.at), cost: num(h?.cost) as number })).filter((h) => h.cost !== null && h.cost !== undefined)
+      : []
+    if (!steps.length || steps[steps.length - 1].cost !== c) steps.push({ at: millis(v?.at), cost: c })
+    hist[costKey(id, pid)] = steps.sort((a, b) => a.at - b.at)
   }
+}
+
+/** What a product cost at a moment, from its history; null when its first known cost came later. */
+export function costAt(steps: CostStep[] | undefined, when: number): number | null {
+  if (!steps?.length) return null
+  let out: number | null = null
+  for (const s of steps) if (s.at <= when) out = s.cost
+  return out
+}
+
+/** The history after a new cost (null = emptied: the history goes too). Kept short. */
+export function nextHist(steps: CostStep[] | undefined, cost: number | null, now: number): CostStep[] {
+  if (cost === null) return []
+  return [...(steps ?? []), { at: now, cost }].slice(-30)
 }
 
 /** What the picked parts of a build cost the shop, and how many picked parts have no cost yet. */

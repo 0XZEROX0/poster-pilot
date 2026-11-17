@@ -1,12 +1,15 @@
 import { addDays } from './logic'
-import { costKey, type CostMap } from './costMath'
+import { costAt, costKey, type CostHist, type CostMap } from './costMath'
+import type { SavedCosts } from './orderCosts'
 import { isManual, priceOf, type Order } from './orders'
 
 // Sales and profit of orders (website and added by hand), for a period. Pure sums; the page reads the orders.
 //
 // Orders count by the day they were placed (Cairo). Sales are the completed orders' agreed price (the website total
 // when none was agreed). Delivery is passed on to the courier, so profit = (sales - delivery) - what the items cost.
-// An order whose items do not all have a cost is left out of the profit (and counted, so the page can say so).
+// An order whose items do not all have a known cost is left out of the profit (and counted, so the page can say so):
+// counting it would show the whole sale as profit. A line's cost is the one saved on the order, else the price list
+// cost the product had on the day the order was placed (see lineCosts).
 
 export const PERIODS = ['today', 'yesterday', 'week', 'month', 'lastmonth', 'custom'] as const
 export type Period = (typeof PERIODS)[number]
@@ -46,21 +49,53 @@ export const periodRange = (days: { from: string; to: string }) => ({ from: cair
 /** Website product (and option) -> price list product, from the confirmed website links: `${websiteId}:${optionId}` -> `${cat}/${pid}`. */
 export function webIndex(cats: { id: string; items: { id: string; web?: { id: number; ok: boolean; variation?: number } }[] }[]): Record<string, string> {
   const out: Record<string, string> = {}
-  for (const c of cats) for (const it of c.items) if (it.web?.ok && it.web.id) out[`${it.web.id}:${it.web.variation ?? 0}`] = costKey(c.id, it.id)
+  for (const c of cats) for (const it of c.items) if (it.web?.ok && it.web.id) {
+    out[`${it.web.id}:${it.web.variation ?? 0}`] = costKey(c.id, it.id)
+    // Any option of the same website product: only a suggestion (another colour usually costs about the same).
+    if (!out[`${it.web.id}:*`]) out[`${it.web.id}:*`] = costKey(c.id, it.id)
+  }
   return out
 }
 
-/** What an order's items cost the shop, and how many lines have no cost (or no price list product). */
-export function orderCost(o: Pick<Order, 'items'>, costs: CostMap, web: Record<string, string>): { cost: number; missing: number } {
+/** Everything needed to say what an order cost: price list costs with their history, website links, and costs saved on orders. */
+export type CostCtx = { costs: CostMap; hist: CostHist; web: Record<string, string>; saved: SavedCosts }
+
+/**
+ * What one line cost (for one), and where that came from:
+ *  - 'order': typed in (or accepted) for this order: exact;
+ *  - 'list': the price list cost the product had on the day the order was placed;
+ *  - null: not known. `suggest` is then a cost to offer: today's price list cost of the same product (its cost
+ *    was typed in after the order) or of another option of the same website product.
+ */
+export type LineCost = { unit: number | null; from: 'order' | 'list' | null; suggest: number | null }
+
+export function lineCosts(o: Pick<Order, 'id' | 'items' | 'placedAt'>, ctx: CostCtx): LineCost[] {
+  const saved = ctx.saved[o.id]
+  return o.items.map((it, i) => {
+    const s = saved?.[i]
+    if (s && s.c !== null && s.n === it.name) return { unit: s.c, from: 'order', suggest: null }
+    const exact = it.cat && it.ref ? costKey(it.cat, it.ref) : it.pid ? ctx.web[`${it.pid}:${it.vid}`] : undefined
+    if (exact && ctx.costs[exact] !== undefined) {
+      // Without a history (the demo) the cost counts for every day.
+      const steps = ctx.hist[exact]
+      const then = steps ? costAt(steps, o.placedAt) : ctx.costs[exact]
+      return then !== null ? { unit: then, from: 'list', suggest: null } : { unit: null, from: null, suggest: ctx.costs[exact] }
+    }
+    const near = !exact && it.pid ? ctx.web[`${it.pid}:*`] : undefined
+    return { unit: null, from: null, suggest: near && ctx.costs[near] !== undefined ? ctx.costs[near] : null }
+  })
+}
+
+/** What an order's items cost the shop, and how many lines have no known cost. */
+export function orderCost(o: Pick<Order, 'id' | 'items' | 'placedAt'>, ctx: CostCtx): { cost: number; missing: number; lines: LineCost[] } {
+  const lines = lineCosts(o, ctx)
   let cost = 0
   let missing = 0
-  for (const it of o.items) {
-    const key = it.cat && it.ref ? costKey(it.cat, it.ref) : web[`${it.pid}:${it.vid}`]
-    const c = key ? costs[key] : undefined
-    if (c === undefined) missing++
-    else cost += c * (it.qty || 1)
-  }
-  return { cost: Math.round(cost * 100) / 100, missing }
+  lines.forEach((l, i) => {
+    if (l.unit === null) missing++
+    else cost += l.unit * (o.items[i].qty || 1)
+  })
+  return { cost: Math.round(cost * 100) / 100, missing, lines }
 }
 
 export type Sums = {
@@ -83,16 +118,17 @@ export type Sums = {
 const zero = (): Sums => ({ orders: 0, completed: 0, cancelled: 0, open: 0, openValue: 0, sales: 0, delivery: 0, average: 0, profit: 0, costed: 0, uncosted: 0 })
 const r2 = (n: number) => Math.round(n * 100) / 100
 
-export type OrderLine = { o: Order; sale: number; profit: number | null }
+export type OrderLine = { o: Order; sale: number; profit: number | null; cost: number | null; lines: LineCost[] | null; missing: number }
 
-type Row = { o: Order; open: boolean; done: boolean; sale: number; profit: number | null }
-function rowsOf(list: Order[], costs: CostMap | null, web: Record<string, string>): Row[] {
+type Row = OrderLine & { open: boolean; done: boolean }
+function rowsOf(list: Order[], ctx: CostCtx | null): Row[] {
   return list.map((o) => {
     const open = o.status === 'new' || o.status === 'confirmed'
     const done = o.status === 'completed'
     const sale = priceOf(o)
-    const c = done && costs ? orderCost(o, costs, web) : null
-    return { o, open, done, sale, profit: c && !c.missing ? r2(sale - o.shipping - c.cost) : null }
+    const c = done && ctx ? orderCost(o, ctx) : null
+    const whole = c && !c.missing && o.items.length > 0
+    return { o, open, done, sale, profit: whole ? r2(sale - o.shipping - c.cost) : null, cost: whole ? c.cost : null, lines: c?.lines ?? null, missing: c ? (o.items.length ? c.missing : 1) : 0 }
   })
 }
 function add(s: Sums, r: Row) {
@@ -112,19 +148,19 @@ function finish(s: Sums) {
 }
 
 /** Sums for all orders, website ones and ones added by hand; plus each completed order with its profit. */
-export function statsOf(list: Order[], costs: CostMap | null, web: Record<string, string>) {
+export function statsOf(list: Order[], ctx: CostCtx | null) {
   const all = zero(), website = zero(), manual = zero()
-  const rows = rowsOf(list, costs, web)
+  const rows = rowsOf(list, ctx)
   for (const r of rows) { add(all, r); add(isManual(r.o) ? manual : website, r) }
-  const lines: OrderLine[] = rows.filter((r) => r.done).map(({ o, sale, profit }) => ({ o, sale, profit }))
+  const lines: OrderLine[] = rows.filter((r) => r.done).map(({ o, sale, profit, cost, lines: l, missing }) => ({ o, sale, profit, cost, lines: l, missing }))
   lines.sort((a, b) => b.o.placedAt - a.o.placedAt)
   return { all: finish(all), website: finish(website), manual: finish(manual), lines }
 }
 
 /** Sums by any key (sales rep, category, where the order came from), biggest sales first. Empty keys count as "". */
-export function sumsBy(list: Order[], costs: CostMap | null, web: Record<string, string>, key: (o: Order) => string): [string, Sums][] {
+export function sumsBy(list: Order[], ctx: CostCtx | null, key: (o: Order) => string): [string, Sums][] {
   const m = new Map<string, Sums>()
-  for (const r of rowsOf(list, costs, web)) {
+  for (const r of rowsOf(list, ctx)) {
     const k = key(r.o).trim()
     if (!m.has(k)) m.set(k, zero())
     add(m.get(k)!, r)
