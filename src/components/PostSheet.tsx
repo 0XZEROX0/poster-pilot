@@ -8,6 +8,7 @@ import { PostHistory } from './History'
 import { PhotoPicker } from './PhotoPicker'
 import { Poster } from './Poster'
 import { StageChip } from './PostRow'
+import { StoryBox } from './StoryBox'
 import { Sheet } from './Sheet'
 import { Icon, showToast } from './ui'
 
@@ -34,6 +35,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     // A new date or time replaces a "Post now" the engine has not carried out yet.
     if (post.postNow && ('postDate' in out || 'postTime' in out)) out.postNow = ''
     if (post.variants && (draft.title ?? '') !== (post.title ?? '')) out.title = draft.title ?? ''
+    // The story choice: where it goes and how long after the post.
+    if ((draft.story ?? '') !== (post.story ?? '')) out.story = draft.story ?? ''
+    if ((draft.storyDelay ?? '') !== (post.storyDelay ?? '')) out.storyDelay = draft.storyDelay ?? ''
     return out
   }
   async function save(extra: Partial<Post>, message: string) {
@@ -60,6 +64,11 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
       showToast(t('Could not ask for Post now. Try again.'))
       setBusy(false)
     }
+  }
+  /** A story that failed: the same choice is sent again, and the engine tries the places that did not get it. */
+  async function retryStory() {
+    await backend.updatePost(post.id, { story: post.story ?? '', storyDelay: post.storyDelay ?? '' })
+    showToast(t('The story will be tried again'))
   }
   async function remove() {
     await backend.removePost(post.id)
@@ -90,7 +99,10 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const mayPostNow = mayPlan && stage === 'scheduled' && post.feedback === 'Done' && !onFacebook && post.postNow !== 'yes' && !!post.posterUrl && !dirty
 
   const footer = posted ? (
-    post.fbPostId && <a className="btn btn-primary" href={`https://www.facebook.com/${post.fbPostId}`} target="_blank" rel="noreferrer"><Icon name="link" size={18} />{t('Open on Facebook')}</a>
+    <>
+      {dirty && <button className="btn btn-primary" onClick={() => save({}, 'Saved')}>{t('Save')}</button>}
+      {post.fbPostId && <a className={dirty ? 'btn' : 'btn btn-primary'} href={`https://www.facebook.com/${post.fbPostId}`} target="_blank" rel="noreferrer"><Icon name="link" size={18} />{t('Open on Facebook')}</a>}
+    </>
   ) : (
     <>
       {stage === 'offer' ? (
@@ -106,13 +118,14 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
       ) : stage === 'fix' || stage === 'building' ? (
         <>
           {mayEdit && <button className="btn btn-primary" onClick={() => save({ feedback: 'Redo' }, 'Sent for redo')}><Icon name="redo" size={18} />{t('Retry')}</button>}
+          {dirty && <button className="btn" onClick={() => save({}, 'Saved')}>{t('Save')}</button>}
           {mayPlan && post.feedback === 'Done' && (onFacebook || when) && (
             <button className="btn" onClick={() => save({ feedback: 'Cancel' }, 'Schedule cancelled. The post stays approved.')}>{t('Cancel schedule')}</button>
           )}
         </>
       ) : stage === 'scheduled' && confirmPost ? (
         <div className="confirm-post" role="alertdialog" aria-labelledby="confirm-post-q">
-          <p id="confirm-post-q"><b>{t('Publish to Facebook and Instagram now?')}</b><br /><span className="muted small">{t('It goes out within a minute and cannot be taken back from here.')}</span></p>
+          <p id="confirm-post-q"><b>{t('Publish to Facebook and Instagram now?')}</b><br /><span className="muted small">{t('It goes out within a minute and cannot be taken back from here.')}{post.story ? ` ${t('Its story goes out too.')}` : ''}</span></p>
           <div className="confirm-post-actions">
             <button className="btn btn-primary" disabled={busy} onClick={postNow}><Icon name="send" size={18} />{t('Yes, post now')}</button>
             <button className="btn btn-ghost" disabled={busy} onClick={() => setConfirmPost(false)}>{t('Cancel')}</button>
@@ -204,6 +217,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               </p>
             </>
           )}
+          {stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} />}
           <label>
             <span>{t('Caption')}</span>
             <textarea dir="auto" rows={9} readOnly={posted} value={draft.caption} onChange={(e) => set({ caption: e.target.value })} />

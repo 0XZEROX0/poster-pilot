@@ -207,6 +207,40 @@ export function whenOf(p: Post): { date: string; time: string } | null {
   return engine
 }
 
+/** The minutes a story may wait after its post, offered in the post editor. */
+export const STORY_DELAYS = [0, 15, 30, 60, 120, 180] as const
+
+/** True when the post's story goes to this place ('fb' or 'ig'). */
+export const storyTo = (p: Pick<Post, 'story'>, where: 'fb' | 'ig'): boolean => (p.story ?? '').split('+').includes(where)
+
+/** The story's minutes after the post (0 for none or anything that is not a whole number). */
+export function storyDelayOf(p: Pick<Post, 'storyDelay'>): number {
+  const n = Number(String(p.storyDelay ?? '').trim() || 0)
+  return Number.isInteger(n) && n > 0 && n <= 24 * 60 ? n : 0
+}
+
+/** When the post's story goes out: the post's own time plus its delay, in Cairo time. Null without a story or a time. */
+export function storyWhenOf(p: Post): { date: string; time: string } | null {
+  if (!p.story) return null
+  const when = whenOf(p)
+  if (!when) return null
+  const [h, m] = when.time.split(':').map(Number)
+  const total = h * 60 + m + storyDelayOf(p)
+  return { date: addDays(when.date, Math.floor(total / 1440)), time: `${String(Math.floor((total % 1440) / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}` }
+}
+
+/**
+ * Where a post's story stands, for one place: 'off' (not asked for), 'posted', 'failed' (with the engine's text),
+ * or 'waiting' (asked for, not out yet).
+ */
+export function storyStateOf(p: Post, where: 'fb' | 'ig'): { state: 'off' | 'waiting' | 'posted' | 'failed'; text: string } {
+  if (!storyTo(p, where)) return { state: 'off', text: '' }
+  const text = String((where === 'fb' ? p.storyFbStatus : p.storyIgStatus) ?? '').trim()
+  if (/^(posted|published)/i.test(text)) return { state: 'posted', text }
+  if (text && !/^waiting/i.test(text)) return { state: 'failed', text }
+  return { state: 'waiting', text }
+}
+
 /** The engine's automatic slots: 17:00 Cairo, then every 15 minutes, 5 a day. */
 export const SLOT_START = '17:00'
 export const SLOT_STEP_MIN = 15
