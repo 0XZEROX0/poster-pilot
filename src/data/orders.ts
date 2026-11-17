@@ -320,6 +320,15 @@ export function manualOrder(d: Draft, step: Step, now = Date.now()): Omit<Order,
   }
 }
 
+/** The fields a new hand order may be written with (firestore.rules 'manualOrderKeys' + rep and category). label and
+ * shipState come only from the old sheet import, local and push only on website orders, so a new order leaves them out. */
+export const NEW_ORDER_KEYS = ['source', 'wooId', 'number', 'webStatus', 'want', 'status', 'closed', 'placedAt', 'customer', 'phone', 'email', 'address', 'city', 'area',
+  'delivery', 'shipping', 'payMethod', 'items', 'webTotal', 'agreed', 'customerNote', 'date', 'time', 'webError', 'updatedAt', 'steps', 'rep', 'category'] as const
+export function newOrderDoc(o: ReturnType<typeof manualOrder>): [string, Record<string, unknown>] {
+  const { id, ...rest } = o
+  return [id, Object.fromEntries(Object.entries(rest).filter(([k]) => (NEW_ORDER_KEYS as readonly string[]).includes(k)))]
+}
+
 export interface OrderBackend {
   watchOpen(onData: (list: Order[]) => void, onError: (e: Error) => void): () => void
   loadClosed(): Promise<Order[]>
@@ -355,8 +364,8 @@ function firestoreOrders(fs: NonNullable<typeof firestore>): OrderBackend {
       return snap.docs.map((x) => toOrder(x.id, x.data()))
     },
     async add(d) {
-      const { id, ...rest } = manualOrder(d, stepBy('placed', ''))
-      await setDoc(doc(col, id), { ...rest, placedAt: serverTimestamp(), updatedAt: serverTimestamp() })
+      const [id, data] = newOrderDoc(manualOrder(d, stepBy('placed', '')))
+      await setDoc(doc(col, id), { ...data, placedAt: serverTimestamp(), updatedAt: serverTimestamp() })
       return id
     },
     async edit(o, d, step) {

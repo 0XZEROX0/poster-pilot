@@ -231,3 +231,20 @@ describe('matching order lines to price list names', () => {
     expect(nameScore('a', '')).toBe(0)
   })
 })
+
+import { readFileSync } from 'node:fs'
+import { NEW_ORDER_KEYS, newOrderDoc } from '../src/data/orders'
+
+describe('a new hand order matches the database rules', () => {
+  const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8')
+  const listed = (fn: string) => [...(rules.match(new RegExp(`function ${fn}\\(\\) \\{\\s*return \\[([^\\]]*)\\]`))?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1])
+  it('writes only the fields the create rule allows, and all it requires', () => {
+    const allowed = [...listed('manualOrderKeys'), 'rep', 'category']
+    expect([...NEW_ORDER_KEYS].sort()).toEqual(allowed.sort())
+    const d: Draft = { source: 'whatsapp', customer: 'Sara', phone: '010', email: '', address: '', city: '', area: '', delivery: 'pickup', shipping: 0, payMethod: 'Cash', items: [{ name: 'Fan', qty: 1, total: 100, pid: 0, vid: 0 }], customerNote: '', date: '', time: '', status: 'new', agreed: null, rep: '', category: '' }
+    const [, data] = newOrderDoc(manualOrder(d, { at: 1, by: 'u', byName: 'U', kind: 'placed', note: '' }))
+    const keys = [...Object.keys(data), 'placedAt', 'updatedAt']
+    expect(keys.every((k) => allowed.includes(k))).toBe(true)
+    expect(listed('manualOrderKeys').every((k) => keys.includes(k))).toBe(true)
+  })
+})
