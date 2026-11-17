@@ -6,11 +6,13 @@ import { cairoNow } from '../data/logic'
 import { nudgeEngine } from '../data/nudge'
 import { nameOf } from '../data/profiles'
 import {
-  ADDABLE, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, priceOf, progressOf, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
+  ADDABLE, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, priceOf, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
   type Order, type Status, type Step, type StepKind,
 } from '../data/orders'
 import { allowed, isOwner } from '../data/store'
 import { locale, t, tn } from '../i18n'
+import { OrderForm } from './OrderForm'
+import { OrderStats } from './OrderStats'
 import { Sheet } from './Sheet'
 import { useDesktop } from './useDesktop'
 import { Empty, Icon, SearchBox, showToast } from './ui'
@@ -22,14 +24,14 @@ const FILTERS: Filter[] = ['open', 'new', 'confirmed', 'completed', 'cancelled']
 const STEP_TITLE: Record<StepKind, string> = {
   placed: 'Order placed on the website', called: 'Called the customer', confirmed: 'Order confirmed', date: 'Date and time set', price: 'Agreed price changed',
   paid: 'Payment received', ready: 'Ready for pickup', out: 'Out for delivery', delivered: 'Delivered, order completed', cancelled: 'Order cancelled',
-  reopened: 'Order opened again', note: 'Note', website: 'Status changed on the website',
+  reopened: 'Order opened again', note: 'Note', website: 'Status changed on the website', edited: 'Order details changed',
 }
 const STEP_BUTTON: Record<StepKind, string> = {
   placed: 'Placed', called: 'Called', confirmed: 'Confirm order', date: 'Date and time', price: 'Agreed price', paid: 'Payment', ready: 'Ready for pickup',
-  out: 'Out for delivery', delivered: 'Delivered (complete)', cancelled: 'Cancel order', reopened: 'Open again', note: 'Note', website: 'Website',
+  out: 'Out for delivery', delivered: 'Delivered (complete)', cancelled: 'Cancel order', reopened: 'Open again', note: 'Note', website: 'Website', edited: 'Edit',
 }
 const STEP_TONE: Partial<Record<StepKind, string>> = { placed: 'b', confirmed: 'b', date: 'b', paid: 'g', ready: 'o', out: 'o', delivered: 'g', cancelled: 'r', called: 'b', website: '' }
-const STEP_ICON: Partial<Record<StepKind, string>> = { placed: 'globe', called: 'whatsapp', date: 'calendar', price: 'prices', paid: 'check', note: 'edit', cancelled: 'close', website: 'globe', out: 'send', reopened: 'redo' }
+const STEP_ICON: Partial<Record<StepKind, string>> = { placed: 'globe', called: 'whatsapp', date: 'calendar', price: 'prices', paid: 'check', note: 'edit', cancelled: 'close', website: 'globe', out: 'send', reopened: 'redo', edited: 'edit' }
 const PROGRESS = ['Placed', 'Confirmed', 'Paid', 'Ready or on the way', 'Delivered']
 
 const money = (n: number) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} EGP`
@@ -49,6 +51,7 @@ function StatusChip({ o }: { o: Order }) {
 
 /** Whether the website has caught up with the app. */
 function SyncChip({ o }: { o: Order }) {
+  if (isManual(o)) return <span className="chip">{t(SOURCE_LABEL[o.source])}</span>
   if (o.webError) return <span className="chip chip-bad" title={o.webError}>{t('Website refused')}</span>
   if (o.want) return <span className="chip">{t('Sending to website…')}</span>
   return null
@@ -63,6 +66,11 @@ export function OrdersView() {
   const [filter, setFilter] = useState<Filter>('open')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  const [view, setView] = useState<'list' | 'stats'>('list')
+  const [form, setForm] = useState<{ edit?: Order } | null>(null)
+  const canEdit = allowed('orders.edit')
+  /** An order opened from the sales page that is not among the loaded ones. */
+  const [extra, setExtra] = useState<Order | null>(null)
 
   useEffect(() => orders.watchOpen((list) => { setOpen(list); setError('') }, (e) => setError(String(e))), [])
   // Closed orders are read once, only when someone looks for them.
@@ -76,8 +84,9 @@ export function OrdersView() {
     const byId = new Map<string, Order>()
     for (const x of closed ?? []) byId.set(x.id, x)
     for (const x of open ?? []) byId.set(x.id, x)
+    if (extra && !byId.has(extra.id)) byId.set(extra.id, extra)
     return [...byId.values()]
-  }, [open, closed])
+  }, [open, closed, extra])
   const counts = useMemo(() => {
     const c: Record<string, number> = { open: 0 }
     for (const x of open ?? []) { c[x.status] = (c[x.status] ?? 0) + 1; if (!x.closed) c.open++ }
@@ -105,12 +114,41 @@ export function OrdersView() {
       key={current.id}
       o={current}
       onDeleted={() => setSelected(null)}
+      onEdit={() => setForm({ edit: current })}
       onClosed={(o) => setClosed((c) => (c ? [o, ...c.filter((x) => x.id !== o.id)] : c))}
     />
   )
 
+  const formSheet = form && (
+    <OrderForm
+      edit={form.edit}
+      onClose={() => setForm(null)}
+      onSaved={(id) => { setForm(null); setView('list'); if (!form.edit) { setFilter('open'); setSearch('') } setSelected(id) }}
+    />
+  )
+  const top = (
+    <div className="os-switch">
+      <div className="seg">
+        <button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>{t('Orders')}</button>
+        <button className={view === 'stats' ? 'on' : ''} onClick={() => setView('stats')}>{t('Sales')}</button>
+      </div>
+      {canEdit && <button className="btn btn-primary" onClick={() => setForm({})}><Icon name="plus" size={20} />{t('Add order')}</button>}
+    </div>
+  )
+
+  if (view === 'stats') {
+    return (
+      <div className="mt">
+        {top}
+        <OrderStats onOpen={(o) => { setExtra(o); setSelected(o.id); setView('list') }} />
+        {formSheet}
+      </div>
+    )
+  }
+
   return (
     <div className="mt">
+      {top}
       <div className="mt-top">
         <div className="filters">
           {FILTERS.map((f) => (
@@ -148,11 +186,12 @@ export function OrdersView() {
         {desktop && <div className="mt-side">{detail ?? <Empty icon="cart" text={t('Pick an order to see its log.')} />}</div>}
       </div>
       {!desktop && current && <Sheet title={orderNo(current)} onClose={() => setSelected(null)}>{detail}</Sheet>}
+      {formSheet}
     </div>
   )
 }
 
-function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => void; onClosed: (o: Order) => void }) {
+function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: () => void; onClosed: (o: Order) => void; onEdit: () => void }) {
   const [kind, setKind] = useState<StepKind | null>(null)
   const [note, setNote] = useState('')
   const [amount, setAmount] = useState('')
@@ -166,6 +205,7 @@ function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => vo
   const price = priceOf(o)
   const paid = paidOf(o)
   const left = leftOf(o)
+  const manual = isManual(o)
   const reopenable = o.status === 'completed' || o.status === 'cancelled'
   const choices: StepKind[] = o.closed ? (reopenable ? ['reopened', 'paid', 'note'] : ['note'])
     : ADDABLE.filter((k) => !(k === 'confirmed' && o.status === 'confirmed') && !(k === 'ready' && o.delivery === 'delivery') && !(k === 'out' && o.delivery === 'pickup'))
@@ -183,7 +223,7 @@ function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => vo
 
   async function add() {
     if (!kind || !amountOk || !dateOk) return
-    if (kind === 'cancelled' && !confirm(tn('Cancel order %n? The website order is cancelled too.', { n: orderNo(o) }))) return
+    if (kind === 'cancelled' && !confirm(manual ? tn('Cancel order %n?', { n: orderNo(o) }) : tn('Cancel order %n? The website order is cancelled too.', { n: orderNo(o) }))) return
     if (kind === 'delivered' && left > 0 && !confirm(tn('%m is still unpaid. Complete the order anyway?', { m: money(left) }))) return
     setBusy(true)
     const step: Step = stepBy(kind, note, kind === 'paid' ? { amount: Number(amount), method } : kind === 'price' ? { amount: Number(amount) } : kind === 'date' ? { date, time } : {})
@@ -191,7 +231,7 @@ function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => vo
       await orders.addStep(o, step)
       const extra = kind === 'paid' ? `${money(step.amount ?? 0)} · ${method}` : kind === 'price' ? money(step.amount ?? 0) : kind === 'date' ? whenLabel({ date, time }) : ''
       track('orders', 'order.step', { what: `${orderNo(o)} · ${o.customer}`, note: [STEP_TITLE[kind], extra, step.note].filter(Boolean).join(': '), ref: o.id })
-      if (['confirmed', 'delivered', 'cancelled', 'reopened'].includes(kind)) tellEngine()
+      if (!manual && ['confirmed', 'delivered', 'cancelled', 'reopened'].includes(kind)) tellEngine()
       if (kind === 'delivered' || kind === 'cancelled') onClosed({ ...o, steps: [...o.steps, step], status: kind === 'delivered' ? 'completed' : 'cancelled', closed: true, updatedAt: Date.now() })
       setKind(null)
       setNote('')
@@ -206,7 +246,7 @@ function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => vo
     } catch (e) { refused(e) }
   }
   async function remove() {
-    if (!confirm(tn('Remove order %n from the app? It stays on the website.', { n: orderNo(o) }))) return
+    if (!confirm(manual ? tn('Delete order %n? This cannot be undone.', { n: orderNo(o) }) : tn('Remove order %n from the app? It stays on the website.', { n: orderNo(o) }))) return
     try {
       await orders.remove(o)
       track('orders', 'order.deleted', { what: `${orderNo(o)} · ${o.customer}`, ref: o.id })
@@ -229,12 +269,14 @@ function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => vo
         <div className="mt-acts">
           {wa && <a className="btn btn-sm mt-wa" href={`https://wa.me/${wa}?text=${encodeURIComponent(waMessage(o))}`} target="_blank" rel="noreferrer"><Icon name="whatsapp" size={18} />WhatsApp</a>}
           {o.phone && <a className="btn btn-sm" href={`tel:${o.phone.replace(/[^\d+]/g, '')}`}><Icon name="user" size={18} />{t('Call')}</a>}
+          {manual && canEdit && <button className="btn btn-sm" onClick={onEdit}><Icon name="edit" size={18} />{t('Edit')}</button>}
           {owner && <button className="btn btn-sm mt-del" onClick={remove} aria-label={t('Remove from the app')}><Icon name="trash" size={18} /></button>}
         </div>
       </div>
       <div className="or-status">
         <StatusChip o={o} />
-        <span className="small t2">{tn('Website: %s', { s: t(WEB_LABEL[o.webStatus] ?? o.webStatus ?? '—') })}</span>
+        {manual ? <span className="small t2">{tn('Added in the app · %s', { s: t(SOURCE_LABEL[o.source]) })}</span>
+          : <span className="small t2">{tn('Website: %s', { s: t(WEB_LABEL[o.webStatus] ?? o.webStatus ?? '—') })}</span>}
         <SyncChip o={o} />
       </div>
       {o.webError && <p className="banner banner-bad mt-late" dir="auto">{tn('The website did not take the last change: %e', { e: o.webError })}</p>}
@@ -253,7 +295,7 @@ function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => vo
             <tr key={n}><td dir="auto">{i.name}</td><td className="num">{i.qty > 1 ? `× ${i.qty}` : ''}</td><td className="num" dir="ltr">{money(i.total)}</td></tr>
           ))}
           {o.shipping > 0 && <tr><td>{t('Delivery')}</td><td /><td className="num" dir="ltr">{money(o.shipping)}</td></tr>}
-          <tr className="sum"><td>{t('Website total')}</td><td /><td className="num" dir="ltr">{money(o.webTotal)}</td></tr>
+          <tr className="sum"><td>{t(manual ? 'Total' : 'Website total')}</td><td /><td className="num" dir="ltr">{money(o.webTotal)}</td></tr>
         </tbody>
       </table>
       <div className="or-money">
@@ -284,7 +326,7 @@ function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => vo
                 <label><span>{t('Time (optional)')}</span><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
               </div>
             )}
-            {(kind === 'confirmed' || kind === 'delivered' || kind === 'cancelled' || kind === 'reopened') && (
+            {!manual && (kind === 'confirmed' || kind === 'delivered' || kind === 'cancelled' || kind === 'reopened') && (
               <p className="small t2">{tn('The website order becomes %s.', { s: t(kind === 'confirmed' || kind === 'reopened' ? 'Processing' : kind === 'delivered' ? 'Completed' : 'Cancelled') })}</p>
             )}
             <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} dir="auto" placeholder={t(kind === 'paid' ? 'For example: deposit for shipping (optional)' : 'What happened? (optional)')} />
@@ -304,11 +346,11 @@ function OrderDetail({ o, onDeleted, onClosed }: { o: Order; onDeleted: () => vo
               <li key={`${s.at}-${i}`}>
                 <span className={`mt-dot ${STEP_TONE[s.kind] ?? ''}`}><Icon name={STEP_ICON[s.kind] ?? 'check'} size={13} /></span>
                 <div>
-                  <h4>{t(STEP_TITLE[s.kind])}{extra && <span className="or-extra" dir="auto"> · {extra}</span>}</h4>
+                  <h4>{t(s.kind === 'placed' && manual ? 'Order added in the app' : STEP_TITLE[s.kind])}{extra && <span className="or-extra" dir="auto"> · {extra}</span>}</h4>
                   {s.note && <p dir="auto">{s.note}</p>}
                   <small>{when(s.at)} · {s.by === 'website' ? t('Website') : nameOf(s.by, s.byName) || t('Someone')}</small>
                 </div>
-                {owner && s.kind !== 'placed' && s.kind !== 'website' && <button className="icon-btn mt-x" onClick={() => takeOut(i)} aria-label={t('Take this step out')}><Icon name="close" size={16} /></button>}
+                {owner && s.kind !== 'placed' && s.kind !== 'website' && s.kind !== 'edited' && <button className="icon-btn mt-x" onClick={() => takeOut(i)} aria-label={t('Take this step out')}><Icon name="close" size={16} /></button>}
               </li>
             )
           })}

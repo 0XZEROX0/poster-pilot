@@ -22,7 +22,7 @@ export const ACTIVITY_ACTS = {
   people: ['join.accepted', 'join.declined', 'member.removed', 'member.role', 'role.saved', 'role.deleted', 'code.reset'],
   settings: ['templates.saved', 'engine.run'],
   tickets: ['ticket.opened', 'ticket.step', 'ticket.edited', 'ticket.deleted', 'ticket.step_removed'],
-  orders: ['order.step', 'order.step_removed', 'order.deleted'],
+  orders: ['order.added', 'order.edited', 'order.step', 'order.step_removed', 'order.deleted'],
 } as const
 type AppWrites = typeof ACTIVITY_ACTS
 export type WriteApp = keyof AppWrites
@@ -56,6 +56,8 @@ export const ACTIVITY_TEXT: Record<string, string> = {
   'ticket.edited': 'Maintenance ticket changed',
   'ticket.deleted': 'Maintenance ticket deleted',
   'ticket.step_removed': 'Maintenance step taken out',
+  'order.added': 'Order added by hand',
+  'order.edited': 'Order details changed',
   'order.step': 'Order step added',
   'order.step_removed': 'Order step taken out',
   'order.deleted': 'Order removed from the app',

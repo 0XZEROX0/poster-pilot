@@ -1433,3 +1433,38 @@ button.stock:hover { filter: brightness(1.15); }
 .note-box { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
 .note-box b { display: flex; align-items: center; gap: 6px; }
 .note-box p { margin: 0; overflow-wrap: anywhere; }
+
+/* Orders: switch between the list and the sales page, the add/edit form, the sales page. */
+.os-switch { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.os-switch > .btn { flex: none; }
+.or-lines { display: grid; gap: 8px; }
+.or-label { font-size: 0.8125rem; font-weight: 600; color: var(--text-2); }
+.or-line { display: grid; grid-template-columns: minmax(0, 1fr) 64px 110px auto; gap: 8px; align-items: end; padding: 8px; border-radius: 12px; background: var(--surface-2); }
+.or-line label { gap: 2px !important; }
+.or-line small { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
+.or-line .icon-btn { align-self: center; }
+.or-line-hint { grid-column: 1 / -1; font-weight: 500 !important; }
+.or-lines > .btn { justify-self: start; }
+.or-form-total { margin: 0; font-size: 0.95rem; }
+@media (max-width: 520px) {
+  .or-line { grid-template-columns: minmax(0, 1fr) 64px auto; }
+  .or-line-name { grid-column: 1 / -1; }
+  .or-line-price { grid-column: 1 / 2; }
+}
+.os { display: grid; gap: 14px; min-width: 0; }
+.os .form { max-width: 420px; }
+.os-tiles .tile b { font-size: 1.6rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.desk .os-tiles .tile b { font-size: 1.9rem; }
+.os-tiles .tile small { font-size: 0.78rem; }
+.os-eye { display: inline-flex; align-items: center; gap: 6px; }
+.os-table th { text-align: start; font-size: 0.78rem; color: var(--muted); font-weight: 600; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.os-table th.num { text-align: end; padding-inline-start: 10px; }
+.os-lines { display: grid; gap: 6px; }
+.os-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 4px 14px; align-items: center; text-align: start; padding: 10px 12px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); font-size: 0.9rem; }
+.os-line > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-line .num { font-variant-numeric: tabular-nums; text-align: end; white-space: nowrap; }
+.os-line .good { color: var(--good); }
+.os-line .bad { color: var(--bad); }
+@media (max-width: 520px) {
+  .os-line { grid-template-columns: minmax(0, 1fr) auto; }
+}

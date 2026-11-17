@@ -1,6 +1,6 @@
 import { getAuth } from 'firebase/auth'
 import { myNameFor } from './profiles'
-import { collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where, type DocumentData } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, type DocumentData } from 'firebase/firestore'
 import { firestore } from './firebase'
 import { addDays, cairoNow } from './logic'
 import { paperDate, waNumber } from './tickets'
@@ -15,7 +15,17 @@ import { paperDate, waNumber } from './tickets'
 // send); the engine sends it to the website and empties `want`. A status changed on the website comes back
 // as a "website" step, unless the app has a change of its own still waiting to be sent (the app wins then).
 //
+//   orders/M<random>             an order added by hand in the app (WhatsApp, phone, in the shop): same shape,
+//                                `source` says where it came from, no website part (wooId 0), never sent anywhere.
+//
 // The page listens only to open orders. Closed ones are read once, when someone looks at them.
+
+/** Where an order came from. Website orders have no `source` field. */
+export const SOURCES = ['website', 'whatsapp', 'phone', 'store', 'other'] as const
+export type Source = (typeof SOURCES)[number]
+export const MANUAL_SOURCES: Source[] = ['whatsapp', 'phone', 'store', 'other']
+export const SOURCE_LABEL: Record<Source, string> = { website: 'Website', whatsapp: 'WhatsApp', phone: 'Phone call', store: 'In the shop', other: 'Other' }
+export const isManual = (o: Pick<Order, 'source'>) => o.source !== 'website'
 
 /** Where an order is, in the app. */
 export const STATUSES = ['new', 'confirmed', 'completed', 'cancelled', 'refunded', 'failed'] as const
@@ -35,9 +45,9 @@ export const WEB_LABEL: Record<string, string> = {
   pending: 'Pending payment', 'on-hold': 'On hold', processing: 'Processing', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded', failed: 'Failed', 'checkout-draft': 'Draft',
 }
 
-export const STEP_KINDS = ['placed', 'called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note', 'website'] as const
+export const STEP_KINDS = ['placed', 'called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note', 'website', 'edited'] as const
 export type StepKind = (typeof STEP_KINDS)[number]
-/** What a person can add. "placed" and "website" are written by the engine. */
+/** What a person can add. "placed" and "website" are written by the engine (or when an order is added by hand), "edited" by the edit form. */
 export const ADDABLE: StepKind[] = ['called', 'confirmed', 'date', 'paid', 'price', 'ready', 'out', 'delivered', 'cancelled', 'note']
 
 export type Step = {
@@ -59,10 +69,15 @@ export type Step = {
 
 export const PAY_METHODS = ['Cash', 'Instapay', 'E-wallet', 'Card', 'Bank transfer', 'Other'] as const
 
-export type Item = { name: string; qty: number; total: number; pid: number; vid: number }
+/**
+ * One line of an order. Website lines carry the website product (pid) and option (vid); lines added in the app carry
+ * the price list product instead (cat, ref). `total` is the line's price for all of qty.
+ */
+export type Item = { name: string; qty: number; total: number; pid: number; vid: number; cat?: string; ref?: string }
 
 export type Order = {
   id: string
+  source: Source
   /** The website's order id and number (usually the same). */
   wooId: number
   number: string
@@ -101,6 +116,7 @@ export type Order = {
 }
 
 export const orderNo = (o: Pick<Order, 'number' | 'wooId'>) => `#${o.number || o.wooId}`
+export const itemsTotal = (items: Pick<Item, 'total'>[]) => Math.round(items.reduce((n, x) => n + (x.total || 0), 0) * 100) / 100
 export const priceOf = (o: Pick<Order, 'agreed' | 'webTotal'>) => (o.agreed ?? o.webTotal)
 export const paidOf = (o: Pick<Order, 'steps'>) => o.steps.reduce((n, s) => n + (s.kind === 'paid' && typeof s.amount === 'number' ? s.amount : 0), 0)
 export const leftOf = (o: Pick<Order, 'steps' | 'agreed' | 'webTotal'>) => Math.round((priceOf(o) - paidOf(o)) * 100) / 100
@@ -124,13 +140,13 @@ export function whereNow(o: Pick<Order, 'steps' | 'status'>): StepKind | null {
 const MOVES: Partial<Record<StepKind, Status>> = { confirmed: 'confirmed', delivered: 'completed', cancelled: 'cancelled', reopened: 'confirmed' }
 
 /** The order after a step: its status, what to send to the website, the agreed price and the date. */
-export function applyStep(o: Pick<Order, 'steps' | 'status' | 'webStatus' | 'want' | 'agreed' | 'date' | 'time' | 'closed'>, step: Step) {
+export function applyStep(o: Pick<Order, 'steps' | 'status' | 'webStatus' | 'want' | 'agreed' | 'date' | 'time' | 'closed'> & { source?: Source }, step: Step) {
   const steps = [...o.steps, step]
   const status = MOVES[step.kind] ?? o.status
   const closed = !OPEN.includes(status)
   // Send the new status unless the website already has it. Moving back to where the website is cancels a waiting send.
   const target = TO_WEB[status] ?? ''
-  const want = status === o.status ? o.want : target && fromWeb(o.webStatus) !== status ? target : ''
+  const want = o.source && o.source !== 'website' ? '' : status === o.status ? o.want : target && fromWeb(o.webStatus) !== status ? target : ''
   const agreed = step.kind === 'price' && typeof step.amount === 'number' ? step.amount : o.agreed
   const date = step.kind === 'date' ? step.date ?? '' : o.date
   const time = step.kind === 'date' ? step.time ?? '' : o.time
@@ -165,7 +181,7 @@ export function timeLabel(time: string): string {
 /** The message the WhatsApp button types in for the customer, in Arabic, by where the order is. */
 export function waMessage(o: Order): string {
   const hi = `أهلاً ${o.customer.trim() || 'بحضرتك'}، معاك Static.`
-  const ref = `طلبك رقم ${orderNo(o)} من موقع static-eg.com`
+  const ref = isManual(o) ? `طلبك رقم ${orderNo(o)}` : `طلبك رقم ${orderNo(o)} من موقع static-eg.com`
   const when = o.date ? ` يوم ${paperDate(o.date)}${o.time ? ` الساعة ${timeLabel(o.time).replace('AM', 'ص').replace('PM', 'م')}` : ''}` : ''
   const left = leftOf(o)
   const money = left > 0 ? `\nالمبلغ المتبقي: ${left.toLocaleString('en-US')} جنيه.` : ''
@@ -200,11 +216,17 @@ export function toOrder(id: string, d: DocumentData): Order {
     })
     : []
   const items: Item[] = Array.isArray(d.items)
-    ? d.items.filter((x: unknown) => x && typeof x === 'object').map((x: Record<string, unknown>) => ({ name: str(x.name, 400), qty: num(x.qty) || 1, total: num(x.total), pid: num(x.pid), vid: num(x.vid) }))
+    ? d.items.filter((x: unknown) => x && typeof x === 'object').map((x: Record<string, unknown>) => {
+      const it: Item = { name: str(x.name, 400), qty: num(x.qty) || 1, total: num(x.total), pid: num(x.pid), vid: num(x.vid) }
+      if (typeof x.cat === 'string' && x.cat) it.cat = x.cat.slice(0, 80)
+      if (typeof x.ref === 'string' && x.ref) it.ref = x.ref.slice(0, 80)
+      return it
+    })
     : []
   const status = (STATUSES as readonly string[]).includes(str(d.status)) ? (d.status as Status) : fromWeb(str(d.webStatus))
+  const source = (SOURCES as readonly string[]).includes(str(d.source)) ? (d.source as Source) : 'website'
   return {
-    id, wooId: num(d.wooId), number: str(d.number, 40), webStatus: str(d.webStatus, 40), want: str(d.want, 40), status, closed: d.closed === true || !OPEN.includes(status),
+    id, source, wooId: num(d.wooId), number: str(d.number, 40), webStatus: str(d.webStatus, 40), want: str(d.want, 40), status, closed: d.closed === true || !OPEN.includes(status),
     placedAt: millis(d.placedAt), customer: str(d.customer, 200), phone: str(d.phone, 40), email: str(d.email, 200), address: str(d.address, 500), city: str(d.city, 120), area: str(d.area, 120),
     delivery: d.delivery === 'delivery' ? 'delivery' : 'pickup', shipping: num(d.shipping), payMethod: str(d.payMethod, 80), items, webTotal: num(d.webTotal),
     agreed: typeof d.agreed === 'number' ? d.agreed : null, customerNote: str(d.customerNote), date: str(d.date, 10), time: str(d.time, 5),
@@ -229,9 +251,57 @@ export function stepBy(kind: StepKind, note: string, extra: Partial<Pick<Step, '
   return step
 }
 
+/** What the add / edit form fills in for an order added by hand. */
+export type Draft = Pick<Order, 'customer' | 'phone' | 'email' | 'address' | 'city' | 'area' | 'delivery' | 'shipping' | 'payMethod' | 'items' | 'customerNote' | 'date' | 'time'> & {
+  source: Exclude<Source, 'website'>
+  status: 'new' | 'confirmed'
+  /** The price agreed with the customer when it differs from the lines + delivery; null = the same. */
+  agreed: number | null
+}
+
+/** The details part of an order added by hand, cleaned, with its total. */
+export function draftFields(d: Draft) {
+  const items = d.items.filter((x) => x.name.trim()).slice(0, 100).map((x) => {
+    const it: Item = { name: x.name.trim().slice(0, 400), qty: Math.max(1, Math.round(x.qty || 1)), total: Math.max(0, Math.round((x.total || 0) * 100) / 100), pid: 0, vid: 0 }
+    if (x.cat) it.cat = x.cat
+    if (x.ref) it.ref = x.ref
+    return it
+  })
+  const shipping = d.delivery === 'delivery' ? Math.max(0, Math.round((d.shipping || 0) * 100) / 100) : 0
+  return {
+    source: d.source, customer: d.customer.trim().slice(0, 200), phone: d.phone.trim().slice(0, 40), email: d.email.trim().slice(0, 200), address: d.address.trim().slice(0, 500),
+    city: d.city.trim().slice(0, 120), area: d.area.trim().slice(0, 120), delivery: d.delivery, shipping, payMethod: d.payMethod.slice(0, 80), items,
+    webTotal: Math.round((itemsTotal(items) + shipping) * 100) / 100, customerNote: d.customerNote.trim().slice(0, 2000),
+  }
+}
+
+/** A new hand-made order's id and number: M + a random tail (no counter to read), number M-<day><month>-<4 letters>. */
+export function newManualId(now = Date.now()) {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const tail = Array.from({ length: 4 }, () => abc[Math.floor(Math.random() * abc.length)]).join('')
+  const d = new Date(now + 2 * 3600_000) // Cairo day, near enough for a label
+  const number = `M-${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCMonth() + 1).padStart(2, '0')}-${tail}`
+  return { id: `M${now.toString(36)}${tail}`, number }
+}
+
+/** A whole new order from the form, with its first step. */
+export function manualOrder(d: Draft, step: Step, now = Date.now()): Omit<Order, 'id' | 'updatedAt' | 'placedAt'> & { id: string } {
+  const { id, number } = newManualId(now)
+  const f = draftFields(d)
+  return {
+    id, ...f, wooId: 0, number, webStatus: '', want: '', status: d.status, closed: false, agreed: d.agreed, date: d.date, time: d.time, webError: '', steps: [step],
+  }
+}
+
 export interface OrderBackend {
   watchOpen(onData: (list: Order[]) => void, onError: (e: Error) => void): () => void
   loadClosed(): Promise<Order[]>
+  /** Orders placed between two moments (ms), for the sales page. */
+  loadPlaced(from: number, to: number): Promise<Order[]>
+  /** A new order added by hand. Returns its id. */
+  add(d: Draft): Promise<string>
+  /** New details for an order added by hand, with an "edited" step. */
+  edit(o: Order, d: Draft, step: Step): Promise<void>
   addStep(o: Order, step: Step): Promise<void>
   removeStep(o: Order, index: number): Promise<void>
   remove(o: Order): Promise<void>
@@ -246,6 +316,18 @@ function firestoreOrders(fs: NonNullable<typeof firestore>): OrderBackend {
     async loadClosed() {
       const snap = await getDocs(query(col, orderBy('updatedAt', 'desc'), limit(150)))
       return snap.docs.map((x) => toOrder(x.id, x.data())).filter((x) => x.closed)
+    },
+    async loadPlaced(from, to) {
+      const snap = await getDocs(query(col, where('placedAt', '>=', Timestamp.fromMillis(from)), where('placedAt', '<', Timestamp.fromMillis(to)), limit(2000)))
+      return snap.docs.map((x) => toOrder(x.id, x.data()))
+    },
+    async add(d) {
+      const { id, ...rest } = manualOrder(d, stepBy('placed', ''))
+      await setDoc(doc(col, id), { ...rest, placedAt: serverTimestamp(), updatedAt: serverTimestamp() })
+      return id
+    },
+    async edit(o, d, step) {
+      await updateDoc(doc(col, o.id), { ...draftFields(d), agreed: d.agreed, date: d.date, time: d.time, steps: [...o.steps, step], updatedAt: serverTimestamp() })
     },
     async addStep(o, step) {
       await updateDoc(doc(col, o.id), { ...applyStep(o, step), updatedAt: serverTimestamp() })
@@ -274,7 +356,7 @@ function demoOrders(): Order[] {
     const webTotal = o.items.reduce((n, x) => n + x.total, 0) + shipping
     const status = o.status ?? fromWeb(webStatus)
     return {
-      ...base, id: `W${wooId}`, wooId, number: String(wooId), webStatus, status, placedAt: o.steps[0].at, address: '', city: 'Cairo', area: 'Cairo', delivery: 'pickup',
+      ...base, id: `W${wooId}`, source: 'website', wooId, number: String(wooId), webStatus, status, placedAt: o.steps[0].at, address: '', city: 'Cairo', area: 'Cairo', delivery: 'pickup',
       shipping, payMethod: 'Cash', webTotal, updatedAt: o.steps[o.steps.length - 1].at, ...o, closed: !OPEN.includes(status),
     }
   }
@@ -313,6 +395,14 @@ function localOrders(): OrderBackend {
       return () => localListeners.delete(send)
     },
     async loadClosed() { return localGet().filter((x) => x.closed) },
+    async loadPlaced(from, to) { return localGet().filter((x) => x.placedAt >= from && x.placedAt < to) },
+    async add(d) {
+      const now = Date.now()
+      const o = { ...manualOrder(d, stepBy('placed', ''), now), placedAt: now, updatedAt: now }
+      localPut([o, ...localGet()])
+      return o.id
+    },
+    async edit(o, d, step) { localChange(o.id, { ...draftFields(d), agreed: d.agreed, date: d.date, time: d.time, steps: [...o.steps, step] }) },
     async addStep(o, step) { localChange(o.id, applyStep(o, step)) },
     async removeStep(o, index) { localChange(o.id, withoutStep(o, index)) },
     async remove(o) { localPut(localGet().filter((x) => x.id !== o.id)) },
