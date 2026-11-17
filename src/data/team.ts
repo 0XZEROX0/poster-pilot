@@ -12,7 +12,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'orders', 'orders.edit'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
@@ -24,6 +24,7 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   brainstorm: ['Brainstorm posts', 'Use the Brainstorm page: plan which approved post goes out on which day of a week. It is only a plan and never schedules anything.'],
   'templates.edit': ['Edit caption templates', 'See and change the caption templates in Settings, Posters.'],
   delete: ['Delete posts', 'Delete posts that are not on the schedule.'],
+  'social.delete': ['Delete from Facebook and Instagram', 'Take a published post off the Facebook Page and Instagram for good. This cannot be undone. The owner always may.'],
   people: ['Manage people', 'See the system code, accept and remove people.'],
   'prices.edit': ['Edit prices', 'Change prices, add, hide and delete products in the price list.'],
   'prices.web': ['See website prices', 'See Price before and Price after (the static-eg.com prices) in Prices, the product form and the price changes. Hidden from everyone else. The owner always sees them.'],
@@ -59,7 +60,7 @@ export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
   { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'orders' && p !== 'orders.edit'), pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'social.delete' && p !== 'orders' && p !== 'orders.edit'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }

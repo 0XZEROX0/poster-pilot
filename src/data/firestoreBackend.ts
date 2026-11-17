@@ -5,7 +5,7 @@ import { track } from './activity'
 import type { Backend } from './backend'
 import { describe, describeDelete, describeNew } from './history'
 import { engineReachable, nudgeEngine, runEngineNow, type EngineJob } from './nudge'
-import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product, type VersionPhotos } from './types'
+import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product, type Results, type VersionPhotos } from './types'
 
 // Firestore layout (the engine, n8n, reads and writes the same documents with a service account):
 //   posts/{id}          one post; see Post in types.ts
@@ -13,6 +13,7 @@ import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry,
 //   catalog/styles      { names: string[] }
 //   catalog/templates   { items: CaptionTemplate[] }
 //   status/engine       { lastSync: number, note: string }
+//   status/results      { at, need, posts: { [postId]: { fb, ig, igLink, at } } }  Facebook/Instagram numbers, twice a day
 //   config/access       { emails: string[] }   who may open the app (see firestore.rules)
 //   log/{id}            one line of a post's history; see LogEntry in types.ts. Never changed or removed.
 //
@@ -20,7 +21,7 @@ import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry,
 // tell what the person changed and carry it out. `appDirty` is true while something is waiting, so
 // the engine can ask for just those posts. The engine removes each entry when it is done.
 
-const APP_ONLY = new Set(['ignoredProblem', 'offerNote', 'offerBy', 'marketAsk', 'photoAsk', 'storyDesign'])
+const APP_ONLY = new Set(['ignoredProblem', 'offerNote', 'offerBy', 'marketAsk', 'photoAsk', 'storyDesign', 'takeDown', 'takeDownAt', 'takeDownBy'])
 
 const blankPost: Omit<Post, 'id'> = {
   order: 0, items: [], company: '', priceBefore: '', priceAfter: '', style: '', details: '', posterUrl: '', photoStatus: '', feedback: '',
@@ -89,6 +90,8 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
           })
         }, fail),
         onSnapshot(doc(db, 'status', 'engine'), (snap) => push({ health: (snap.data() as Health | undefined) ?? null }), fail),
+        // One small document, written twice a day: costs one read per change. Only for roles that see posts.
+        !source ? () => {} : onSnapshot(doc(db, 'status', 'results'), (snap) => push({ results: (snap.data() as Results | undefined) ?? null }), () => push({ results: null })),
       ]
       return () => stops.forEach((stop) => stop())
     },
@@ -116,6 +119,8 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       // A changed offer (items or price) or one sent for approval again needs a new competitor check.
       if (patch.marketAsk || patch.items || patch.priceBefore !== undefined || patch.priceAfter !== undefined || patch.offer === '') jobs.push('market')
       if (patch.photoAsk) jobs.push('photos')
+      // "Delete from Facebook and Instagram": its own workflow, started at once.
+      if (patch.takeDown === 'asked') jobs.push('takedown')
       if (jobs.length) nudgeEngine(getAuth(db.app), jobs)
     },
     async removePost(id) {

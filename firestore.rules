@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'orders', 'orders.edit'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -56,7 +56,7 @@ service cloud.firestore {
     }
     // Someone who may only look (for example 'See offers') cannot change a post in any way.
     function canAct() {
-      return isMember() && permsOf(myRole()).hasAny(['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete']);
+      return isMember() && permsOf(myRole()).hasAny(['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'social.delete']);
     }
     function can(perm) {
       return isMember() && perm in permsOf(myRole());
@@ -86,6 +86,13 @@ service cloud.firestore {
         && (!keys.hasAny(['story', 'storyDelay', 'storyDesign']) || can('schedule'))
         && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', '')) && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''))))
         && (!keys.hasAny(['appDeleted']) || can('delete'))
+        // "Delete from Facebook and Instagram" takes a published post off the Page and Instagram for good: only with
+        // its own permission, only as a new ask ('asked', with the time and the name of who asked), and only once
+        // (again only after the engine reported that it failed).
+        && (!keys.hasAny(['takeDown', 'takeDownAt', 'takeDownBy'])
+          || (can('social.delete') && now.get('takeDown', '') == 'asked' && was.get('takeDown', '') in ['', 'failed']
+            && now.get('takeDownAt', 0) is int && now.get('takeDownBy', '') is string && now.get('takeDownBy', '').size() <= 200
+            && was.get('fbStatus', '') == 'Published'))
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
         // Asking for the website photos of the items, for the photo picker.
         && (!keys.hasAny(['photoAsk']) || can('offers.create') || can('fix') || can('designs.approve'))
@@ -97,7 +104,7 @@ service cloud.firestore {
           || (can('offers.create') && was.get('createdBy', '') == request.auth.uid && was.get('offer', '') == 'Rejected'
             && now.get('offer', '') == '' && edits.get('offer', '') == '' && !keys.hasAny(['offerNote', 'offerBy'])))
         // Competitor prices, where a post stands, and what Facebook and the poster maker report are written by the engine only.
-        && !keys.hasAny(['createdBy', 'createdByName', 'market', 'photoChoices', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew', 'storyImage', 'storyFbStatus', 'storyIgStatus', 'storyDesignedAt', 'storyVideo']);
+        && !keys.hasAny(['createdBy', 'createdByName', 'market', 'photoChoices', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew', 'storyImage', 'storyFbStatus', 'storyIgStatus', 'storyDesignedAt', 'storyVideo', 'takeDownNote', 'takeDownTry']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may
     // walk in once without a request. Admins can only shorten it.
@@ -249,7 +256,7 @@ service cloud.firestore {
         && request.resource.data.postId is string && request.resource.data.postId.size() > 0 && request.resource.data.postId.size() <= 40
         && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
         && request.resource.data.act in ['created', 'edited', 'offer.approved', 'offer.rejected', 'offer.resubmitted', 'design.approved', 'design.redo', 'design.redo_next',
-          'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'schedule.postnow', 'problem.ignored', 'prices.recheck', 'deleted']
+          'design.skipped', 'design.back', 'schedule.set', 'schedule.cleared', 'schedule.cancel', 'schedule.postnow', 'problem.ignored', 'prices.recheck', 'deleted', 'social.delete']
         && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 1000))
         && (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() <= 300))
         && (!('changes' in request.resource.data) || (request.resource.data.changes is list && request.resource.data.changes.size() <= 12));

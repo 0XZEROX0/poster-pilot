@@ -28,8 +28,9 @@ const RETRY_MS = [3000, 10000, 30000]
  * - photos: website photos for the photo picker
  * - website: send price list changes to the website; pull: read changes made on the website
  * - orders: send order status changes to the website and read new orders
+ * - takedown: delete published posts from Facebook and Instagram (posts with takeDown 'asked')
  */
-export type EngineJob = 'app' | 'lists' | 'poster' | 'queue' | 'changes' | 'captions' | 'status' | 'instagram' | 'move' | 'market' | 'photos' | 'website' | 'pull' | 'orders'
+export type EngineJob = 'app' | 'lists' | 'poster' | 'queue' | 'changes' | 'captions' | 'status' | 'instagram' | 'move' | 'market' | 'photos' | 'website' | 'pull' | 'takedown' | 'orders'
 
 /**
  * How the last knock went:

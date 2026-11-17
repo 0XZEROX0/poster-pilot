@@ -1,7 +1,8 @@
 import { formatPrice, hasOffer, priceOf, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
-import type { Post } from '../data/types'
+import type { Post, PostResults } from '../data/types'
 import { t } from '../i18n'
 import { Poster } from './Poster'
+import { ResultsLine } from './Results'
 import { Chip, Icon, dayLabel, timeLabel } from './ui'
 
 /** A post's state as one small coloured label. */
@@ -9,6 +10,9 @@ export function StageChip({ post }: { post: Post }) {
   const stage = stageOf(post)
   const when = whenOf(post)
   if (stage === 'offer') return <Chip tone="warn">{t(post.offer === 'Rejected' ? 'Offer sent back' : 'Waiting for offer approval')}</Chip>
+  if (stage === 'posted' && post.takeDown === 'done') return <Chip>{t('Removed from FB + IG')}</Chip>
+  if (stage === 'posted' && (post.takeDown === 'asked' || post.takeDown === 'working')) return <Chip tone="info">{t('Being removed')}</Chip>
+  if (stage === 'posted' && post.takeDown === 'failed') return <Chip tone="bad">{t('Not removed')}</Chip>
   if (stage === 'posted') return <Chip tone="good">{t('Published')}</Chip>
   if (stage === 'fix') return <Chip tone="bad">{problemOf(post)?.text.slice(0, 28)}</Chip>
   if (stage === 'building') return <Chip tone="info">{t('Being built')}</Chip>
@@ -37,8 +41,8 @@ export function PostRow({ post, onOpen }: { post: Post; onOpen: (id: string) => 
   )
 }
 
-/** One post as a small card: poster, name, price and its time or state. Opens the post when tapped. */
-export function PostCard({ post, onOpen }: { post: Post; onOpen: (id: string) => void }) {
+/** One post as a small card: poster, name, price and its time or state (and reach and likes once published). Opens the post when tapped. */
+export function PostCard({ post, onOpen, results }: { post: Post; onOpen: (id: string) => void; results?: PostResults }) {
   const when = whenOf(post)
   const posted = stageOf(post) === 'posted'
   return (
@@ -50,6 +54,7 @@ export function PostCard({ post, onOpen }: { post: Post; onOpen: (id: string) =>
           {hasOffer(post) && <s>{formatPrice(post.priceBefore)}</s>} {formatPrice(priceOf(post))} EGP
         </span>
         {posted && when ? <span className="card-when"><Icon name="posted" size={15} />{timeLabel(when.time)}</span> : <StageChip post={post} />}
+        {posted && <ResultsLine r={results} />}
       </span>
     </button>
   )

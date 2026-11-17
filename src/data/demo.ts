@@ -1,5 +1,5 @@
 import { addDays, buildCaption, cairoNow, marketKey } from './logic'
-import type { CaptionTemplate, Data, MarketItem, PhotoChoiceItem, PhotoChoices, Post, PostItem, Product } from './types'
+import type { CaptionTemplate, Data, MarketItem, PhotoChoiceItem, PhotoChoices, Post, PostItem, Product, Results } from './types'
 
 // Sample data for demo mode (no Firebase configured). The products, prices and caption templates are
 // a small copy of the real Posts sheet; the states are spread out so every screen has something to show.
@@ -136,4 +136,21 @@ export function demoPosts(): Post[] {
   ]
 }
 
-export const demoData = (): Data => ({ loaded: true, posts: demoPosts().map((p) => (p.posterUrl ? { ...p, caption: buildCaption(p, demoTemplates) } : p)), products: demoProducts, styles: demoStyles, templates: demoTemplates, health: { lastSync: Date.now(), note: 'demo' } })
+export const demoData = (): Data => {
+  const posts = demoPosts().map((p) => (p.posterUrl ? { ...p, caption: buildCaption(p, demoTemplates) } : p))
+  return { loaded: true, posts, products: demoProducts, styles: demoStyles, templates: demoTemplates, health: { lastSync: Date.now(), note: 'demo' }, results: demoResults(posts) }
+}
+
+/** Made-up Facebook and Instagram numbers for the published demo posts. */
+function demoResults(posts: Post[]): Results {
+  const out: Results['posts'] = {}
+  posts.filter((p) => /^published/i.test(p.fbStatus)).forEach((p, i) => {
+    const r = 900 + ((i * 577) % 2300)
+    out[p.id] = {
+      fb: { reach: r, views: Math.round(r * 1.4), reactions: 12 + ((i * 7) % 40), comments: (i * 3) % 9, shares: i % 4 },
+      ig: { reach: Math.round(r * 0.6), likes: 20 + ((i * 11) % 60), comments: (i * 2) % 7, saved: i % 5, shares: (i + 1) % 3 },
+      igLink: 'https://www.instagram.com/static_egypt/', at: Date.now() - 3 * 3600_000,
+    }
+  })
+  return { at: Date.now() - 3 * 3600_000, need: [], posts: out }
+}

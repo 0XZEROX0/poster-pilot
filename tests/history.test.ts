@@ -22,6 +22,7 @@ group('history entries for app changes', () => {
     expect(describe(post(), { feedback: 'ignore' })?.act).toBe('design.skipped')
     expect(describe(post({ feedback: 'Done' }), { feedback: 'Cancel' })?.act).toBe('schedule.cancel')
     expect(describe(post({ feedback: 'Done' }), { postNow: 'yes', postDate: '2026-11-15', postTime: '17:45' })).toEqual({ act: 'schedule.postnow', note: '2026-11-15 17:45' })
+    expect(describe(post({ feedback: 'Done', fbStatus: 'Published' }), { takeDown: 'asked', takeDownAt: 1, takeDownBy: 'Static' })).toEqual({ act: 'social.delete' })
     expect(describe(post({ feedback: 'Done', postNow: 'yes' }), { postNow: '', postDate: '2026-11-16', postTime: '17:00' })?.act).toBe('schedule.set')
     expect(describe(post({ feedback: 'Done' }), { postDate: '2026-11-20', postTime: '17:00' })).toEqual({ act: 'schedule.set', note: '2026-11-20 17:00' })
     expect(describe(post({ feedback: 'Cancel' }), { postDate: '2026-11-20', postTime: '17:00', feedback: 'Done' })?.act).toBe('schedule.set')

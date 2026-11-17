@@ -194,6 +194,19 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .card-sm .card-body { padding: 8px 2px 2px; gap: 4px; align-items: flex-start; }
 .card-title { font-weight: 600; font-size: 0.875rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card-when { display: inline-flex; align-items: center; gap: 4px; color: var(--good); font-weight: 600; font-size: 0.8125rem; }
+/* Facebook and Instagram numbers of a published post */
+.results-line { display: inline-flex; gap: 10px; color: var(--text-2); font-size: 0.75rem; font-weight: 600; }
+.results-line > span { display: inline-flex; align-items: center; gap: 3px; }
+.results-box { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; display: grid; gap: 10px; background: var(--surface); }
+.results-box > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.results-box .hint { margin: 0; }
+.results-side { display: grid; gap: 6px; }
+.results-name { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; font-weight: 600; color: var(--text-2); }
+.results-name a { color: var(--accent); display: inline-flex; }
+.results-nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
+.results-nums > span { display: grid; gap: 1px; padding: 6px 8px; border-radius: 10px; background: var(--surface-2); min-width: 0; }
+.results-nums b { font-size: 1rem; font-variant-numeric: tabular-nums; }
+.results-nums small { font-size: 0.6875rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .group-count { font-weight: 600; color: var(--text-2); background: var(--surface-2); border-radius: 999px; padding: 1px 8px; margin-inline-start: 6px; letter-spacing: 0; }
 
 /* Planner: the day as a timeline */
@@ -1412,3 +1425,11 @@ button.stock:hover { filter: brightness(1.15); }
 .mt-quick button.or-cancel { color: var(--bad); }
 .mt-quick button.or-cancel.on { background: var(--bad); color: #fff; }
 .or-extra { font-weight: 500; color: var(--text-2); }
+/* Delete from Facebook and Instagram: the confirm asks for a typed word, and the state box after it. */
+.confirm-takedown { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 12px; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 12px; background: rgba(239, 68, 68, 0.06); }
+.confirm-takedown p { margin: 0; }
+.confirm-takedown label { display: flex; flex-direction: column; gap: 4px; }
+.confirm-takedown .btn-danger { flex: 1; }
+.note-box { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
+.note-box b { display: flex; align-items: center; gap: 6px; }
+.note-box p { margin: 0; overflow-wrap: anywhere; }
