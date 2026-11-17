@@ -38,7 +38,7 @@ export let backend: Backend
 
 /** A change the person's role does not allow is refused by the database: say so instead of failing silently. */
 function guarded(b: Backend): Backend {
-  const tell = <A extends unknown[]>(work: (...args: A) => Promise<void>) => (...args: A) =>
+  const tell = <A extends unknown[], R>(work: (...args: A) => Promise<R>) => (...args: A) =>
     work(...args).catch((e: { code?: string }) => {
       if (e.code === 'permission-denied') showToast(t('Your role does not allow this.'))
       throw e

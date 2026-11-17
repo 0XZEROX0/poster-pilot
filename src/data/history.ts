@@ -1,4 +1,4 @@
-import { titleOf } from './logic'
+import { KIND_LABEL, titleOf } from './logic'
 import type { LogChange, LogEntry, Post } from './types'
 
 // The history of every offer and post: what happened, who did it and when.
@@ -85,6 +85,12 @@ export function changesOf(before: Post | undefined, patch: Partial<Post>): LogCh
     const from = storyText(f, String(before?.[f] ?? '')), to = storyText(f, String(patch[f] ?? ''))
     if (from !== to) out.push({ f, from, to })
   }
+  // A text, photo or video post: its uploaded files and where it goes.
+  if (patch.media) {
+    const n = (m: Post['media']) => (m ?? []).map((x) => x.id).join(',')
+    if (n(before?.media) !== n(patch.media)) out.push({ f: 'media', from: String(before?.media?.length ?? 0), to: String(patch.media.length) })
+  }
+  if (patch.places !== undefined && patch.places !== (before?.places ?? 'fb+ig')) out.push({ f: 'places', from: before?.places ?? 'fb+ig', to: patch.places })
   // A story designed in the story editor: noted on the story line (the design itself is too long for the history).
   if (patch.storyDesign) out.push({ f: 'story', from: '', to: 'designed in the story editor' })
   if (patch.items) {
@@ -130,9 +136,9 @@ export function describe(before: Post | undefined, patch: Partial<Post>): Omit<L
 }
 
 /** The entry for a new post, so its history starts with what it was made from. */
-export const describeNew = (p: Pick<Post, 'items' | 'priceBefore' | 'priceAfter' | 'style'>) => ({
-  act: 'created', title: short(itemsText(p.items), 280), note: short([p.priceAfter || p.priceBefore, p.style].filter(Boolean).join(' · '), 300),
-})
+export const describeNew = (p: Pick<Post, 'items' | 'priceBefore' | 'priceAfter' | 'style'> & Partial<Pick<Post, 'kind' | 'caption' | 'variants' | 'title' | 'media'>>) => p.kind
+  ? { act: 'created', title: short(titleOf(p), 280), note: KIND_LABEL[p.kind] + (p.media?.length ? ` · ${p.media.length}` : '') }
+  : { act: 'created', title: short(itemsText(p.items), 280), note: short([p.priceAfter || p.priceBefore, p.style].filter(Boolean).join(' · '), 300) }
 
 export const describeDelete = (p: Post | undefined) => ({ act: 'deleted', ...(p ? { title: short(titleOf(p), 280) } : {}) })
 

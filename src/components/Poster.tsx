@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DEMO_POSTER } from '../data/demo'
-import { formatPrice, hasOffer, anyProblemOf, isBuilding, previewUrl, priceOf, titleOf } from '../data/logic'
+import { driveThumb, formatPrice, hasOffer, anyProblemOf, isBuilding, previewUrl, priceOf, titleOf } from '../data/logic'
 import type { Post } from '../data/types'
 import { t } from '../i18n'
 import { Icon } from './ui'
@@ -26,7 +26,45 @@ function FullScreen({ src, alt, onClose }: { src: string; alt: string; onClose: 
   )
 }
 
+/** A text, photo or video post: its first photo (or the video's frame, with a play sign), or its text. */
+function CustomTile({ post, small, zoom }: { post: Post; small: boolean; zoom: boolean }) {
+  const [full, setFull] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const cls = `poster poster-custom${small ? ' poster-small' : ''}`
+  const first = (post.media ?? [])[0]
+  if (post.kind === 'text' || !first) {
+    return (
+      <div className={`${cls} poster-text`} aria-label={titleOf(post)}>
+        <Icon name={post.kind === 'video' ? 'video' : post.kind === 'image' ? 'image' : 'text'} size={small ? 20 : 28} />
+        {!small && <span dir="auto">{(post.caption || '').slice(0, 280) || t(post.kind === 'text' ? 'Text post' : 'Nothing uploaded yet')}</span>}
+      </div>
+    )
+  }
+  const count = (post.media ?? []).length
+  return (
+    <div className={cls}>
+      {failed ? <span className="poster-text"><Icon name={first.type === 'video' ? 'video' : 'image'} size={small ? 20 : 32} /></span>
+        : <img src={driveThumb(first.id, small ? 300 : 900)} alt={titleOf(post)} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />}
+      {first.type === 'video' && <span className="media-play"><Icon name="play" size={small ? 16 : 28} /></span>}
+      {count > 1 && <span className="media-count">1/{count}</span>}
+      {zoom && !failed && (
+        <span className="poster-zoom" role="button" tabIndex={0} aria-label={t('Full screen')} onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFull(true) }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setFull(true) } }}>
+          <Icon name="expand" size={18} />
+        </span>
+      )}
+      {full && <FullScreen src={driveThumb(first.id, 2000)} alt={titleOf(post)} onClose={() => setFull(false)} />}
+    </div>
+  )
+}
+
 export function Poster({ post, small = false, zoom = false }: { post: Post; small?: boolean; zoom?: boolean }) {
+  if (post.kind) return <CustomTile post={post} small={small} zoom={zoom} />
+  return <ProductPoster post={post} small={small} zoom={zoom} />
+}
+
+function ProductPoster({ post, small, zoom }: { post: Post; small: boolean; zoom: boolean }) {
   const [failed, setFailed] = useState(false)
   const [full, setFull] = useState(false)
   const problem = anyProblemOf(post)

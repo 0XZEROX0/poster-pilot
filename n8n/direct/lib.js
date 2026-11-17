@@ -113,6 +113,7 @@ function variantsOf(f) {
 const OK_FB = /^(scheduled|published|cancelled|waiting)\b/i;
 /** The app's zone, the same rule the sheet sync used. */
 function zoneOf(f) {
+  if (kindOf(f)) return customZone(f);
   const ps = clean(f.photoStatus), fbs = clean(f.fbStatus), igs = clean(f.igStatus), fb = clean(f.feedback);
   const trouble = (ps !== '' && ps !== 'OK' && !/^(WORKING|PHOTO FOUND)/i.test(ps)) || !(fbs === '' || OK_FB.test(fbs)) || (igs !== '' && /error|fail/i.test(igs));
   if (clean(f.offer) !== 'Approved') return 'offer';
@@ -123,6 +124,8 @@ function zoneOf(f) {
 }
 /** Which workflow queues a post is in. Each workflow reads only its own queue, which keeps database reads low. */
 function queuesOf(f) {
+  // Text, photo and video posts have one queue of their own, read by "Static OS - Text, photo and video posts".
+  if (kindOf(f)) return customWork(f) ? ['custom'] : [];
   const ex = (f.ex && typeof f.ex === 'object') ? f.ex : {};
   const fb = low(f.feedback);
   const items = (Array.isArray(f.items) ? f.items : []).filter(it => it && clean(it.name));
@@ -154,6 +157,44 @@ function storyWaiting(f) {
   if (!['done', 'published'].includes(low(f.feedback))) return false;
   const open = places.filter(w => { const s = w === 'fb' ? f.storyFbStatus : f.storyIgStatus; return !storyDone(s) && !storyFailed(s); });
   return open.length > 0;
+}
+
+// ---------- text, photo and video posts (post.kind) ----------
+// Posts the person writes and uploads in the app instead of a product poster: 'text' (Facebook only, Instagram
+// does not allow a post without a picture), 'image' (1 to 10 photos; more than one is an album / carousel) and
+// 'video'. `media` lists the uploaded Drive files, `places` says where it goes ('fb+ig', 'fb', 'ig').
+const KINDS = ['text', 'image', 'video'];
+const kindOf = f => KINDS.includes(clean(f && f.kind)) ? clean(f.kind) : '';
+function placesOf(f) {
+  if (kindOf(f) === 'text') return ['fb'];
+  const p = clean(f.places).split('+').filter(w => w === 'fb' || w === 'ig');
+  return p.length ? [...new Set(p)] : ['fb', 'ig'];
+}
+const isPub = s => /^(published|posted)/i.test(clean(s));
+/** A Facebook / Instagram status that is a problem: it waits until the person changes the post (the engine then clears it). */
+const isFail = s => { const v = clean(s); return v !== '' && !isPub(v) && !/^(scheduled|cancelled|waiting|posting)\b/i.test(v); };
+function customZone(f) {
+  const places = placesOf(f);
+  const st = w => w === 'fb' ? f.fbStatus : f.igStatus;
+  if (clean(f.takeDown) === 'done') return 'posted';
+  if (places.some(w => isFail(st(w)))) return 'fix';
+  if (places.every(w => isPub(st(w)))) return 'posted';
+  if (/^(done|cancel)$/i.test(clean(f.feedback))) return 'approved';
+  return 'design';
+}
+/** Whether "Static OS - Text, photo and video posts" still has something to do for this post. */
+function customWork(f) {
+  if (!kindOf(f) || f.appDeleted === true || clean(f.takeDown)) return false;
+  const ex = (f.ex && typeof f.ex === 'object') ? f.ex : {};
+  const fb = low(f.feedback);
+  if (fb === 'cancel') return true;
+  // On Facebook's schedule: its time to check, a change to carry over, or a cancel.
+  if (clean(f.fbPostId) && !isPub(f.fbStatus)) return true;
+  if (clean(ex.igContainer)) return true;
+  if (fb !== 'done') return false;
+  if (!(clean(f.postDate) && clean(f.postTime)) && low(f.postNow) !== 'yes') return false;
+  const places = placesOf(f);
+  return (places.includes('fb') && !isPub(f.fbStatus) && !isFail(f.fbStatus)) || (places.includes('ig') && !isPub(f.igStatus) && !isFail(f.igStatus));
 }
 
 // ---------- writing sheet columns into a post ----------
@@ -268,4 +309,4 @@ function pricesFrom(items, products, variants) {
   return { priceBefore: bad ? 'Check item' : (variants ? top : sum).toLocaleString('en-US'), company: companies.join(' + ') };
 }
 
-if (typeof module !== 'undefined') module.exports = { storyPlaces, storyWaiting, storyDone, storyFailed, HEADERS, TYPED, EX, dec, enc, fieldsOf, docOf, slotted, rowOf, zoneOf, queuesOf, applyCols, historyOf, logWrite, titleOf, pricesFrom, isNum, toNum, grouped, clean, randomId };
+if (typeof module !== 'undefined') module.exports = { KINDS, kindOf, placesOf, isPub, isFail, customZone, customWork, storyPlaces, storyWaiting, storyDone, storyFailed, HEADERS, TYPED, EX, dec, enc, fieldsOf, docOf, slotted, rowOf, zoneOf, queuesOf, applyCols, historyOf, logWrite, titleOf, pricesFrom, isNum, toNum, grouped, clean, randomId };

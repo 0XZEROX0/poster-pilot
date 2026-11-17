@@ -71,6 +71,13 @@ service cloud.firestore {
         : value in ['Redo', 'Redo next image'] ? (can('designs.approve') || can('fix') || can('offers.create'))
         : can('designs.approve');
     }
+    // Text, photo and video posts (`kind`): the kind is set when the post is made and never changes; up to 10
+    // uploaded files (Drive ids); where it goes. A text post goes to Facebook only.
+    function customOk(d) {
+      return (!('kind' in d) || d.kind in ['text', 'image', 'video'])
+        && (!('media' in d) || (d.media is list && d.media.size() <= 10))
+        && (!('places' in d) || (d.places in ['fb+ig', 'fb', 'ig'] && (d.get('kind', '') != 'text' || d.places == 'fb')));
+    }
     // A change to a post, field by field. `appEdits` is the copy of the change that the engine
     // carries to the sheet, so it is held to the same rules.
     function postChangeOk() {
@@ -96,7 +103,8 @@ service cloud.firestore {
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
         // Asking for the website photos of the items, for the photo picker.
         && (!keys.hasAny(['photoAsk']) || can('offers.create') || can('fix') || can('designs.approve'))
-        && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle']) || can('offers.create') || can('fix') || can('designs.approve'))
+        && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle', 'media', 'places']) || can('offers.create') || can('fix') || can('designs.approve'))
+        && customOk(now) && customOk(edits)
         // An offer is approved by someone other than the person who made it. The owner always may.
         && (!keys.hasAny(['offer', 'offerNote', 'offerBy'])
           || (can('offers.approve') && (isOwner() || isAdmin() || was.get('createdBy', '') != request.auth.uid))
@@ -104,7 +112,7 @@ service cloud.firestore {
           || (can('offers.create') && was.get('createdBy', '') == request.auth.uid && was.get('offer', '') == 'Rejected'
             && now.get('offer', '') == '' && edits.get('offer', '') == '' && !keys.hasAny(['offerNote', 'offerBy'])))
         // Competitor prices, where a post stands, and what Facebook and the poster maker report are written by the engine only.
-        && !keys.hasAny(['createdBy', 'createdByName', 'market', 'photoChoices', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew', 'storyImage', 'storyFbStatus', 'storyIgStatus', 'storyDesignedAt', 'storyVideo', 'takeDownNote', 'takeDownTry']);
+        && !keys.hasAny(['kind', 'createdBy', 'createdByName', 'market', 'photoChoices', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew', 'storyImage', 'storyFbStatus', 'storyIgStatus', 'storyDesignedAt', 'storyVideo', 'takeDownNote', 'takeDownTry']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may
     // walk in once without a request. Admins can only shorten it.
@@ -241,7 +249,8 @@ service cloud.firestore {
         && request.resource.data.get('postDate', '') == '' && request.resource.data.get('postTime', '') == ''
         && request.resource.data.get('fbStatus', '') == '' && request.resource.data.get('igStatus', '') == '' && request.resource.data.get('fbPostId', '') == ''
         && request.resource.data.get('scheduledFor', '') == '' && request.resource.data.get('posterUrl', '') == ''
-        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market', 'photoChoices', 'appDeleted', 'ignoredProblem']);
+        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market', 'photoChoices', 'appDeleted', 'ignoredProblem'])
+        && customOk(request.resource.data);
       allow update: if canAct() && postChangeOk();
     }
     // The history of every post. The app adds a line with each change, in the same step, under the

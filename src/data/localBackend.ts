@@ -82,7 +82,7 @@ export function createLocalBackend(): Backend {
         system(id, 'ig.removed')
         return
       }
-      if (p.feedback === 'Redo' || !p.posterUrl || !p.photoStatus) {
+      if (!p.kind && (p.feedback === 'Redo' || !p.posterUrl || !p.photoStatus)) {
         patchPost(id, { posterUrl: DEMO_POSTER, photoStatus: 'OK', feedback: '', caption: p.caption || buildCaption(p, data.templates), items: p.items.map((i) => ({ ...i, nextPhoto: false })) })
         system(id, 'poster.built')
       } else if (p.feedback === 'Done' && p.postNow === 'yes' && !p.fbPostId) {
@@ -117,8 +117,10 @@ export function createLocalBackend(): Backend {
       const id = `local-${Date.now()}`
       const order = Math.min(0, ...data.posts.map((p) => p.order)) - 1
       note(id, describeNew(post))
-      commit({ ...data, posts: [{ ...post, id, order, posterUrl: '', photoStatus: '', feedback: '', scheduledFor: '', caption: '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: Date.now(), offer: '', createdBy: 'demo-maker', createdByName: 'Demo maker' }, ...data.posts] })
+      // A text, photo or video post keeps its caption and has no offer to approve.
+      commit({ ...data, posts: [{ ...post, id, order, posterUrl: '', photoStatus: '', feedback: '', scheduledFor: '', caption: post.kind ? post.caption ?? '' : '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: Date.now(), ...(post.kind ? {} : { offer: '' as const }), createdBy: 'demo-maker', createdByName: 'Demo maker' }, ...data.posts] })
       engine(id)
+      return id
     },
     async updatePost(id, patch) {
       const before = data.posts.find((p) => p.id === id)
