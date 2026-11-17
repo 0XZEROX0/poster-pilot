@@ -1376,3 +1376,20 @@ button.stock:hover { filter: brightness(1.15); }
   .se-done { padding: 8px 13px; margin-inline-start: 0; }
   .se-dot { width: 26px; height: 26px; }
 }
+.story-frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.story-frame { position: relative; }
+.story-video-mark { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 11px; font-weight: 700; }
+.se-gif-box { position: fixed; left: 0; bottom: 0; width: 120px; height: 120px; overflow: hidden; opacity: 0.02; pointer-events: none; z-index: 199; }
+.se-gif-box img { position: absolute; left: 0; top: 0; width: 120px; height: 120px; }
+.se-recording { position: fixed; inset: 0; z-index: 220; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); color: #fff; font-weight: 700; font-size: 18px; pointer-events: all; }
+.se-motions .se-style { padding: 5px 11px; font-size: 13px; }
+.se-tabs { display: flex; gap: 6px; }
+.se-tray-title { font-size: 13px; color: rgba(255, 255, 255, 0.7); text-align: center; }
+.se-chip-moving { background: #1f2937; color: #fff; border: 1.5px dashed rgba(255, 255, 255, 0.5); }
+.se-gifs { display: flex; flex-direction: column; gap: 10px; }
+.se-gifs .se-words { width: 100%; }
+.se-gif-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.se-gif-grid button { border: 0; padding: 0; background: rgba(255, 255, 255, 0.06); border-radius: 10px; aspect-ratio: 1; cursor: pointer; overflow: hidden; }
+.se-gif-grid img { width: 100%; height: 100%; object-fit: contain; }
+.se-powered { margin: 0; text-align: center; font-size: 11px; color: rgba(255, 255, 255, 0.5); }
+.se-gif-form { display: flex; gap: 8px; } .se-gif-form .se-words { flex: 1; }

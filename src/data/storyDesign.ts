@@ -17,11 +17,21 @@ export type TextAlign = 'left' | 'center' | 'right'
  */
 export type StickerKind = 'emoji' | 'logo' | 'badge' | 'location' | 'website' | 'product' | 'price'
 export type PenKind = 'pen' | 'marker' | 'neon' | 'eraser'
+/** How a layer moves when the story is a video. 'type' (text only) writes the words out letter by letter. */
+export type Motion = 'none' | 'pulse' | 'bounce' | 'wiggle' | 'spin' | 'flash' | 'float' | 'type'
+export const MOTIONS: { key: Motion; label: string }[] = [
+  { key: 'none', label: 'Still' }, { key: 'pulse', label: 'Pulse' }, { key: 'bounce', label: 'Bounce' }, { key: 'wiggle', label: 'Wiggle' },
+  { key: 'spin', label: 'Spin' }, { key: 'flash', label: 'Flash' }, { key: 'float', label: 'Float' }, { key: 'type', label: 'Typing' },
+]
+/** How long a moving story's video is, in seconds. */
+export const VIDEO_SECONDS = 5
 
 export type StoryLayer =
-  | { id: string; kind: 'poster'; x: number; y: number; scale: number; rotation: number }
-  | { id: string; kind: 'text'; x: number; y: number; scale: number; rotation: number; text: string; style: TextStyle; color: string; box: TextBox; align: TextAlign; size: number }
-  | { id: string; kind: 'sticker'; x: number; y: number; scale: number; rotation: number; sticker: StickerKind; text: string; sub?: string; old?: string; color: string }
+  | { id: string; kind: 'poster'; x: number; y: number; scale: number; rotation: number; motion?: Motion }
+  | { id: string; kind: 'text'; x: number; y: number; scale: number; rotation: number; text: string; style: TextStyle; color: string; box: TextBox; align: TextAlign; size: number; motion?: Motion }
+  | { id: string; kind: 'sticker'; x: number; y: number; scale: number; rotation: number; sticker: StickerKind; text: string; sub?: string; old?: string; color: string; motion?: Motion }
+  /** A GIF from GIPHY (an animated WebP link), w x h in story pixels at scale 1. */
+  | { id: string; kind: 'gif'; x: number; y: number; scale: number; rotation: number; src: string; w: number; h: number; title?: string; motion?: Motion }
   /** A drawn line: points in story pixels (x1, y1, x2, y2, ...). Drawn above everything else, as in Instagram. */
   | { id: string; kind: 'draw'; x: number; y: number; scale: number; rotation: number; points: number[]; color: string; width: number; pen: PenKind }
 
@@ -47,6 +57,9 @@ export const TEXT_STYLES: Record<TextStyle, { label: string; font: string; arabi
 
 /** The emoji in the sticker tray. */
 export const EMOJI = ['🔥', '⚡', '💥', '✨', '⭐', '🎉', '🎁', '🛒', '💸', '💰', '🏷️', '📦', '🚚', '⏰', '⏳', '📍', '👉', '👇', '👆', '✅', '❤️', '🧡', '💙', '😍', '🤩', '😎', '🤯', '😱', '👀', '🙌', '👏', '💪', '🎮', '🕹️', '🖥️', '💻', '⌨️', '🖱️', '🎧', '🎤', '📱', '🔌', '🔋', '💡', '🛠️', '🚀', '🏆', '🥇', '💯', '🆕', '🆓', '🔝', '❄️', '🌙', '☀️', '🎄', '🕌', '🇪🇬']
+
+/** True when something in the story moves, so it goes out as a short video instead of a picture. */
+export const designMoves = (d: StoryDesign) => d.layers.some((l) => l.kind === 'gif' || (l.kind !== 'draw' && !!l.motion && l.motion !== 'none'))
 
 export const hasArabic = (s: string) => /[؀-ۿ]/.test(s)
 
@@ -77,6 +90,7 @@ export const shownText = (l: Extract<StoryLayer, { kind: 'text' }>) => (TEXT_STY
 const NUDGE = import.meta.env.VITE_ENGINE_NUDGE_URL as string | undefined
 const SAVE_URL = NUDGE?.replace(/static-os-nudge$/, 'static-os-story')
 const ASSET_URL = NUDGE?.replace(/static-os-nudge$/, 'static-os-story-asset')
+const VIDEO_URL = NUDGE?.replace(/static-os-nudge$/, 'static-os-story-video')
 
 /** True when this build of the app can save designed stories (not in the demo). */
 export const storySaving = (): boolean => !!SAVE_URL && !!auth
@@ -105,6 +119,65 @@ export async function loadPoster(posterUrl: string): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+/**
+ * Sends a moving story: the video (MP4) and a still of it (JPEG, for the app's preview). The engine saves both and
+ * puts them on the post; the story then goes out as a video. Resolves to the video's Drive link.
+ */
+export async function saveStoryVideo(postId: string, jpeg: string, video: Blob): Promise<string> {
+  if (!VIDEO_URL) throw new Error('no-engine')
+  const form = new FormData()
+  form.append('token', await token())
+  form.append('postId', postId)
+  form.append('image', jpeg)
+  form.append('video', video, 'story.mp4')
+  // A multipart form is a "simple" request too.
+  const res = await fetch(VIDEO_URL, { method: 'POST', body: form })
+  const out = (await res.json().catch(() => ({}))) as { ok?: boolean; link?: string; video?: string; error?: string }
+  if (!res.ok || !out.ok || !out.video) throw new Error(out.error || `engine ${res.status}`)
+  return out.video
+}
+
+// ---------- GIPHY (the GIFs Instagram uses) ----------
+const GIPHY_KEY = import.meta.env.VITE_GIPHY_KEY as string | undefined
+export const giphyReady = () => !!GIPHY_KEY
+export type Gif = { id: string; title: string; preview: string; src: string; w: number; h: number }
+type GiphyImage = { url?: string; webp?: string; width?: string; height?: string; webp_size?: string }
+/** GIPHY stickers (see-through GIFs, as in Instagram's GIF search): trending when the search is empty. */
+// The free GIPHY key allows 100 searches an hour for the whole shop, so answers are kept: trending for an hour on
+// this device, searches for this visit.
+const gifCache = new Map<string, Gif[]>()
+const TRENDING_KEY = 'pp-giphy-trending'
+export async function searchGifs(q: string): Promise<Gif[]> {
+  if (!GIPHY_KEY) return []
+  const query = q.trim().toLowerCase()
+  const hit = gifCache.get(query)
+  if (hit) return hit
+  if (!query) {
+    try {
+      const kept = JSON.parse(localStorage.getItem(TRENDING_KEY) || 'null') as { at: number; gifs: Gif[] } | null
+      if (kept && Date.now() - kept.at < 3600_000) { gifCache.set('', kept.gifs); return kept.gifs }
+    } catch { /* asks GIPHY instead */ }
+  }
+  const gifs = await askGiphy(query)
+  gifCache.set(query, gifs)
+  if (!query) try { localStorage.setItem(TRENDING_KEY, JSON.stringify({ at: Date.now(), gifs })) } catch { /* kept for this visit only */ }
+  return gifs
+}
+async function askGiphy(q: string): Promise<Gif[]> {
+  const path = q.trim() ? `search?q=${encodeURIComponent(q.trim())}&` : 'trending?'
+  const res = await fetch(`https://api.giphy.com/v1/stickers/${path}api_key=${GIPHY_KEY}&limit=30&rating=g`)
+  if (res.status === 429) throw new Error('giphy-limit')
+  if (!res.ok) throw new Error(`GIPHY ${res.status}`)
+  const out = (await res.json()) as { data: { id: string; title: string; images: Record<string, GiphyImage> }[] }
+  return out.data.map((g) => {
+    const big = g.images.original && Number(g.images.original.webp_size ?? 0) < 2_500_000 ? g.images.original : g.images.fixed_height
+    const w = Number(big?.width ?? 200), h = Number(big?.height ?? 200)
+    // At most 520 story pixels on its longer side to start with; it can be made bigger.
+    const k = 520 / Math.max(w, h)
+    return { id: g.id, title: g.title, preview: g.images.fixed_width_small?.webp || g.images.fixed_width_small?.url || '', src: big?.webp || big?.url || '', w: Math.round(w * k), h: Math.round(h * k) }
+  }).filter((g) => g.src)
 }
 
 /** Sends the finished 1080x1920 JPEG (a data URL) to the engine, which saves it and puts it on the post. Resolves to its Drive link. */

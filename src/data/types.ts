@@ -81,6 +81,8 @@ export type Post = {
   storyIgStatus?: string
   /** The story as designed in the story editor (layers, as JSON text), so it can be opened and changed again. App only. */
   storyDesign?: string
+  /** Engine only: link to the story video in Drive, when the designed story moves (GIFs, moving stickers). */
+  storyVideo?: string
   /** Engine only: when the designed story picture was saved. */
   storyDesignedAt?: string
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
