@@ -1,13 +1,13 @@
 // "Decide app changes" Code node. For each website order:
 // - not in the app yet: the order is made (status from the website, a "placed" step by Website).
-// - in the app: the website part (customer, items, totals, delivery) is brought up to date. A new website status:
+// - in the app: the website part (customer, items, totals, delivery) is brought up to date, unless someone changed
+//   the order's details in the app (local: true; the app sends them to the website, see build-send.js). A new website status:
 //   - the app is sending this very status (want) -> want is emptied, nothing else;
 //   - the app has another status waiting -> the app wins, the next send overwrites the website;
 //   - otherwise the app follows the website, with a "website" step in the log (only when the app's status changes).
 //   The website's pickup date and time fill the app's date only while the app has none.
 // Each write carries the document's updateTime (or must not exist), so nothing the app wrote meanwhile is lost; a refused
 // write is simply read again on the next run.
-const STATES = { EGALX: 'Alexandria', EGASN: 'Aswan', EGAST: 'Asyut', EGBA: 'Red Sea', EGBH: 'Beheira', EGBNS: 'Beni Suef', EGC: 'Cairo', EGDK: 'Dakahlia', EGDT: 'Damietta', EGFYM: 'Faiyum', EGGH: 'Gharbia', EGGZ: 'Giza', EGIS: 'Ismailia', EGJS: 'South Sinai', EGKB: 'Qalyubia', EGKFS: 'Kafr el-Sheikh', EGKN: 'Qena', EGLX: 'Luxor', EGMN: 'Minya', EGMNF: 'Monufia', EGMT: 'Matrouh', EGPTS: 'Port Said', EGSHG: 'Sohag', EGSHR: 'Sharqia', EGSIN: 'North Sinai', EGSUZ: 'Suez', EGWAD: 'New Valley' };
 const PAY = { bacs: 'Instapay', cheque: 'E-wallet', cod: 'Cash' };
 const clean = s => { s = String(s || '').trim(); return s === '[object Object]' ? '' : s; };
 const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
@@ -50,7 +50,8 @@ for (const o of plan.orders) {
     continue;
   }
   const f = fieldsOf(doc), set = {};
-  for (const k of Object.keys(w)) if (!same(f[k], w[k])) set[k] = w[k];
+  // Details changed in the app (local) stay as the app has them; only the status still follows the website.
+  if (!f.local) for (const k of Object.keys(w)) if (!same(f[k], w[k])) set[k] = w[k];
   if (o.status !== f.webStatus) {
     set.webStatus = o.status;
     if (f.want) {

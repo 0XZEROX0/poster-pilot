@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyStep, fromWeb, leftOf, matchesOrder, progressOf, toOrder, withoutStep, type Step } from '../src/data/orders'
+import { applyStep, editFields, fromWeb, leftOf, matchesOrder, progressOf, toOrder, withoutStep, type Step } from '../src/data/orders'
 
 const st = (kind: Step['kind'], more: Partial<Step> = {}): Step => ({ at: 1, by: 'u', byName: 'U', kind, note: '', ...more })
 const base = toOrder('W1', { wooId: 1, number: '1', webStatus: 'on-hold', status: 'new', closed: false, customer: 'Karim Adel', phone: '01002223344', webTotal: 5299, shipping: 300, items: [{ name: 'Xigmatek Case', qty: 1, total: 4999 }], steps: [st('placed')] })
@@ -129,5 +129,25 @@ describe('sales by rep', () => {
     const mk = (id: string, rep: string, total: number, status = 'completed') => toOrder(id, { source: 'whatsapp', status, webTotal: total, rep, steps: [], items: [] })
     const g = sumsBy([mk('M1', 'Octo', 100), mk('M2', 'JR', 500), mk('M3', 'Octo', 300), mk('M4', '', 50, 'new')], null, {}, (o) => o.rep)
     expect(g.map(([k, s]) => [k, s.sales, s.orders])).toEqual([['JR', 500, 1], ['Octo', 400, 2], ['', 0, 1]])
+  })
+})
+
+describe('changing an order', () => {
+  const d = (over: Partial<Draft> = {}): Draft => ({ source: 'website', customer: ' Karim ', phone: '0100', email: '', address: '', city: '', area: '', delivery: 'pickup', shipping: 150, payMethod: 'Cash', items: [{ name: 'Case', qty: 1, total: 4999, pid: 7, vid: 2 }, { name: 'Fan', qty: 2, total: 600, pid: 0, vid: 0 }], customerNote: '', date: '', time: '', rep: '', category: '', status: 'new', agreed: null, ...over })
+  it('marks a website order local, keeps its source and the website product of each line', () => {
+    const f = editFields({ source: 'website' }, d()) as Record<string, unknown>
+    expect(f.local).toBe(true)
+    expect(f.push).toBe(true)
+    expect('source' in f).toBe(false)
+    expect((f.items as { pid: number; vid: number }[])[0]).toMatchObject({ pid: 7, vid: 2 })
+    expect(f.shipping).toBe(0) // picked up: no delivery fee
+    expect(f.webTotal).toBe(5599)
+    expect(f.customer).toBe('Karim')
+  })
+  it('keeps a hand order a hand order', () => {
+    const f = editFields({ source: 'whatsapp' }, d({ source: 'whatsapp', delivery: 'delivery' })) as Record<string, unknown>
+    expect(f.source).toBe('whatsapp')
+    expect('local' in f).toBe(false)
+    expect(f.webTotal).toBe(5749)
   })
 })

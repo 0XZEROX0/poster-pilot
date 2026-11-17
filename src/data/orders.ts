@@ -125,6 +125,10 @@ export type Order = {
   category: string
   label: string
   shipState: string
+  /** A website order whose details were changed in the app: the app's details win, the engine no longer brings the website's over them. */
+  local: boolean
+  /** The app's changed details are waiting to be sent to the website order (the engine sends them, then empties this). */
+  push: boolean
 }
 
 export const orderNo = (o: Pick<Order, 'number' | 'wooId'>) => `#${o.number || o.wooId}`
@@ -243,7 +247,7 @@ export function toOrder(id: string, d: DocumentData): Order {
     delivery: d.delivery === 'delivery' ? 'delivery' : 'pickup', shipping: num(d.shipping), payMethod: str(d.payMethod, 80), items, webTotal: num(d.webTotal),
     agreed: typeof d.agreed === 'number' ? d.agreed : null, customerNote: str(d.customerNote), date: str(d.date, 10), time: str(d.time, 5),
     webError: str(d.webError, 500), updatedAt: millis(d.updatedAt), steps,
-    rep: str(d.rep, 80), category: str(d.category, 80), label: str(d.label, 120), shipState: str(d.shipState, 120),
+    rep: str(d.rep, 80), category: str(d.category, 80), label: str(d.label, 120), shipState: str(d.shipState, 120), local: d.local === true, push: d.push === true,
   }
 }
 
@@ -264,9 +268,10 @@ export function stepBy(kind: StepKind, note: string, extra: Partial<Pick<Step, '
   return step
 }
 
-/** What the add / edit form fills in for an order added by hand. */
+/** What the add / edit form fills in: a new order added by hand, or new details for any order. */
 export type Draft = Pick<Order, 'customer' | 'phone' | 'email' | 'address' | 'city' | 'area' | 'delivery' | 'shipping' | 'payMethod' | 'items' | 'customerNote' | 'date' | 'time' | 'rep' | 'category'> & {
-  source: Exclude<Source, 'website'>
+  /** 'website' only when changing a website order. */
+  source: Source
   status: 'new' | 'confirmed'
   /** The price agreed with the customer when it differs from the lines + delivery; null = the same. */
   agreed: number | null
@@ -275,7 +280,8 @@ export type Draft = Pick<Order, 'customer' | 'phone' | 'email' | 'address' | 'ci
 /** The details part of an order added by hand, cleaned, with its total. */
 export function draftFields(d: Draft) {
   const items = d.items.filter((x) => x.name.trim()).slice(0, 100).map((x) => {
-    const it: Item = { name: x.name.trim().slice(0, 400), qty: Math.max(1, Math.round(x.qty || 1)), total: Math.max(0, Math.round((x.total || 0) * 100) / 100), pid: 0, vid: 0 }
+    // pid / vid: the website product, kept when a website order's line is changed (the sales page finds its cost by it).
+    const it: Item = { name: x.name.trim().slice(0, 400), qty: Math.max(1, Math.round(x.qty || 1)), total: Math.max(0, Math.round((x.total || 0) * 100) / 100), pid: Math.max(0, Math.round(x.pid || 0)), vid: Math.max(0, Math.round(x.vid || 0)) }
     if (x.cat) it.cat = x.cat
     if (x.ref) it.ref = x.ref
     return it
@@ -298,12 +304,19 @@ export function newManualId(now = Date.now()) {
   return { id: `M${now.toString(36)}${tail}`, number }
 }
 
+/** What changing an order's details writes. A website order keeps its source, is marked local (the engine no longer
+ * brings the website's details over it) and push (the engine sends the new details to the website order). */
+export function editFields(o: Pick<Order, 'source'>, d: Draft) {
+  const { source, ...f } = draftFields(d)
+  return { ...(o.source === 'website' ? { local: true, push: true } : { source }), ...f, agreed: d.agreed, date: d.date, time: d.time }
+}
+
 /** A whole new order from the form, with its first step. */
 export function manualOrder(d: Draft, step: Step, now = Date.now()): Omit<Order, 'id' | 'updatedAt' | 'placedAt'> & { id: string } {
   const { id, number } = newManualId(now)
   const f = draftFields(d)
   return {
-    id, ...f, wooId: 0, number, webStatus: '', want: '', status: d.status, closed: false, agreed: d.agreed, date: d.date, time: d.time, webError: '', steps: [step], label: '', shipState: '',
+    id, ...f, wooId: 0, number, webStatus: '', want: '', status: d.status, closed: false, agreed: d.agreed, date: d.date, time: d.time, webError: '', steps: [step], label: '', shipState: '', local: false, push: false,
   }
 }
 
@@ -314,7 +327,7 @@ export interface OrderBackend {
   loadPlaced(from: number, to: number): Promise<Order[]>
   /** A new order added by hand. Returns its id. */
   add(d: Draft): Promise<string>
-  /** New details for an order added by hand, with an "edited" step. */
+  /** New details for any order (needs 'Change order details'), with an "edited" step. Website orders change in the app only. */
   edit(o: Order, d: Draft, step: Step): Promise<void>
   /** The sales rep and category of any order (website ones too), with an "edited" step. */
   tag(o: Order, rep: string, category: string, step: Step): Promise<void>
@@ -330,7 +343,8 @@ function firestoreOrders(fs: NonNullable<typeof firestore>): OrderBackend {
       return onSnapshot(query(col, where('closed', '==', false)), (snap) => onData(snap.docs.map((x) => toOrder(x.id, x.data()))), onError)
     },
     async loadClosed() {
-      const snap = await getDocs(query(col, orderBy('updatedAt', 'desc'), limit(150)))
+      // The newest placed 300 (open ones come live from watchOpen); older ones through a date filter.
+      const snap = await getDocs(query(col, orderBy('placedAt', 'desc'), limit(300)))
       return snap.docs.map((x) => toOrder(x.id, x.data())).filter((x) => x.closed)
     },
     async loadPlaced(from, to) {
@@ -343,7 +357,7 @@ function firestoreOrders(fs: NonNullable<typeof firestore>): OrderBackend {
       return id
     },
     async edit(o, d, step) {
-      await updateDoc(doc(col, o.id), { ...draftFields(d), agreed: d.agreed, date: d.date, time: d.time, steps: [...o.steps, step], updatedAt: serverTimestamp() })
+      await updateDoc(doc(col, o.id), { ...editFields(o, d), steps: [...o.steps, step], updatedAt: serverTimestamp() })
     },
     async tag(o, rep, category, step) {
       await updateDoc(doc(col, o.id), { rep: rep.trim().slice(0, 80), category: category.trim().slice(0, 80), steps: [...o.steps, step], updatedAt: serverTimestamp() })
@@ -369,7 +383,7 @@ function demoOrders(): Order[] {
   const today = cairoNow().date
   const at = (n: number, h: number) => new Date(`${addDays(today, n)}T${String(h).padStart(2, '0')}:00:00+02:00`).getTime()
   const s = (kind: StepKind, n: number, h: number, byName: string, note = '', extra: Partial<Step> = {}): Step => ({ at: at(n, h), by: byName, byName, kind, note, ...extra })
-  const base = { email: '', want: '', webError: '', customerNote: '', agreed: null, date: '', time: '', closed: false, rep: '', category: '', label: '', shipState: '' }
+  const base = { email: '', want: '', webError: '', customerNote: '', agreed: null, date: '', time: '', closed: false, rep: '', category: '', label: '', shipState: '', local: false, push: false }
   const mk = (wooId: number, webStatus: string, o: Partial<Order> & Pick<Order, 'customer' | 'phone' | 'items' | 'steps'>): Order => {
     const shipping = o.shipping ?? 0
     const webTotal = o.items.reduce((n, x) => n + x.total, 0) + shipping
@@ -422,7 +436,7 @@ function localOrders(): OrderBackend {
       return o.id
     },
     async tag(o, rep, category, step) { localChange(o.id, { rep, category, steps: [...o.steps, step] }) },
-    async edit(o, d, step) { localChange(o.id, { ...draftFields(d), agreed: d.agreed, date: d.date, time: d.time, steps: [...o.steps, step] }) },
+    async edit(o, d, step) { localChange(o.id, { ...editFields(o, d), steps: [...o.steps, step] } as Partial<Order>) },
     async addStep(o, step) { localChange(o.id, applyStep(o, step)) },
     async removeStep(o, index) { localChange(o.id, withoutStep(o, index)) },
     async remove(o) { localPut(localGet().filter((x) => x.id !== o.id)) },

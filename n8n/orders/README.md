@@ -6,8 +6,10 @@ sources into the live workflow.
 
 ## Data
 `orders/W<website order id>`: see `src/data/orders.ts`. The engine makes each document and keeps the website part
-(customer, phone, email, address, delivery, items, totals, pay method, website status) up to date. The app changes only
-`status`, `want`, `closed`, `agreed`, `date`, `time`, `steps` (firestore.rules enforces it).
+(customer, phone, email, address, delivery, items, totals, pay method, website status) up to date. The app changes
+`status`, `want`, `closed`, `agreed`, `date`, `time`, `steps`; with "Change order details" also the details, which marks
+the order `local` (the engine stops bringing the website's details over it, the status still syncs) and `push` (the
+engine sends the details to the website, see below). firestore.rules enforces it.
 
 ## Status mapping
 | Website (WooCommerce) | App |
@@ -30,6 +32,12 @@ App -> website: Confirm order / Open again = processing, Delivered = completed, 
   starts this workflow (`When app asks`). "Find orders to send" queries `want IN [...]` (1 read when none), sends one
   WooCommerce `orders/batch`, and writes the answer back (`webStatus`, `want` = '', or `webError`) plus a line in the
   activity log by Website.
+- App edits -> website: "Find orders to send" also finds `push == true`. "Read orders to change" reads those website
+  orders, "Build the website update" (`build-send.js`) adds billing/shipping, note, pay method (only when changed),
+  the shipping line (pickup = local_pickup at 0, delivery keeps the site's method with the app's fee) and the items:
+  product lines matched by product/variation id get the app's quantity and price, lines the app dropped are removed
+  (`product_id: null`), new website products are added, hand-typed items go as fee lines marked `_static_os` (replaced
+  on each send). WooCommerce recalculates the total. The answer empties `push` (or writes `webError`).
 - Every hour at :40 the same run as a safety net; every hour at :25 the webhooks are checked/re-enabled
   (`Hook settings.hooks` must be true).
 - Website requests stay >= 1.5 s apart and a burst of webhook calls starts one read (Hostinger firewall, see

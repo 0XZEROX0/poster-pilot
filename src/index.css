@@ -1476,3 +1476,10 @@ button.stock:hover { filter: brightness(1.15); }
 .or-tag { margin-inline-start: 10px; color: var(--accent); font-weight: 600; font-size: 0.85rem; background: none; padding: 0; }
 .or-tagform { background: var(--surface-2); border-radius: 12px; padding: 10px; }
 .os-table { margin-top: 4px; }
+
+/* Orders: search with the sort beside it (wraps under it on a phone). */
+.or-searchrow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.or-searchrow > :first-child { flex: 1 1 260px; min-width: 0; }
+@media (max-width: 600px) { .or-sort { width: 100%; } .or-sort select { flex: 1; } }
+.or-sort { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.or-sort select { min-height: 44px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
