@@ -21,6 +21,7 @@ import { applyEditToStored, builderOpen, edits } from './data/builder'
 import { DatabaseView } from './components/DatabaseView'
 import { ActivityView } from './components/ActivityView'
 import { MaintenanceView } from './components/MaintenanceView'
+import { OrdersView } from './components/OrdersView'
 import { allowed, isOwner, myId, ownOffer, postWork, seesPage, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, tn, useLang } from './i18n'
@@ -29,7 +30,7 @@ import { APP_GROUPS, AppIcon, Launcher } from './components/Launcher'
 import { useLayout } from './layout'
 
 /** What a tab needs. A tab the person's role cannot use is not shown. */
-const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view', brainstorm: 'brainstorm', maintenance: 'tickets' }
+const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view', brainstorm: 'brainstorm', maintenance: 'tickets', orders: 'orders' }
 
 const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
@@ -37,6 +38,7 @@ const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'prices', label: 'Prices', icon: 'prices' },
   { id: 'builder', label: 'Builder', icon: 'builder' },
   { id: 'maintenance', label: 'Maintenance', icon: 'wrench' },
+  { id: 'orders', label: 'Orders', icon: 'cart' },
   { id: 'offers', label: 'Offers', icon: 'offer' },
   { id: 'review', label: 'Review', icon: 'review' },
   { id: 'fix', label: 'Fix', icon: 'fix' },
@@ -53,7 +55,7 @@ type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'setting
 const tabFromHash = (): Tab => ALL_TABS.find((x) => location.hash === `#/${x.id}` || location.hash.startsWith(`#/${x.id}/`))?.id ?? 'home'
 
 /** Sidebar headings: the shop tools, then everything about posters. */
-const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' || id === 'maintenance' ? 'Shop' : id === 'activity' ? 'Team' : 'Posters')
+const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' || id === 'maintenance' || id === 'orders' ? 'Shop' : id === 'activity' ? 'Team' : 'Posters')
 
 /** The engine is "quiet" when it has not written its sign of life for this long. */
 // The engine's timed run (which writes the heartbeat) is now hourly; the app's signals start everything else.
@@ -67,7 +69,7 @@ export default function App() {
   const [wanted, setTab] = useState<Tab>(tabFromHash)
   // The app grid (default) or the older sidebar layout, chosen in Settings.
   const solo = useLayout() === 'grid'
-  const TABS = ALL_TABS.filter((x) => (x.id === 'dashboard' ? solo : true)).filter((x) => x.id === 'home' || x.id === 'dashboard' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || seesPage(x.id)).filter((x) => (x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
+  const TABS = ALL_TABS.filter((x) => (x.id === 'dashboard' ? solo : true)).filter((x) => x.id === 'home' || x.id === 'dashboard' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || x.id === 'orders' || seesPage(x.id)).filter((x) => (x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'orders' ? allowed('orders') || allowed('orders.edit') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -193,6 +195,8 @@ export default function App() {
     <PlannerView data={data} onOpen={open} />
   ) : tab === 'maintenance' ? (
     <MaintenanceView />
+  ) : tab === 'orders' ? (
+    <OrdersView />
   ) : tab === 'brainstorm' ? (
     <BrainstormView data={data} onOpen={open} />
   ) : tab === 'database' ? (

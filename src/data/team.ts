@@ -12,7 +12,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'orders', 'orders.edit'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
@@ -33,6 +33,8 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   'activity.view': ['See the activity log', 'Open Activity: everything everyone did in the app (offers, prices, quotes, people, settings, engine and website), with filters. Nobody can change or remove a line. The owner always sees it.'],
   tickets: ['Open maintenance tickets', 'See the Maintenance page, open new tickets, print the receipt and message the customer on WhatsApp. Without Edit tickets, a ticket cannot be changed after it is opened.'],
   'tickets.edit': ['Edit maintenance tickets', 'Change a ticket\'s details and add steps to its log (given to warranty, fixed, replaced, delivered and so on). Only the owner can delete a ticket or take a step out.'],
+  orders: ['See website orders', 'See the Orders page: the orders customers place on static-eg.com, with their name, phone, address, items, payments and log, and message them on WhatsApp. Without Handle orders, nothing can be changed.'],
+  'orders.edit': ['Handle website orders', 'Confirm, complete and cancel orders (the website order changes too), set the pickup or delivery date and time, the agreed price and payments, and add steps to the log. Only the owner can remove an order from the app or take a step out.'],
   'quotes.edit': ['Edit live quotes', "Change someone's quote while they build it (from Live quotes): parts, quantities, build discount and extra discount. They see each change at once, with your name."],
 }
 /** 'owner', or the id of a role in `roles`. */
@@ -57,7 +59,7 @@ export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
   { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit'), pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'orders' && p !== 'orders.edit'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }

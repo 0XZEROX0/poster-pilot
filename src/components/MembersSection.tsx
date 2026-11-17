@@ -108,7 +108,7 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
 /** Permissions and pages grouped by the part of the app they belong to. */
 /** permPages: pages that are switched on by a permission alone; they show among the page pills and tick that permission. */
 const GROUPS: { title: string; hint: string; pages: Page[]; perms: Perm[]; permPages?: { perm: Perm; label: string }[] }[] = [
-  { title: 'Shop', hint: 'Prices, the PC builder and maintenance tickets.', pages: ['prices', 'builder'], perms: ['prices.edit', 'prices.web', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'tickets', 'tickets.edit'], permPages: [{ perm: 'tickets', label: 'Maintenance' }] },
+  { title: 'Shop', hint: 'Prices, the PC builder, website orders and maintenance tickets.', pages: ['prices', 'builder'], perms: ['prices.edit', 'prices.web', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'orders', 'orders.edit', 'tickets', 'tickets.edit'], permPages: [{ perm: 'orders', label: 'Orders' }, { perm: 'tickets', label: 'Maintenance' }] },
   { title: 'Posters', hint: 'Offers, posters, the schedule and Facebook.', pages: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'], perms: ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'brainstorm', 'delete', 'templates.edit'], permPages: [{ perm: 'brainstorm', label: 'Brainstorm' }] },
   { title: 'People', hint: 'Who is in the system, and what everyone did.', pages: [], perms: ['people', 'activity.view'] },
 ]

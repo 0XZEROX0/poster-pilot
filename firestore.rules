@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'orders', 'orders.edit'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -276,7 +276,9 @@ service cloud.firestore {
               || (d.act in ['member.role', 'role.saved', 'role.deleted', 'code.reset'] && isOwner())))
           || (d.app == 'settings' && ((d.act == 'templates.saved' && can('templates.edit')) || d.act == 'engine.run'))
           || (d.app == 'tickets' && ((d.act == 'ticket.opened' && can('tickets')) || (d.act in ['ticket.step', 'ticket.edited'] && can('tickets.edit'))
-              || (d.act in ['ticket.deleted', 'ticket.step_removed'] && isOwner()))));
+              || (d.act in ['ticket.deleted', 'ticket.step_removed'] && isOwner())))
+          || (d.app == 'orders' && ((d.act == 'order.step' && can('orders.edit'))
+              || (d.act in ['order.deleted', 'order.step_removed'] && isOwner()))));
     }
     match /activity/{id} {
       allow read: if can('activity.view');
@@ -464,6 +466,36 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.createdByName == resource.data.createdByName
         && (request.resource.data.steps.size() > resource.data.steps.size() || request.resource.data.steps == resource.data.steps || isOwner());
+      allow delete: if isOwner();
+    }
+    // Website orders (orders/W<website order id>), one document each with its whole event log inside.
+    // Only the engine makes them and writes the website part (customer, items, totals, website status), with its
+    // service account. The app may change only what happens in the shop: the status and the website status to send
+    // (want), the agreed price, the date and time, and the log. Steps can only be added; only the owner may take a
+    // step out or remove an order from the app (it stays on the website).
+    function orderStepOk(st) {
+      return st is map && st.keys().hasOnly(['at', 'by', 'byName', 'kind', 'note', 'amount', 'method', 'date', 'time', 'web'])
+        && st.kind in ['called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note']
+        && st.note is string && st.note.size() <= 1000
+        && (!('amount' in st) || (st.amount is number && st.amount >= 0 && st.amount <= 100000000));
+    }
+    match /orders/{id} {
+      allow read: if can('orders') || can('orders.edit');
+      allow create: if false;
+      allow update: if can('orders.edit')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'want', 'closed', 'agreed', 'date', 'time', 'steps', 'updatedAt'])
+        && request.resource.data.status in ['new', 'confirmed', 'completed', 'cancelled', 'refunded', 'failed']
+        && request.resource.data.want in ['', 'on-hold', 'processing', 'completed', 'cancelled']
+        && request.resource.data.closed == !(request.resource.data.status in ['new', 'confirmed'])
+        && (request.resource.data.agreed == null || (request.resource.data.agreed is number && request.resource.data.agreed >= 0))
+        && request.resource.data.date is string && request.resource.data.date.size() <= 10
+        && request.resource.data.time is string && request.resource.data.time.size() <= 5
+        && request.resource.data.steps is list && request.resource.data.steps.size() <= 300
+        && request.resource.data.updatedAt == request.time
+        && ((request.resource.data.steps.size() == resource.data.steps.size() + 1
+              && orderStepOk(request.resource.data.steps[request.resource.data.steps.size() - 1])
+              && request.resource.data.steps[request.resource.data.steps.size() - 1].by == request.auth.uid)
+          || isOwner());
       allow delete: if isOwner();
     }
     match /counters/tickets {
