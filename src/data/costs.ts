@@ -3,7 +3,7 @@ import { myNameFor } from './profiles'
 import { collection, deleteField, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch, type Firestore } from 'firebase/firestore'
 import { useEffect, useSyncExternalStore } from 'react'
 import { firestore } from './firebase'
-import { costKey, costsOf, type CostMap } from './costMath'
+import { costKey, costsOf, nextHist, type CostHist, type CostMap } from './costMath'
 import { money, type PriceChange } from './prices'
 import { allowed } from './store'
 
@@ -11,7 +11,8 @@ import { allowed } from './store'
 // database enforces that: the cost is NOT a field of the price list (everyone in the system reads prices/*,
 // and the engine and the website sync read it too), it lives in its own collection that nobody else can read.
 //
-//   costs/{category}  { items: { [productId]: { cost, at, byName } } }   same category ids as prices/{category}
+//   costs/{category}  { items: { [productId]: { cost, at, byName, hist: [{ at, cost }] } } }   same category ids as prices/{category}
+//                     hist: every cost the product had and from when (ms), so old orders use the cost of their day
 //   costLog/{auto}    { cat, pid, name, act: 'cost', changes: [{ f: 'cost', from, to }], at, by, byName }
 //                     never changed or removed; read only with 'See and edit cost' (so not part of priceLog, which
 //                     everyone reads)
@@ -22,7 +23,7 @@ import { allowed } from './store'
 export * from './costMath'
 
 export interface CostBackend {
-  watch(onData: (costs: CostMap) => void, onError: (message: string) => void): () => void
+  watch(onData: (costs: CostMap, hist: CostHist) => void, onError: (message: string) => void): () => void
   /** Sets (or empties, with null) one product's cost, with a line in costLog, all or nothing. */
   save(cat: string, pid: string, name: string, cost: number | null, before: number | null): Promise<void>
   /** A product moved to another category gets a new id: its cost follows it. */
@@ -44,8 +45,9 @@ function firestoreCosts(db: Firestore): CostBackend {
         collection(db, 'costs'),
         (snap) => {
           const out: CostMap = {}
-          snap.docs.forEach((d) => costsOf(d.id, d.data(), out))
-          onData(out)
+          const hist: CostHist = {}
+          snap.docs.forEach((d) => costsOf(d.id, d.data({ serverTimestamps: 'estimate' }), out, hist))
+          onData(out, hist)
         },
         (e) => onError(e.message),
       )
@@ -54,14 +56,16 @@ function firestoreCosts(db: Firestore): CostBackend {
       if (cost === before) return
       const { by, byName } = who()
       const batch = writeBatch(db)
-      batch.set(doc(db, 'costs', cat), { items: { [pid]: cost === null ? deleteField() : { cost, at: serverTimestamp(), byName } } }, { merge: true })
+      const hist = nextHist(state.hist[costKey(cat, pid)], cost, Date.now())
+      batch.set(doc(db, 'costs', cat), { items: { [pid]: cost === null ? deleteField() : { cost, at: serverTimestamp(), byName, hist } } }, { merge: true })
       batch.set(doc(collection(db, 'costLog')), { cat, pid, name: name.slice(0, 400), act: 'cost', changes: [{ f: 'cost', from: show(before), to: show(cost) }], at: serverTimestamp(), by, byName })
       await batch.commit()
     },
     async move(from, to, cost) {
       const { byName } = who()
       const batch = writeBatch(db)
-      batch.set(doc(db, 'costs', to.cat), { items: { [to.pid]: { cost, at: serverTimestamp(), byName } } }, { merge: true })
+      const hist = state.hist[costKey(from.cat, from.pid)] ?? nextHist([], cost, Date.now())
+      batch.set(doc(db, 'costs', to.cat), { items: { [to.pid]: { cost, at: serverTimestamp(), byName, hist } } }, { merge: true })
       batch.set(doc(db, 'costs', from.cat), { items: { [from.pid]: deleteField() } }, { merge: true })
       await batch.commit()
     },
@@ -97,7 +101,7 @@ function localCosts(): CostBackend {
   // A few costs so the demo shows how it looks.
   let costs = load<CostMap>(DEMO_KEY, { 'cpu/d1': 7300, 'cpu/d4': 7600, 'mb/d8': 4950, 'ram/d13': 13300, 'vga/d15': 27600, 'ssd/d19': 3500, 'case/d22': 3900, 'cooler/d25': 1050, 'monitor/d27': 5400 })
   let log = load<PriceChange[]>(DEMO_LOG_KEY, [])
-  const listeners = new Set<(c: CostMap) => void>()
+  const listeners = new Set<(c: CostMap, h: CostHist) => void>()
   const persist = () => {
     try {
       localStorage.setItem(DEMO_KEY, JSON.stringify(costs))
@@ -105,7 +109,7 @@ function localCosts(): CostBackend {
     } catch {
       // The demo then lasts until the page is closed.
     }
-    listeners.forEach((l) => l(costs))
+    listeners.forEach((l) => l(costs, {}))
   }
   const drop = (k: string) => {
     const next = { ...costs }
@@ -115,7 +119,7 @@ function localCosts(): CostBackend {
   return {
     watch(onData) {
       listeners.add(onData)
-      onData(costs)
+      onData(costs, {})
       return () => listeners.delete(onData)
     },
     async save(cat, pid, name, cost, before) {
@@ -143,8 +147,8 @@ function localCosts(): CostBackend {
 export const costs: CostBackend = firestore ? firestoreCosts(firestore) : localCosts()
 
 // One live listener for the whole app, only for people who may see cost (anyone else never asks the database).
-type CostState = { loaded: boolean; costs: CostMap; error: string }
-let state: CostState = { loaded: false, costs: {}, error: '' }
+type CostState = { loaded: boolean; costs: CostMap; hist: CostHist; error: string }
+let state: CostState = { loaded: false, costs: {}, hist: {}, error: '' }
 const listeners = new Set<() => void>()
 let users = 0
 let stop: (() => void) | null = null
@@ -153,16 +157,16 @@ const set = (patch: Partial<CostState>) => {
   state = { ...state, ...patch }
   listeners.forEach((l) => l())
 }
-const EMPTY: CostState = { loaded: true, costs: {}, error: '' }
+const EMPTY: CostState = { loaded: true, costs: {}, hist: {}, error: '' }
 
 function hold() {
   if (!allowed('cost')) return
   users++
   clearTimeout(stopTimer)
-  if (!stop) stop = costs.watch((c) => set({ costs: c, loaded: true, error: '' }), (error) => set({ error, loaded: true }))
+  if (!stop) stop = costs.watch((c, h) => set({ costs: c, hist: h, loaded: true, error: '' }), (error) => set({ error, loaded: true }))
   return () => {
     users--
-    if (users === 0) stopTimer = setTimeout(() => { stop?.(); stop = null; state = { loaded: false, costs: {}, error: '' } }, 5 * 60_000)
+    if (users === 0) stopTimer = setTimeout(() => { stop?.(); stop = null; state = { loaded: false, costs: {}, hist: {}, error: '' } }, 5 * 60_000)
   }
 }
 

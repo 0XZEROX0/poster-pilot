@@ -1478,6 +1478,18 @@ button.stock:hover { filter: brightness(1.15); }
 .or-tag { margin-inline-start: 10px; color: var(--accent); font-weight: 600; font-size: 0.85rem; background: none; padding: 0; }
 .or-tagform { background: var(--surface-2); border-radius: 12px; padding: 10px; }
 .os-table { margin-top: 4px; }
+#os-fix { display: grid; gap: 10px; scroll-margin-top: 80px; }
+.os-fix { padding: 12px; gap: 8px; font-size: 0.9rem; }
+.os-fix-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
+.os-fix-head > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-fix-head .num { grid-row: 1 / span 2; grid-column: 2; font-variant-numeric: tabular-nums; }
+.os-fix-line { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 6px 10px; align-items: center; padding-top: 8px; border-top: 1px solid var(--border); }
+.os-fix-line > .btn, .os-fix-line > small { grid-column: 2; justify-self: stretch; text-align: center; }
+.os-fix-name { min-width: 0; overflow-wrap: anywhere; }
+.os-fix-line input { width: 100%; min-height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; font-variant-numeric: tabular-nums; }
+.os-fix-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.os-fix-foot .good { color: var(--good); }
+.os-fix-foot .bad { color: var(--bad); }
 
 /* Orders: search with the sort beside it (wraps under it on a phone). */
 .or-searchrow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }

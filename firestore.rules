@@ -312,6 +312,17 @@ service cloud.firestore {
         && request.resource.data.items is map;
       allow delete: if false;
     }
+    // What the lines of completed orders cost the shop (typed in on the Sales page), one document per month the
+    // orders were placed in: orderCosts/{YYYY-MM} { orders: { [orderId]: { lines: [{ n, c }], at, byName } } }.
+    // Only 'See and edit cost'; kept out of orders/* because everyone handling orders reads those.
+    match /orderCosts/{month} {
+      allow read: if can('cost');
+      allow create, update: if can('cost')
+        && month.matches('[0-9]{4}-[0-9]{2}')
+        && request.resource.data.keys().hasOnly(['orders'])
+        && request.resource.data.orders is map;
+      allow delete: if false;
+    }
     // Every cost change, like priceLog but only for those who may see cost. Nobody changes or removes a line.
     match /costLog/{id} {
       allow read: if can('cost');

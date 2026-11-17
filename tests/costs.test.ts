@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { buildCost, costKey, costsOf, lowestPrice, profitOf, profitText } from '../src/data/costMath'
+import { buildCost, costAt, costKey, costsOf, lowestPrice, nextHist, profitOf, profitText, type CostHist } from '../src/data/costMath'
 
 describe('costs', () => {
   it('reads a costs document into one map by category and product', () => {
     const map = {}
     costsOf('cpu', { items: { a1: { cost: 7300 }, a2: { cost: null }, a3: {} } }, map)
     expect(map).toEqual({ 'cpu/a1': 7300 })
+  })
+  it('keeps when each cost started, so old orders use the cost of their day', () => {
+    const map = {}
+    const hist: CostHist = {}
+    costsOf('cpu', { items: { a1: { cost: 7300, at: 5000 }, a2: { cost: 900, at: { toMillis: () => 9000 }, hist: [{ at: 1000, cost: 800 }, { at: 9000, cost: 900 }] } } }, map, hist)
+    expect(hist).toEqual({ 'cpu/a1': [{ at: 5000, cost: 7300 }], 'cpu/a2': [{ at: 1000, cost: 800 }, { at: 9000, cost: 900 }] })
+    expect(costAt(hist['cpu/a2'], 500)).toBeNull()
+    expect(costAt(hist['cpu/a2'], 1000)).toBe(800)
+    expect(costAt(hist['cpu/a2'], 10000)).toBe(900)
+    expect(nextHist(hist['cpu/a1'], 7000, 6000)).toEqual([{ at: 5000, cost: 7300 }, { at: 6000, cost: 7000 }])
+    expect(nextHist(hist['cpu/a1'], null, 6000)).toEqual([])
   })
   it('adds up what the picked parts cost, times quantity, and counts parts without a cost', () => {
     const map = { [costKey('cpu', 'a')]: 7000, [costKey('ram', 'b')]: 1500 }

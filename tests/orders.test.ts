@@ -63,7 +63,7 @@ describe('search', () => {
 })
 
 import { draftFields, manualOrder, type Draft } from '../src/data/orders'
-import { orderCost, periodDays, cairoStart, statsOf, webIndex } from '../src/data/orderStats'
+import { lineCosts, orderCost, periodDays, cairoStart, statsOf, webIndex, type CostCtx } from '../src/data/orderStats'
 
 const draft = (over: Partial<Draft> = {}): Draft => ({
   source: 'whatsapp', status: 'new', agreed: null, customer: ' Sara ', phone: '0100', email: '', address: 'x', city: 'Giza', area: '', delivery: 'pickup', shipping: 200,
@@ -93,10 +93,28 @@ describe('sales and profit', () => {
   const cats = [{ id: 'ram', items: [{ id: 'r1' }, { id: 'r2', web: { id: 500, ok: true } }, { id: 'r3', web: { id: 600, ok: true, variation: 601 } }, { id: 'r4', web: { id: 700, ok: false } }] }]
   const web = webIndex(cats)
   const costs = { 'ram/r1': 1200, 'ram/r2': 900, 'ram/r3': 100 }
+  const ctx = (over: Partial<CostCtx> = {}): CostCtx => ({ costs, hist: {}, web, saved: {}, ...over })
+  const line = (name: string, more: Record<string, unknown> = {}) => ({ name, qty: 1, total: 0, pid: 0, vid: 0, ...more })
   it('finds what website lines cost through confirmed links only', () => {
-    expect(web).toEqual({ '500:0': 'ram/r2', '600:601': 'ram/r3' })
-    expect(orderCost({ items: [{ name: 'a', qty: 2, total: 0, pid: 500, vid: 0 }, { name: 'b', qty: 1, total: 0, pid: 600, vid: 601 }] }, costs, web)).toEqual({ cost: 1900, missing: 0 })
-    expect(orderCost({ items: [{ name: 'c', qty: 1, total: 0, pid: 700, vid: 0 }] }, costs, web)).toEqual({ cost: 0, missing: 1 })
+    expect(web).toEqual({ '500:0': 'ram/r2', '500:*': 'ram/r2', '600:601': 'ram/r3', '600:*': 'ram/r3' })
+    expect(orderCost({ id: 'W1', placedAt: 0, items: [line('a', { qty: 2, pid: 500 }), line('b', { pid: 600, vid: 601 })] }, ctx())).toMatchObject({ cost: 1900, missing: 0 })
+    expect(orderCost({ id: 'W1', placedAt: 0, items: [line('c', { pid: 700 })] }, ctx())).toMatchObject({ cost: 0, missing: 1 })
+  })
+  it('uses the cost the product had on the day of the order, and only suggests a later one', () => {
+    const hist = { 'ram/r2': [{ at: 1000, cost: 800 }, { at: 2000, cost: 900 }] }
+    const o = (placedAt: number) => ({ id: 'W1', placedAt, items: [line('a', { pid: 500 })] })
+    expect(lineCosts(o(1500), ctx({ hist }))).toEqual([{ unit: 800, from: 'list', suggest: null }])
+    expect(lineCosts(o(2500), ctx({ hist }))).toEqual([{ unit: 900, from: 'list', suggest: null }])
+    expect(lineCosts(o(500), ctx({ hist }))).toEqual([{ unit: null, from: null, suggest: 900 }])
+    // another option of a linked website product: a suggestion only
+    expect(lineCosts({ id: 'W2', placedAt: 0, items: [line('b', { pid: 600, vid: 602 })] }, ctx())).toEqual([{ unit: null, from: null, suggest: 100 }])
+  })
+  it('a cost saved on the order wins, while the line keeps its name', () => {
+    const o = { id: 'MS1', placedAt: 0, items: [line('Old PC specs', { total: 20000 }), line('a', { qty: 2, pid: 500 })] }
+    expect(orderCost(o, ctx())).toMatchObject({ missing: 1 })
+    const saved = { MS1: [{ n: 'Old PC specs', c: 17000 }, { n: 'a', c: 850 }] }
+    expect(orderCost(o, ctx({ saved }))).toMatchObject({ cost: 18700, missing: 0 })
+    expect(orderCost({ ...o, items: [line('Changed', { total: 20000 }), o.items[1]] }, ctx({ saved }))).toMatchObject({ missing: 1 })
   })
   it('adds up completed orders, keeps open and cancelled apart, and leaves out orders without cost', () => {
     const mk = (id: string, more: Record<string, unknown>) => toOrder(id, { closed: false, steps: [], items: [], ...more })
@@ -106,14 +124,16 @@ describe('sales and profit', () => {
       mk('M1', { source: 'phone', status: 'completed', webTotal: 3000, agreed: 2800, items: [{ name: 'RAM', qty: 2, total: 3000, cat: 'ram', ref: 'r1' }] }),
       mk('M2', { source: 'store', status: 'new', webTotal: 500 }),
       mk('W3', { webStatus: 'cancelled', status: 'cancelled', webTotal: 999 }),
+      mk('M3', { source: 'phone', status: 'completed', webTotal: 700 }),
     ]
-    const s = statsOf(list, costs, web)
-    expect(s.all).toMatchObject({ orders: 5, completed: 3, cancelled: 1, open: 1, openValue: 500, sales: 5900, delivery: 300, costed: 2, uncosted: 1 })
-    // W1: 2100 - 300 delivery - 1800 cost = 0; M1: 2800 - 2400 = 400
+    const s = statsOf(list, ctx())
+    expect(s.all).toMatchObject({ orders: 6, completed: 4, cancelled: 1, open: 1, openValue: 500, sales: 6600, delivery: 300, costed: 2, uncosted: 2 })
+    // W1: 2100 - 300 delivery - 1800 cost = 0; M1: 2800 - 2400 = 400; M3 has no items, so no cost: never all profit
     expect(s.all.profit).toBe(400)
-    expect(s.manual).toMatchObject({ orders: 2, completed: 1, sales: 2800, profit: 400 })
+    expect(s.manual).toMatchObject({ orders: 3, completed: 2, sales: 3500, profit: 400 })
     expect(s.website).toMatchObject({ orders: 3, completed: 2, sales: 3100 })
-    expect(statsOf(list, null, web).all.uncosted).toBe(3)
+    expect(statsOf(list, null).all.uncosted).toBe(4)
+    expect(s.lines.find((l) => l.o.id === 'W2')).toMatchObject({ profit: null, missing: 1 })
   })
   it('turns periods into Cairo days', () => {
     expect(periodDays('week', '2026-11-17')).toEqual({ from: '2026-11-11', to: '2026-11-17' })
@@ -127,7 +147,7 @@ import { sumsBy } from '../src/data/orderStats'
 describe('sales by rep', () => {
   it('groups orders by any key, biggest sales first', () => {
     const mk = (id: string, rep: string, total: number, status = 'completed') => toOrder(id, { source: 'whatsapp', status, webTotal: total, rep, steps: [], items: [] })
-    const g = sumsBy([mk('M1', 'Octo', 100), mk('M2', 'JR', 500), mk('M3', 'Octo', 300), mk('M4', '', 50, 'new')], null, {}, (o) => o.rep)
+    const g = sumsBy([mk('M1', 'Octo', 100), mk('M2', 'JR', 500), mk('M3', 'Octo', 300), mk('M4', '', 50, 'new')], null, (o) => o.rep)
     expect(g.map(([k, s]) => [k, s.sales, s.orders])).toEqual([['JR', 500, 1], ['Octo', 400, 2], ['', 0, 1]])
   })
 })
@@ -149,5 +169,19 @@ describe('changing an order', () => {
     expect(f.source).toBe('whatsapp')
     expect('local' in f).toBe(false)
     expect(f.webTotal).toBe(5749)
+  })
+})
+
+import { monthOf, monthsBetween, savedOf } from '../src/data/orderCosts'
+describe('costs saved on orders', () => {
+  it('files orders by their Cairo month and lists the months of a period', () => {
+    expect(monthOf(Date.parse('2026-10-31T23:30:00Z'))).toBe('2026-11')
+    expect(monthsBetween('2025-11-20', '2026-02-03')).toEqual(['2025-11', '2025-12', '2026-01', '2026-02'])
+    expect(monthsBetween('2026-11-01', '2026-11-17')).toEqual(['2026-11'])
+  })
+  it('reads a month document', () => {
+    const out = {}
+    savedOf({ orders: { MS1: { lines: [{ n: 'PC', c: 100 }, { n: 'x', c: null }, { n: 'y' }] }, bad: {} } }, out)
+    expect(out).toEqual({ MS1: [{ n: 'PC', c: 100 }, { n: 'x', c: null }, { n: 'y', c: null }] })
   })
 })

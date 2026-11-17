@@ -457,6 +457,18 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('cost line removed by the owner', deleteDoc(doc(boss, 'costLog/c1')))
   await no('a cost line cannot go into the price log everyone reads', setDoc(doc(pricer, 'priceLog/c9'), CL()))
   await ok('role without Edit prices still reads prices', getDocs(collection(sch, 'prices')))
+  // costs saved on orders: same permission
+  const OC = { orders: { MS1: { lines: [{ n: 'PC', c: 17000 }], at: serverTimestamp(), byName: 'P' } } }
+  await ok('cost role saves costs on orders', setDoc(doc(pricer, 'orderCosts/2026-11'), OC, { merge: true }))
+  await ok('cost role reads costs on orders', getDoc(doc(pricer, 'orderCosts/2026-11')))
+  await ok('owner reads costs on orders', getDoc(doc(boss, 'orderCosts/2026-11')))
+  await no('role without See cost reads costs on orders', getDoc(doc(sch, 'orderCosts/2026-11')))
+  await no('role without See cost saves costs on orders', setDoc(doc(sch, 'orderCosts/2026-11'), OC, { merge: true }))
+  await no('built-in member reads costs on orders', getDoc(doc(old, 'orderCosts/2026-11')))
+  await no('outsider reads costs on orders', getDoc(doc(out, 'orderCosts/2026-11')))
+  await no('costs on orders under a strange id', setDoc(doc(pricer, 'orderCosts/all'), OC))
+  await no('costs on orders with a strange field', setDoc(doc(pricer, 'orderCosts/2026-11'), { evil: 1 }, { merge: true }))
+  await no('costs on orders removed', deleteDoc(doc(boss, 'orderCosts/2026-11')))
 }
 // maintenance tickets: one doc per ticket with its log; counters/tickets numbers them
 {
