@@ -1,0 +1,119 @@
+name: n8n watch
+
+# Checks from GitHub's servers (outside Egypt) that the n8n server answers.
+# Sends ONE WhatsApp message when it goes offline and ONE when it is back.
+# Needs repository secrets (Settings > Secrets and variables > Actions):
+#   WHATSAPP_PHONE   your WhatsApp number with country code, e.g. +2010xxxxxxxx
+#   WHATSAPP_APIKEY  the key CallMeBot sends you after activation
+# Optional backup channel (used too if set):
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# Run it by hand (Actions > n8n watch > Run workflow) with "test" ticked to get a test message.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      test:
+        description: Send a test message now
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n8n-watch
+  cancel-in-progress: false
+
+env:
+  HEALTH_URL: https://zero.tail0ea3a8.ts.net/healthz
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Load last known state
+        uses: actions/cache/restore@v4
+        with:
+          path: .n8n-watch
+          key: n8n-watch-${{ github.run_id }}
+          restore-keys: n8n-watch-
+
+      - name: Check n8n and alert on change
+        id: check
+        env:
+          WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
+          WHATSAPP_APIKEY: ${{ secrets.WHATSAPP_APIKEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
+        run: |
+          set -u
+          mkdir -p .n8n-watch
+          prev=$(cat .n8n-watch/state 2>/dev/null || echo up)
+          since=$(cat .n8n-watch/since 2>/dev/null || date -u +%s)
+
+          cairo() { TZ=Africa/Cairo date -d "@$1" '+%a %d %b, %I:%M %p'; }
+
+          send() {
+            local text="$1" sent=0
+            if [ -n "$WHATSAPP_PHONE" ] && [ -n "$WHATSAPP_APIKEY" ]; then
+              code=$(curl -sS -m 30 -o wa.txt -w '%{http_code}' -G https://api.callmebot.com/whatsapp.php \
+                --data-urlencode "phone=$WHATSAPP_PHONE" \
+                --data-urlencode "apikey=$WHATSAPP_APIKEY" \
+                --data-urlencode "text=$text") || true
+              code=${code:-000}
+              echo "WhatsApp answer: $code $(head -c 300 wa.txt 2>/dev/null | tr -d '\n')"
+              [ "$code" = 200 ] && sent=1
+            fi
+            if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+              code=$(curl -sS -m 30 -o tg.txt -w '%{http_code}' "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+                --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" --data-urlencode "text=$text") || true
+              code=${code:-000}
+              echo "Telegram answer: $code"
+              [ "$code" = 200 ] && sent=1
+            fi
+            [ $sent = 1 ] || echo "::warning::No alert was delivered (secrets missing or the service refused)."
+          }
+
+          # Up = /healthz answers 200. Before calling it down, try 4 times over
+          # about 6 minutes so a short Tailscale restart is not an alarm.
+          now_state=down
+          for i in 1 2 3 4; do
+            code=$(curl -sS -m 20 -o /dev/null -w '%{http_code}' "$HEALTH_URL") || true
+            code=${code:-000}
+            echo "Try $i: $code"
+            if [ "$code" = 200 ]; then now_state=up; break; fi
+            if [ $i -lt 4 ]; then sleep 110; fi
+          done
+
+          now=$(date -u +%s)
+          echo "Before: $prev  Now: $now_state"
+
+          if [ "$TEST" = "true" ]; then
+            send "✅ Static OS test: n8n watch is working. n8n is ${now_state^^} right now ($(cairo $now) Cairo time)."
+          fi
+
+          changed=false
+          if [ "$prev" = up ] && [ "$now_state" = down ]; then
+            send "🔴 Static OS: n8n server is OFFLINE since about $(cairo $now) Cairo time. Posters, scheduling and website sync are paused. Check the Dell PC (power, internet, Docker, Tailscale)."
+            since=$now; changed=true
+          elif [ "$prev" = down ] && [ "$now_state" = up ]; then
+            mins=$(( (now - since) / 60 ))
+            send "🟢 Static OS: n8n server is back ONLINE ($(cairo $now) Cairo time). It was offline for about $((mins / 60))h $((mins % 60))m."
+            since=$now; changed=true
+          fi
+
+          echo "$now_state" > .n8n-watch/state
+          echo "$since" > .n8n-watch/since
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "### n8n is $now_state" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remember the new state
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .n8n-watch
+          key: n8n-watch-${{ github.run_id }}
