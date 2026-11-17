@@ -284,7 +284,7 @@ service cloud.firestore {
           || (d.app == 'settings' && ((d.act == 'templates.saved' && can('templates.edit')) || d.act == 'engine.run'))
           || (d.app == 'tickets' && ((d.act == 'ticket.opened' && can('tickets')) || (d.act in ['ticket.step', 'ticket.edited'] && can('tickets.edit'))
               || (d.act in ['ticket.deleted', 'ticket.step_removed'] && isOwner())))
-          || (d.app == 'orders' && ((d.act == 'order.step' && can('orders.edit'))
+          || (d.app == 'orders' && ((d.act in ['order.step', 'order.added', 'order.edited'] && can('orders.edit'))
               || (d.act in ['order.deleted', 'order.step_removed'] && isOwner()))));
     }
     match /activity/{id} {
@@ -482,15 +482,61 @@ service cloud.firestore {
     // step out or remove an order from the app (it stays on the website).
     function orderStepOk(st) {
       return st is map && st.keys().hasOnly(['at', 'by', 'byName', 'kind', 'note', 'amount', 'method', 'date', 'time', 'web'])
-        && st.kind in ['called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note']
+        && st.kind in ['called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note', 'edited']
         && st.note is string && st.note.size() <= 1000
         && (!('amount' in st) || (st.amount is number && st.amount >= 0 && st.amount <= 100000000));
     }
+    // Orders added by hand in the app (WhatsApp, phone, in the shop): orders/M<random>, same shape as a website
+    // order, with source set and no website part (wooId 0, webStatus and want always empty: never sent anywhere).
+    // People with 'Handle website orders' add them and may change their details later (with an "edited" step).
+    function manualOrderOk(d) {
+      return d.source in ['whatsapp', 'phone', 'store', 'other']
+        && d.wooId == 0 && d.webStatus == '' && d.want == '' && d.webError == ''
+        && d.number is string && d.number.size() <= 40
+        && d.customer is string && d.customer.size() <= 200
+        && d.phone is string && d.phone.size() <= 40
+        && d.email is string && d.email.size() <= 200
+        && d.address is string && d.address.size() <= 500
+        && d.city is string && d.city.size() <= 120
+        && d.area is string && d.area.size() <= 120
+        && d.delivery in ['pickup', 'delivery']
+        && d.shipping is number && d.shipping >= 0
+        && d.payMethod is string && d.payMethod.size() <= 80
+        && d.items is list && d.items.size() >= 1 && d.items.size() <= 100
+        && d.webTotal is number && d.webTotal >= 0
+        && d.customerNote is string && d.customerNote.size() <= 2000;
+    }
+    function manualOrderKeys() {
+      return ['source', 'wooId', 'number', 'webStatus', 'want', 'status', 'closed', 'placedAt', 'customer', 'phone', 'email', 'address', 'city', 'area',
+        'delivery', 'shipping', 'payMethod', 'items', 'webTotal', 'agreed', 'customerNote', 'date', 'time', 'webError', 'updatedAt', 'steps'];
+    }
     match /orders/{id} {
       allow read: if can('orders') || can('orders.edit');
-      allow create: if false;
+      allow create: if can('orders.edit')
+        && id.matches('M[A-Za-z0-9]{8,40}')
+        && request.resource.data.keys().hasOnly(manualOrderKeys())
+        && request.resource.data.keys().hasAll(manualOrderKeys())
+        && manualOrderOk(request.resource.data)
+        && request.resource.data.status in ['new', 'confirmed']
+        && request.resource.data.closed == false
+        && (request.resource.data.agreed == null || (request.resource.data.agreed is number && request.resource.data.agreed >= 0))
+        && request.resource.data.date is string && request.resource.data.date.size() <= 10
+        && request.resource.data.time is string && request.resource.data.time.size() <= 5
+        && request.resource.data.placedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.steps is list && request.resource.data.steps.size() == 1
+        && request.resource.data.steps[0] is map
+        && request.resource.data.steps[0].keys().hasOnly(['at', 'by', 'byName', 'kind', 'note'])
+        && request.resource.data.steps[0].kind == 'placed'
+        && request.resource.data.steps[0].by == request.auth.uid
+        && request.resource.data.steps[0].note is string && request.resource.data.steps[0].note.size() <= 1000;
       allow update: if can('orders.edit')
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'want', 'closed', 'agreed', 'date', 'time', 'steps', 'updatedAt'])
+        && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'want', 'closed', 'agreed', 'date', 'time', 'steps', 'updatedAt'])
+          || (resource.data.get('source', 'website') in ['whatsapp', 'phone', 'store', 'other']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closed', 'agreed', 'date', 'time', 'steps', 'updatedAt',
+              'source', 'customer', 'phone', 'email', 'address', 'city', 'area', 'delivery', 'shipping', 'payMethod', 'items', 'webTotal', 'customerNote'])
+            && manualOrderOk(request.resource.data)))
+        && (resource.data.get('source', 'website') == 'website' || request.resource.data.want == '')
         && request.resource.data.status in ['new', 'confirmed', 'completed', 'cancelled', 'refunded', 'failed']
         && request.resource.data.want in ['', 'on-hold', 'processing', 'completed', 'cancelled']
         && request.resource.data.closed == !(request.resource.data.status in ['new', 'confirmed'])

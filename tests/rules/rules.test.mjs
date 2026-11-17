@@ -550,6 +550,31 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await ok('handler writes an order step line', setDoc(doc(ord, 'activity/o1'), { app: 'orders', act: 'order.step', what: '#12915', by: 'u-ord', byName: 'Ord', at: serverTimestamp() }))
   await no('viewer writes an order step line', setDoc(doc(ov, 'activity/o2'), { app: 'orders', act: 'order.step', what: '#12915', by: 'u-ov', byName: 'Ov', at: serverTimestamp() }))
   await no('handler writes an order deleted line', setDoc(doc(ord, 'activity/o3'), { app: 'orders', act: 'order.deleted', what: '#12915', by: 'u-ord', byName: 'Ord', at: serverTimestamp() }))
+  // orders added by hand (WhatsApp, phone, shop): orders/M..., never sent to the website
+  const M = (over = {}) => ({ source: 'whatsapp', wooId: 0, number: 'M-1711-ABCD', webStatus: '', want: '', status: 'new', closed: false, placedAt: serverTimestamp(), customer: 'Sara', phone: '0100', email: '', address: '', city: '', area: '', delivery: 'pickup', shipping: 0, payMethod: 'Cash', items: [{ name: 'RAM', qty: 2, total: 3000, pid: 0, vid: 0, cat: 'ram', ref: 'r1' }], webTotal: 3000, agreed: null, customerNote: '', date: '', time: '', webError: '', updatedAt: serverTimestamp(), steps: [{ at: 1, by: 'u-ord', byName: 'Ord', kind: 'placed', note: '' }], ...over })
+  await ok('handler adds a WhatsApp order', setDoc(doc(ord, 'orders/Mabc123XYZ'), M()))
+  await no('viewer adds an order', setDoc(doc(ov, 'orders/Mabc123XY2'), M({ steps: [{ at: 1, by: 'u-ov', byName: 'Ov', kind: 'placed', note: '' }] })))
+  await no('built-in member adds an order', setDoc(doc(nor, 'orders/Mabc123XY3'), M({ steps: [{ at: 1, by: 'u-nor', byName: 'N', kind: 'placed', note: '' }] })))
+  await no('hand order with a website id', setDoc(doc(ord, 'orders/W99999'), M()))
+  await no('hand order that asks the website', setDoc(doc(ord, 'orders/Mabc123XY4'), M({ want: 'processing' })))
+  await no('hand order posing as website', setDoc(doc(ord, 'orders/Mabc123XY5'), M({ source: 'website' })))
+  await no('hand order with a website order number', setDoc(doc(ord, 'orders/Mabc123XY6'), M({ wooId: 12915 })))
+  await no('hand order already completed', setDoc(doc(ord, 'orders/Mabc123XY7'), M({ status: 'completed', closed: true })))
+  await no('hand order without items', setDoc(doc(ord, 'orders/Mabc123XY8'), M({ items: [] })))
+  await no('hand order under someone else', setDoc(doc(ord, 'orders/Mabc123XY9'), M({ steps: [{ at: 1, by: 'u-boss', byName: 'B', kind: 'placed', note: '' }] })))
+  await no('hand order with a made-up date', setDoc(doc(ord, 'orders/Mabc123XZ1'), M({ placedAt: 5 })))
+  await no('hand order with extra fields', setDoc(doc(ord, 'orders/Mabc123XZ2'), M({ secret: 1 })))
+  const mFirst = { at: 1, by: 'u-ord', byName: 'Ord', kind: 'placed', note: '' }
+  await ok('handler edits a hand order', updateDoc(doc(ord, 'orders/Mabc123XYZ'), { customer: 'Sara Ali', delivery: 'delivery', shipping: 200, address: 'Haram', webTotal: 3200, steps: [mFirst, st('u-ord', 'edited')], updatedAt: serverTimestamp() }))
+  await ok('handler confirms a hand order (nothing to send)', updateDoc(doc(ord, 'orders/Mabc123XYZ'), { status: 'confirmed', closed: false, want: '', steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed')], updatedAt: serverTimestamp() }))
+  await no('hand order cannot ask the website', updateDoc(doc(ord, 'orders/Mabc123XYZ'), { status: 'completed', closed: true, want: 'completed', steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ord', 'delivered')], updatedAt: serverTimestamp() }))
+  await no('hand order cannot become a website order', updateDoc(doc(ord, 'orders/Mabc123XYZ'), { source: 'website', steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ord', 'edited')], updatedAt: serverTimestamp() }))
+  await no('viewer edits a hand order', updateDoc(doc(ov, 'orders/Mabc123XYZ'), { customer: 'X', steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ov', 'edited')], updatedAt: serverTimestamp() }))
+  await ok('handler completes a hand order', updateDoc(doc(ord, 'orders/Mabc123XYZ'), { status: 'completed', closed: true, want: '', steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ord', 'delivered')], updatedAt: serverTimestamp() }))
+  await no('website order details still locked', updateDoc(doc(ord, 'orders/W12915'), { customer: 'Evil', steps: [...six, st('u-ord', 'edited')], updatedAt: serverTimestamp() }))
+  await ok('viewer reads orders by day placed', getDocs(query(collection(ov, 'orders'), where('placedAt', '>=', new Date(0)))))
+  await ok('handler writes an order added line', setDoc(doc(ord, 'activity/o4'), { app: 'orders', act: 'order.added', what: 'Sara', by: 'u-ord', byName: 'Ord', at: serverTimestamp() }))
+  await no('viewer writes an order added line', setDoc(doc(ov, 'activity/o5'), { app: 'orders', act: 'order.added', what: 'Sara', by: 'u-ov', byName: 'Ov', at: serverTimestamp() }))
 }
 {
   // Profile pictures
