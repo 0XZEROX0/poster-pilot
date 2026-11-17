@@ -8,7 +8,7 @@ import { PostHistory } from './History'
 import { PhotoPicker } from './PhotoPicker'
 import { Poster } from './Poster'
 import { StageChip } from './PostRow'
-import { StoryBox } from './StoryBox'
+import { STORIES_ON, StoryBox } from './StoryBox'
 import { Sheet } from './Sheet'
 import { Icon, showToast } from './ui'
 
@@ -129,7 +129,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
         </>
       ) : stage === 'scheduled' && confirmPost ? (
         <div className="confirm-post" role="alertdialog" aria-labelledby="confirm-post-q">
-          <p id="confirm-post-q"><b>{t('Publish to Facebook and Instagram now?')}</b><br /><span className="muted small">{t('It goes out within a minute and cannot be taken back from here.')}{post.story ? ` ${t('Its story goes out too.')}` : ''}</span></p>
+          <p id="confirm-post-q"><b>{t('Publish to Facebook and Instagram now?')}</b><br /><span className="muted small">{t('It goes out within a minute and cannot be taken back from here.')}{STORIES_ON && post.story ? ` ${t('Its story goes out too.')}` : ''}</span></p>
           <div className="confirm-post-actions">
             <button className="btn btn-primary" disabled={busy} onClick={postNow}><Icon name="send" size={18} />{t('Yes, post now')}</button>
             <button className="btn btn-ghost" disabled={busy} onClick={() => setConfirmPost(false)}>{t('Cancel')}</button>
@@ -221,7 +221,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               </p>
             </>
           )}
-          {stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} onDesign={() => setDesigning(true)} />}
+          {STORIES_ON && stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} onDesign={() => setDesigning(true)} />}
           {designing && <Suspense fallback={null}><StoryEditor post={post} onClose={() => setDesigning(false)} /></Suspense>}
           <label>
             <span>{t('Caption')}</span>
