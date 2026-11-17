@@ -5,7 +5,7 @@
 <h1 align="center">Static OS</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/github/package-json/v/0xzerox0/poster-pilot?label=version&color=283890" alt="Version">
+  <a href="https://github.com/0xzerox0/poster-pilot/releases/latest"><img src="https://img.shields.io/github/v/release/0xzerox0/poster-pilot?label=release&color=283890" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/status-stable-2ea043" alt="Stable">
   <a href="https://github.com/0xzerox0/poster-pilot/actions/workflows/deploy.yml"><img src="https://github.com/0xzerox0/poster-pilot/actions/workflows/deploy.yml/badge.svg?branch=main" alt="Deploy to GitHub Pages"></a>
   <a href="https://0xzerox0.github.io/poster-pilot/"><img src="https://img.shields.io/badge/app-live-f05828?logo=githubpages&logoColor=white" alt="Live app"></a>
@@ -19,6 +19,7 @@
 
 <p align="center">
   <a href="https://0xzerox0.github.io/poster-pilot/"><b>Open the app</b></a> ·
+  <a href="https://github.com/0xzerox0/poster-pilot/releases/latest">Latest release</a> ·
   <a href="#screenshots">Screenshots</a>
 </p>
 
@@ -153,3 +154,10 @@ The n8n workflows themselves are kept as code in `n8n/`.
 Every push to `main` is tested, built and published to GitHub Pages by
 `.github/workflows/deploy.yml` (the badge at the top shows its last result).
 
+## Releases
+
+The version is the one in `package.json`. On every push to `main`,
+`.github/workflows/release.yml` checks whether that version has a release yet. If not, it tags it
+and publishes a normal, stable GitHub release (never a pre-release) with the changes since the
+last one. To make a new release, raise the version in the pull request, for example with
+`npm version minor --no-git-tag-version`.
