@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { buildCaption, cairoNow, itemName, nextFreeSlot, stageOf, titleOf, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, Post } from '../data/types'
@@ -12,12 +12,16 @@ import { StoryBox } from './StoryBox'
 import { Sheet } from './Sheet'
 import { Icon, showToast } from './ui'
 
+// The story editor (and its drawing library) loads only when it is opened.
+const StoryEditor = lazy(() => import('./StoryEditor'))
+
 /** One post in full: its poster, every field that can be changed, and the actions for its stage. */
 export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onClose: () => void }) {
   const [draft, setDraft] = useState(post)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmPost, setConfirmPost] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [designing, setDesigning] = useState(false)
   const stage = stageOf(post)
   const posted = stage === 'posted'
   const problem = problemText(post)
@@ -217,7 +221,8 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               </p>
             </>
           )}
-          {stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} />}
+          {stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} onDesign={() => setDesigning(true)} />}
+          {designing && <Suspense fallback={null}><StoryEditor post={post} onClose={() => setDesigning(false)} /></Suspense>}
           <label>
             <span>{t('Caption')}</span>
             <textarea dir="auto" rows={9} readOnly={posted} value={draft.caption} onChange={(e) => set({ caption: e.target.value })} />

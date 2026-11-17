@@ -80,6 +80,8 @@ export function changesOf(before: Post | undefined, patch: Partial<Post>): LogCh
     const from = storyText(f, String(before?.[f] ?? '')), to = storyText(f, String(patch[f] ?? ''))
     if (from !== to) out.push({ f, from, to })
   }
+  // A story designed in the story editor: noted on the story line (the design itself is too long for the history).
+  if (patch.storyDesign) out.push({ f: 'story', from: '', to: 'designed in the story editor' })
   if (patch.items) {
     const was = before?.items ?? []
     if (itemsText(was) !== itemsText(patch.items)) out.push({ f: 'items', from: short(itemsText(was)), to: short(itemsText(patch.items)) })

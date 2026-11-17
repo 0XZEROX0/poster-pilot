@@ -2,7 +2,7 @@ import { previewUrl, STORY_DELAYS, storyDelayOf, storyStateOf, storyTo, storyWhe
 import type { Post, StoryWhere } from '../data/types'
 import { t } from '../i18n'
 import { Poster } from './Poster'
-import { Chip, dayLabel, timeLabel } from './ui'
+import { Chip, dayLabel, Icon, timeLabel } from './ui'
 
 /**
  * The story picture, 9:16. Once the engine has made it, the real picture; before that a drawing of the same layout
@@ -57,7 +57,7 @@ export function StoryChips({ post }: { post: Post }) {
  * The "Also post as a story" part of the post editor. `draft` holds the person's unsaved choice; `post` is what is
  * saved (its statuses tell which places already have the story, and those cannot be changed any more).
  */
-export function StoryBox({ post, draft, canEdit, onChange, onRetry }: { post: Post; draft: Post; canEdit: boolean; onChange: (patch: Partial<Post>) => void; onRetry: () => void }) {
+export function StoryBox({ post, draft, canEdit, onChange, onRetry, onDesign }: { post: Post; draft: Post; canEdit: boolean; onChange: (patch: Partial<Post>) => void; onRetry: () => void; onDesign?: () => void }) {
   const on = !!draft.story
   const done = { fb: storyStateOf(post, 'fb').state === 'posted', ig: storyStateOf(post, 'ig').state === 'posted' }
   const setWhere = (where: 'fb' | 'ig', yes: boolean) => {
@@ -94,6 +94,12 @@ export function StoryBox({ post, draft, canEdit, onChange, onRetry }: { post: Po
                   {STORY_DELAYS.map((m) => <option key={m} value={m}>{m === 0 ? t('Same time as the post') : m < 60 ? `${m} ${t('minutes after the post')}` : `${m / 60} ${t(m === 60 ? 'hour after the post' : 'hours after the post')}`}</option>)}
                 </select>
               </label>
+              {canEdit && onDesign && !(done.fb || done.ig) && (
+                <div className="story-design">
+                  <button type="button" className="btn btn-ghost" onClick={onDesign}><Icon name="edit" size={18} />{t(post.storyDesign ? 'Change the story design' : 'Design the story')}</button>
+                  <span className="hint">{post.storyDesign ? t('Designed in the story editor.') : t('Add text, move the poster, change the background.')}</span>
+                </div>
+              )}
               <p className="hint">
                 {when ? `${t('The story goes out')} ${dayLabel(when.date)} · ${timeLabel(when.time)}. ` : `${t('The story goes out when the post has a date and a time.')} `}
                 {t('It stays for 24 hours. Tappable stickers (links, polls, mentions) can only be added from the phone.')}
