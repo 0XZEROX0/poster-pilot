@@ -511,6 +511,9 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   const st = (by, kind, more = {}) => ({ at: 2, by, byName: 'X', kind, note: '', ...more })
   await ok('owner makes an Orders role', setDoc(doc(boss, 'roles/orders'), { name: 'Orders', perms: ['orders', 'orders.edit'] }))
   await ok('owner makes an Orders viewer role', setDoc(doc(boss, 'roles/ordview'), { name: 'Order viewer', perms: ['orders'] }))
+  const every = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete']
+  await ok('owner saves a role with every permission ticked', setDoc(doc(boss, 'roles/allperms'), { name: 'Everything', perms: every, pages: ['prices', 'builder'], v: 9 }))
+  await no('owner saves a role with an unknown permission', setDoc(doc(boss, 'roles/allperms'), { name: 'Everything', perms: [...every, 'made.up'] }))
   await ok('owner makes an order changer role', setDoc(doc(boss, 'roles/ordchg'), { name: 'Order changer', perms: ['orders', 'orders.change'] }))
   await env.withSecurityRulesDisabled(async (c) => {
     await setDoc(doc(c.firestore(), 'members/u-ord'), { email: 'ord@x.com', name: 'Ord', role: 'orders', joinedAt: 1 })
