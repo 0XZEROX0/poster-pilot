@@ -1,3 +1,6 @@
+/** Where a post's story goes. */
+export type StoryWhere = '' | 'fb' | 'ig' | 'fb+ig'
+
 /** One product on a poster. A post holds 1 to 3 of them (the sheet's Item 1 to 3 columns), or up to 4 versions of one product. */
 export type PostItem = {
   category: string
@@ -63,6 +66,19 @@ export type Post = {
   /** 'yes' after someone confirmed "Post now": the engine publishes it on Facebook and Instagram at once (not scheduled),
    * then empties it and sets Post date / Post time to the minute it went out. */
   postNow?: string
+  /**
+   * Also post this as a story: '' (no story), 'fb', 'ig' or 'fb+ig'. The engine makes a 1080x1920 story picture from
+   * the poster and publishes it on its own when the post goes out (plus `storyDelay` minutes). Neither Facebook nor
+   * Instagram can hold a story on a schedule, so the engine posts it at that minute.
+   */
+  story?: StoryWhere
+  /** Minutes after the post that the story goes out, as text ('' or '0' = the same minute). */
+  storyDelay?: string
+  /** Engine only: link to the story picture in Drive, made from the poster. Empty until it is made. */
+  storyImage?: string
+  /** Engine only: '', 'Waiting', 'Posted', or an error text, for each place the story goes. */
+  storyFbStatus?: string
+  storyIgStatus?: string
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
   /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */
@@ -122,7 +138,7 @@ export type Data = {
   health: Health | null
 }
 
-export type NewPost = Pick<Post, 'items' | 'variants' | 'title' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime'>
+export type NewPost = Pick<Post, 'items' | 'variants' | 'title' | 'company' | 'priceBefore' | 'priceAfter' | 'style' | 'details' | 'captionStyle' | 'postDate' | 'postTime' | 'story'>
 
 export const emptyData: Data = { loaded: false, posts: [], products: [], styles: [], templates: [], health: null }
 

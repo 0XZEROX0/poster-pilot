@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { addDays, addMinutes, cairoNow, categoryOf, matchesSearch, onFacebook, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
+import { addDays, addMinutes, cairoNow, categoryOf, matchesSearch, onFacebook, problemOf, stageOf, storyWhenOf, titleOf, whenOf } from '../data/logic'
 import { allowed, backend } from '../data/store'
 import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import type { Data, Post } from '../data/types'
@@ -318,9 +318,9 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
                         onClick={(e) => tap(e, p.id)}
                       >
                         {!posted && <span className="grip" title={t('Move to another time')}><Icon name="grip" size={18} /></span>}
-                        <Poster post={p} small />
+                        <span className={p.story ? 'story-ring' : undefined} title={p.story ? t('Also post as a story') : undefined}><Poster post={p} small /></span>
                         <span className="tl-text">
-                          <b>{timeLabel(at)}{posted && <> · {t('Published')}</>}</b>
+                          <b>{timeLabel(at)}{posted && <> · {t('Published')}</>}{p.story && <> · {t('Story')}{storyWhenOf(p) && storyWhenOf(p)!.time !== at ? ` ${timeLabel(storyWhenOf(p)!.time)}` : ''}</>}</b>
                           <span dir="auto">{titleOf(p)}</span>
                         </span>
                       </div>

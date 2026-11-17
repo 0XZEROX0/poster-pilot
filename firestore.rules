@@ -82,6 +82,8 @@ service cloud.firestore {
       return (!keys.hasAny(['postDate', 'postTime']) || can('schedule'))
         // "Post now" publishes on Facebook and Instagram at once: only someone who may schedule can ask for it.
         && (!keys.hasAny(['postNow']) || can('schedule'))
+        // Also posting it as a story (where, and how long after the post) belongs to scheduling too.
+        && (!keys.hasAny(['story', 'storyDelay']) || can('schedule'))
         && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', '')) && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''))))
         && (!keys.hasAny(['appDeleted']) || can('delete'))
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
@@ -95,7 +97,7 @@ service cloud.firestore {
           || (can('offers.create') && was.get('createdBy', '') == request.auth.uid && was.get('offer', '') == 'Rejected'
             && now.get('offer', '') == '' && edits.get('offer', '') == '' && !keys.hasAny(['offerNote', 'offerBy'])))
         // Competitor prices, where a post stands, and what Facebook and the poster maker report are written by the engine only.
-        && !keys.hasAny(['createdBy', 'createdByName', 'market', 'photoChoices', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew']);
+        && !keys.hasAny(['createdBy', 'createdByName', 'market', 'photoChoices', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew', 'storyImage', 'storyFbStatus', 'storyIgStatus']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may
     // walk in once without a request. Admins can only shorten it.

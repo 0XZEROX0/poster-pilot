@@ -46,6 +46,17 @@ for (const d of docs) {
     const p = pricesFrom(g.items, products, g.variants === true);
     if (products.length) { g.priceBefore = p.priceBefore; g.company = p.company; mask.add('priceBefore'); mask.add('company'); }
   }
+  // Stories: a place the person chose (again) waits for the Stories part, unless its story is out already; a failure
+  // is cleared, so "Try the story again" works; a place taken off is emptied.
+  if ('story' in edits || 'storyDelay' in edits) {
+    const places = storyPlaces(g);
+    for (const [k, place] of [['storyFbStatus', 'fb'], ['storyIgStatus', 'ig']]) {
+      const want = places.includes(place) ? (storyDone(g[k]) ? clean(g[k]) : 'Waiting') : (storyDone(g[k]) ? clean(g[k]) : '');
+      if (clean(g[k]) !== want) { g[k] = want; mask.add(k); }
+    }
+    // The Stories part runs with Instagram's: start it now, so a story asked for after the post went out is not held back.
+    if (places.length) sched.add('instagram');
+  }
   g.zone = zoneOf(g); g.q = queuesOf(g); mask.add('zone'); mask.add('q');
   // Starts the poster workflow right away (instead of at its next 3-minute check) when this post now needs a poster:
   // just approved, a Redo, or a missing photo to try again.

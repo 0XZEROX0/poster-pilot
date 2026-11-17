@@ -8,6 +8,7 @@ import type { CaptionTemplate } from '../data/types'
 import { setLang, t, useLang } from '../i18n'
 import { PeoplePanel, RolesPanel, useTeam } from './MembersSection'
 import { Sheet } from './Sheet'
+import { setStoryByDefault, storyByDefault } from './StoryBox'
 import { Avatar, Chip, Icon, showToast } from './ui'
 import { backToGoogleName, backToGooglePhoto, myNameFor, removeMyPhoto, setMyName, setMyPhoto, useProfiles } from '../data/profiles'
 import type { User } from 'firebase/auth'
@@ -207,6 +208,7 @@ function PosterSettings({ session }: { session: Session }) {
         <section className="set-card">
           <header className="set-card-head"><h3>{t('Posting rules')}</h3></header>
           <p className="hint">{t('An approved post is scheduled only once it has a date and a time. Set them in the post or drag it onto a time in the Planner. Nothing is scheduled automatically.')}</p>
+          {allowed('schedule') && <StoryDefault />}
         </section>
       )}
       {editsTemplates() && (
@@ -279,5 +281,19 @@ function PhotoControls({ user }: { user: User }) {
       {custom && user.photoURL && <button className="btn" disabled={busy} onClick={() => run(() => backToGooglePhoto(user))}>{t('Use my Google photo')}</button>}
       {(mine ? mine.photo : user.photoURL) && <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => removeMyPhoto(user))}>{t('Remove photo')}</button>}
     </div>
+  )
+}
+
+/** New posts start with "Also post as a story" ticked, or not. Saved on this device. */
+function StoryDefault() {
+  const [on, setOn] = useState(storyByDefault)
+  return (
+    <>
+      <label className="check">
+        <input type="checkbox" checked={on} onChange={(e) => { setOn(e.target.checked); setStoryByDefault(e.target.checked) }} />
+        <span>{t('New posts: also as a story')}</span>
+      </label>
+      <p className="hint">{t('Facebook and Instagram stories. You can still change it on each post. Saved on this device.')}</p>
+    </>
   )
 }

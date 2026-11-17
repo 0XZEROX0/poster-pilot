@@ -43,6 +43,10 @@ export const ACT_TEXT: Record<string, string> = {
   'fb.error': 'Facebook problem',
   'ig.published': 'Published on Instagram',
   'ig.error': 'Instagram problem',
+  'story.made': 'Story picture made',
+  'story.fb': 'Story posted on Facebook',
+  'story.ig': 'Story posted on Instagram',
+  'story.error': 'Story problem',
   removed: 'Row emptied in the sheet',
   'delete.refused': 'Not deleted: it is on the schedule',
   cleared: 'Removed from the sheet',
@@ -50,8 +54,13 @@ export const ACT_TEXT: Record<string, string> = {
 
 export const FIELD_TEXT: Record<string, string> = {
   items: 'Items', priceBefore: 'Price before', priceAfter: 'Price after', style: 'Style', details: 'Details', caption: 'Caption',
-  captionStyle: 'Caption style', postDate: 'Date', postTime: 'Time', photos: 'Photos',
+  captionStyle: 'Caption style', postDate: 'Date', postTime: 'Time', photos: 'Photos', story: 'Story', storyDelay: 'Story time',
 }
+
+/** The story choice as short text for the history: "Facebook + Instagram", "-" for none, or minutes after the post. */
+const storyText = (f: 'story' | 'storyDelay', v: string) => f === 'story'
+  ? (v.split('+').map((w) => (w === 'fb' ? 'Facebook' : w === 'ig' ? 'Instagram' : '')).filter(Boolean).join(' + ') || '-')
+  : (Number(v) > 0 ? `+${Number(v)} min` : 'same time')
 
 const short = (s: string, n = 140) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 const itemsText = (items: Post['items']) => items.map((i) => i.name.trim()).filter(Boolean).join(' + ')
@@ -64,6 +73,12 @@ export function changesOf(before: Post | undefined, patch: Partial<Post>): LogCh
     if (!(f in patch) || patch[f] === undefined) continue
     const from = String(before?.[f] ?? ''), to = String(patch[f] ?? '')
     if (from !== to) out.push({ f, from: short(from), to: short(to) })
+  }
+  // The story choice. Logged as an edit, so older database rules accept the history line too.
+  for (const f of ['story', 'storyDelay'] as const) {
+    if (!(f in patch) || patch[f] === undefined) continue
+    const from = storyText(f, String(before?.[f] ?? '')), to = storyText(f, String(patch[f] ?? ''))
+    if (from !== to) out.push({ f, from, to })
   }
   if (patch.items) {
     const was = before?.items ?? []

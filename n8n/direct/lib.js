@@ -6,11 +6,11 @@
 // rowOf() turns a post into an object with the sheet's column names (row_number = the post id), and
 // applyCols() does the opposite for a write. That way their own logic did not have to change.
 
-const HEADERS = ['Category 1', 'Category 2', 'Category 3', 'Item 1', 'Next photo 1', 'Manual photo 1', 'Item 2', 'Next photo 2', 'Manual photo 2', 'Item 3', 'Next photo 3', 'Manual photo 3', 'Category 4', 'Item 4', 'Next photo 4', 'Manual photo 4', 'Company', 'Price before', 'Price after', 'Style', 'Details', 'Image link', 'Product image', 'Photo status', 'Feedback', 'Preview', 'Photo #', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'Cached from', 'FB photo id', 'FB post id', 'Scheduled price', 'Scheduled image', 'Auto reschedule', 'Reschedule slot', 'Poster price', 'Offer approval', 'Post now'];
+const HEADERS = ['Category 1', 'Category 2', 'Category 3', 'Item 1', 'Next photo 1', 'Manual photo 1', 'Item 2', 'Next photo 2', 'Manual photo 2', 'Item 3', 'Next photo 3', 'Manual photo 3', 'Category 4', 'Item 4', 'Next photo 4', 'Manual photo 4', 'Company', 'Price before', 'Price after', 'Style', 'Details', 'Image link', 'Product image', 'Photo status', 'Feedback', 'Preview', 'Photo #', 'Post date', 'Post time', 'Scheduled for', 'Caption', 'Caption style', 'FB status', 'IG status', 'Cached from', 'FB photo id', 'FB post id', 'Scheduled price', 'Scheduled image', 'Auto reschedule', 'Reschedule slot', 'Poster price', 'Offer approval', 'Post now', 'Story', 'Story delay', 'Story image', 'Story FB status', 'Story IG status', 'Story from', 'Story photo id', 'Story FB id', 'Story IG id'];
 // Sheet column -> post field.
-const TYPED = { 'Company': 'company', 'Price before': 'priceBefore', 'Price after': 'priceAfter', 'Style': 'style', 'Details': 'details', 'Image link': 'posterUrl', 'Photo status': 'photoStatus', 'Feedback': 'feedback', 'Post date': 'postDate', 'Post time': 'postTime', 'Scheduled for': 'scheduledFor', 'Caption': 'caption', 'Caption style': 'captionStyle', 'FB status': 'fbStatus', 'IG status': 'igStatus', 'FB post id': 'fbPostId', 'Offer approval': 'offer', 'Post now': 'postNow' };
+const TYPED = { 'Company': 'company', 'Price before': 'priceBefore', 'Price after': 'priceAfter', 'Style': 'style', 'Details': 'details', 'Image link': 'posterUrl', 'Photo status': 'photoStatus', 'Feedback': 'feedback', 'Post date': 'postDate', 'Post time': 'postTime', 'Scheduled for': 'scheduledFor', 'Caption': 'caption', 'Caption style': 'captionStyle', 'FB status': 'fbStatus', 'IG status': 'igStatus', 'FB post id': 'fbPostId', 'Offer approval': 'offer', 'Post now': 'postNow', 'Story': 'story', 'Story delay': 'storyDelay', 'Story image': 'storyImage', 'Story FB status': 'storyFbStatus', 'Story IG status': 'storyIgStatus' };
 // Sheet column -> key in the post's `ex` map (columns the app does not show).
-const EX = { 'Product image': 'productImage', 'Photo #': 'photoNo', 'Cached from': 'cachedFrom', 'FB photo id': 'fbPhotoId', 'Scheduled price': 'scheduledPrice', 'Scheduled image': 'scheduledImage', 'Auto reschedule': 'autoReschedule', 'Reschedule slot': 'rescheduleSlot', 'Poster price': 'posterPrice' };
+const EX = { 'Product image': 'productImage', 'Photo #': 'photoNo', 'Cached from': 'cachedFrom', 'FB photo id': 'fbPhotoId', 'Scheduled price': 'scheduledPrice', 'Scheduled image': 'scheduledImage', 'Auto reschedule': 'autoReschedule', 'Reschedule slot': 'rescheduleSlot', 'Poster price': 'posterPrice', 'Story from': 'storyFrom', 'Story photo id': 'storyPhotoId', 'Story FB id': 'storyFbId', 'Story IG id': 'storyIgId' };
 const ITEM_COL = /^(Category|Item|Manual photo|Next photo) ([1234])$/;
 const ITEM_KEY = { 'Category': 'category', 'Item': 'name', 'Manual photo': 'manualPhoto', 'Next photo': 'nextPhoto' };
 
@@ -136,7 +136,24 @@ function queuesOf(f) {
   if (!clean(f.scheduledFor) && fb !== 'ignore' && items.length) q.push('caption');
   if (fb === 'cancel' || (poster && !fbPub && !igPub && !['redo', 'redo next image', 'ignore'].includes(fb))) q.push('changes');
   if ((fbPub || igPub) && clean(ex.moved) !== 'yes') q.push('move');
+  if (storyWaiting(f)) q.push('story');
   return q;
+}
+
+/**
+ * Stories: the places ('fb', 'ig') the post's story goes to, and whether the Stories part still has work on it: an
+ * approved post with a poster, and a place whose story is neither posted nor failed (a failure waits for the person's
+ * "Try the story again", which sets it back to Waiting), or a story picture that is missing or older than the poster.
+ */
+const storyPlaces = f => clean(f.story).split('+').filter(w => w === 'fb' || w === 'ig');
+const storyDone = s => /^(posted|published)/i.test(clean(s));
+const storyFailed = s => clean(s) !== '' && !storyDone(s) && !/^waiting/i.test(clean(s));
+function storyWaiting(f) {
+  const places = storyPlaces(f);
+  if (!places.length || !/\/d\//.test(str(f.posterUrl))) return false;
+  if (!['done', 'published'].includes(low(f.feedback))) return false;
+  const open = places.filter(w => { const s = w === 'fb' ? f.storyFbStatus : f.storyIgStatus; return !storyDone(s) && !storyFailed(s); });
+  return open.length > 0;
 }
 
 // ---------- writing sheet columns into a post ----------
@@ -216,6 +233,13 @@ function historyOf(a, b) {
     if (/^(published|posted)/i.test(igs) && !/^(published|posted)/i.test(g(a, 'igStatus'))) out.push(['ig.published', '']);
     else if (/error|fail/i.test(igs)) out.push(['ig.error', igs.slice(0, 300)]);
   }
+  if (g(b, 'storyImage') !== g(a, 'storyImage') && g(b, 'storyImage')) out.push(['story.made', '']);
+  for (const [k, place] of [['storyFbStatus', 'fb'], ['storyIgStatus', 'ig']]) {
+    const v = g(b, k);
+    if (v === g(a, k)) continue;
+    if (storyDone(v)) out.push(['story.' + place, '']);
+    else if (storyFailed(v)) out.push(['story.error', ((place === 'fb' ? 'Facebook: ' : 'Instagram: ') + v).slice(0, 300)]);
+  }
   return out;
 }
 const randomId = n => { const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; let s = ''; for (let i = 0; i < n; i++) s += abc[Math.floor(Math.random() * abc.length)]; return s; };
@@ -244,4 +268,4 @@ function pricesFrom(items, products, variants) {
   return { priceBefore: bad ? 'Check item' : (variants ? top : sum).toLocaleString('en-US'), company: companies.join(' + ') };
 }
 
-if (typeof module !== 'undefined') module.exports = { HEADERS, TYPED, EX, dec, enc, fieldsOf, docOf, slotted, rowOf, zoneOf, queuesOf, applyCols, historyOf, logWrite, titleOf, pricesFrom, isNum, toNum, grouped, clean, randomId };
+if (typeof module !== 'undefined') module.exports = { storyPlaces, storyWaiting, storyDone, storyFailed, HEADERS, TYPED, EX, dec, enc, fieldsOf, docOf, slotted, rowOf, zoneOf, queuesOf, applyCols, historyOf, logWrite, titleOf, pricesFrom, isNum, toNum, grouped, clean, randomId };

@@ -1,7 +1,7 @@
 import type { Backend } from './backend'
 import { DEMO_POSTER, demoData, demoPhotoChoices, demoVersionPhotos } from './demo'
 import { describe, describeDelete, describeNew } from './history'
-import { buildCaption, cairoNow } from './logic'
+import { buildCaption, cairoNow, storyTo } from './logic'
 import type { Data, LogEntry, Post } from './types'
 
 const KEY = 'posterpilot.demo.v2'
@@ -57,6 +57,13 @@ export function createLocalBackend(): Backend {
     }
     listeners.forEach((l) => l(data))
   }
+  /** The demo's story statuses: each place the story goes gets `state` unless it was posted already. */
+  const demoStory = (p: Post, state: 'Waiting' | 'Posted'): Partial<Post> => {
+    const out: Partial<Post> = {}
+    if (storyTo(p, 'fb') && p.storyFbStatus !== 'Posted') out.storyFbStatus = state
+    if (storyTo(p, 'ig') && p.storyIgStatus !== 'Posted') out.storyIgStatus = state
+    return out
+  }
   const patchPost = (id: string, patch: Partial<Post>) => commit({ ...data, posts: data.posts.map((p) => (p.id === id ? { ...p, ...patch } : p)) })
 
   /** What the real engine does after a change, a few seconds later. */
@@ -73,15 +80,18 @@ export function createLocalBackend(): Backend {
       } else if (p.feedback === 'Done' && p.postNow === 'yes' && !p.fbPostId) {
         // Post now: published at once, at the real minute.
         const now = cairoNow()
-        patchPost(id, { postNow: '', postDate: now.date, postTime: now.time, scheduledFor: `${now.date} ${now.time}`, fbStatus: 'Published', igStatus: 'Published', fbPostId: 'demo', caption: p.caption || buildCaption(p, data.templates) })
+        patchPost(id, { postNow: '', postDate: now.date, postTime: now.time, scheduledFor: `${now.date} ${now.time}`, fbStatus: 'Published', igStatus: 'Published', fbPostId: 'demo', caption: p.caption || buildCaption(p, data.templates), ...demoStory(p, 'Posted') })
         system(id, 'fb.published')
       } else if (p.feedback === 'Done' && p.fbStatus !== 'Published') {
         // Nothing is scheduled without a date and a time.
         if (p.postDate && p.postTime) {
-          patchPost(id, { scheduledFor: `${p.postDate} ${p.postTime}`, fbStatus: 'Scheduled', caption: p.caption || buildCaption(p, data.templates) })
+          patchPost(id, { scheduledFor: `${p.postDate} ${p.postTime}`, fbStatus: 'Scheduled', caption: p.caption || buildCaption(p, data.templates), ...demoStory(p, 'Waiting') })
           system(id, 'fb.scheduled', { note: `${p.postDate} ${p.postTime}` })
         }
         else patchPost(id, { fbStatus: 'Waiting for Post date and Post time' })
+      } else if (p.fbStatus === 'Published' && p.story) {
+        // A story asked for after the post went out goes out at once.
+        patchPost(id, demoStory(p, 'Posted'))
       } else if (p.feedback === 'Cancel') {
         patchPost(id, { feedback: 'Done', postDate: '', postTime: '', scheduledFor: '', fbStatus: 'Waiting for Post date and Post time', fbPostId: '' })
         system(id, 'fb.cancelled')
