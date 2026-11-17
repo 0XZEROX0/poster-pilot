@@ -9,6 +9,7 @@ import { byWhen } from './HomeView'
 import { Poster } from './Poster'
 import { PostCard } from './PostRow'
 import { CardSize } from './CardSize'
+import { mayMakeCustom, NewCustomPostSheet } from './CustomPost'
 import { CategoryChips, categoryOn, Empty, Icon, SearchBox, StyleChips, styleOn, dayLabel, showToast, timeLabel } from './ui'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -75,6 +76,10 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
   const setDay = (d: string | null) => go(d ?? month)
   const [style, setStyle] = useState('')
   const [category, setCategory] = useState('')
+  // "New post": a text, photo or video post for the day in view (today from the month).
+  const [making, setMaking] = useState<string | null>(null)
+  const sheet = making && <NewCustomPostSheet data={data} day={making} onClose={() => setMaking(null)} />
+  const newPost = (d: string) => (mayMakeCustom() ? <button className="btn btn-primary new-post-btn" onClick={() => setMaking(d)}><Icon name="plus" size={18} />{t('New post')}</button> : null)
 
   const byDay = new Map<string, Post[]>()
   const waiting: Post[] = []
@@ -102,7 +107,7 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
     ...(allowed('delete') ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => (free(id) ? backend.removePost(id) : false) }] : []),
   ]
 
-  if (day) return <DayView day={day} setDay={setDay} posts={data.posts} onOpen={onOpen} />
+  if (day) return <>{<DayView day={day} setDay={setDay} posts={data.posts} onOpen={onOpen} newPost={newPost(day < today ? today : day)} />}{sheet}</>
 
   const first = `${month}-01`
   const lead = new Date(`${first}T12:00:00Z`).getUTCDay()
@@ -116,6 +121,7 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
 
   return (
     <div className="view">
+      {mayMakeCustom() && <div className="planner-new">{newPost(month === today.slice(0, 7) ? today : month > today ? `${month}-01` : today)}</div>}
       <div className="cal">
         <div className="cal-head">
           <button className="icon-btn" onClick={() => shift(-1)} aria-label={t('Previous month')}><Icon name="left" /></button>
@@ -159,12 +165,13 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
         </section>
       )}
       <BulkBar bulk={bulk} actions={actions} />
+      {sheet}
     </div>
   )
 }
 
 /** One day as a timeline. Approved posts wait at the side and are dragged, or tapped, onto a time. */
-function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: string | null) => void; posts: Post[]; onOpen: (id: string) => void }) {
+function DayView({ day, setDay, posts, onOpen, newPost }: { day: string; setDay: (d: string | null) => void; posts: Post[]; onOpen: (id: string) => void; newPost: React.ReactNode }) {
   const [zoom, setZoom] = useState(savedZoom)
   const [early, setEarly] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
@@ -289,6 +296,7 @@ function DayView({ day, setDay, posts, onOpen }: { day: string; setDay: (d: stri
           <span>{t(ZOOM_LABEL[zoom])}</span>
           <button className="icon-btn" disabled={zoom === ZOOMS[ZOOMS.length - 1]} onClick={() => changeZoom(1)} aria-label={t('Finer steps')}><Icon name="plus" size={18} /></button>
         </div>
+        {newPost}
       </div>
 
       <div className="day-grid">

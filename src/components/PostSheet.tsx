@@ -126,7 +126,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const when = whenOf(post)
   const mayReview = allowed('designs.approve')
   const mayPlan = allowed('schedule')
-  const mayEdit = allowed('offers.create') || allowed('fix') || mayReview
+  const mayEdit = allowed('offers.create') || allowed('fix') || mayReview || (!!custom && mayPlan)
   const dirty = Object.keys(changes()).length > 0
   // Post now: an approved post with its poster, not on Facebook yet, no unsaved changes, not already asked for.
   const mayPostNow = mayPlan && stage === 'scheduled' && post.feedback === 'Done' && !onFacebook && post.postNow !== 'yes' && (custom ? !/^posting/i.test(post.igStatus) : !!post.posterUrl) && !dirty

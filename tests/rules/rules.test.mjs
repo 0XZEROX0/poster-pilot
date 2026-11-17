@@ -696,6 +696,17 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('places that do not exist', updateDoc(doc(boss, 'posts/k1'), { places: 'tiktok', 'appEdits.places': 'tiktok' }))
   await no('the kind never changes', updateDoc(doc(boss, 'posts/k1'), { kind: 'video', 'appEdits.kind': 'video' }))
   await no('a text post cannot be moved to Instagram later', updateDoc(doc(boss, 'posts/k2'), { places: 'ig', 'appEdits.places': 'ig' }))
+  // Made in the Planner, only by the people who schedule; they approve it and send it (Post now) themselves.
+  await env.withSecurityRulesDisabled(async (c) => { const db = c.firestore(); await setDoc(doc(db, 'roles/social'), { name: 'Social', perms: ['schedule'] }); await setDoc(doc(db, 'members/u-soc'), m('u-soc@x.com', 'social')) })
+  const soc = P('u-soc')
+  await getDoc(doc(soc, 'roles/social')).catch(() => {})
+  const mine = { ...base, createdBy: 'u-soc' }
+  await ok('social media makes a video post', setDoc(doc(soc, 'posts/s1'), { ...mine, kind: 'video', media: [{ id: 'B'.repeat(33), type: 'video' }], places: 'fb+ig' }))
+  await ok('social media approves it and posts it now', updateDoc(doc(soc, 'posts/s1'), { feedback: 'Done', postNow: 'yes', postDate: '2026-11-17', postTime: '22:00', 'appEdits.feedback': 'Done', 'appEdits.postNow': 'yes' }))
+  await ok('social media edits its caption', updateDoc(doc(soc, 'posts/s1'), { caption: 'New', 'appEdits.caption': 'New' }))
+  await no('social media cannot make an offer', setDoc(doc(soc, 'posts/s2'), { ...mine, items: [{ name: 'X', category: 'PSU' }] }))
+  await no('social media cannot approve a product poster', updateDoc(doc(soc, 'posts/new1'), { feedback: 'Done', 'appEdits.feedback': 'Done' }))
+  await no('an offer maker cannot make a text post', setDoc(doc(pm, 'posts/s3'), { ...base, createdBy: 'u-pm', kind: 'text', places: 'fb' }))
 }
 console.log(`${n} checks, ${bad} wrong`)
 await env.cleanup(); process.exit(bad ? 1 : 0)
