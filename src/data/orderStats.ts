@@ -85,34 +85,49 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 
 export type OrderLine = { o: Order; sale: number; profit: number | null }
 
+type Row = { o: Order; open: boolean; done: boolean; sale: number; profit: number | null }
+function rowsOf(list: Order[], costs: CostMap | null, web: Record<string, string>): Row[] {
+  return list.map((o) => {
+    const open = o.status === 'new' || o.status === 'confirmed'
+    const done = o.status === 'completed'
+    const sale = priceOf(o)
+    const c = done && costs ? orderCost(o, costs, web) : null
+    return { o, open, done, sale, profit: c && !c.missing ? r2(sale - o.shipping - c.cost) : null }
+  })
+}
+function add(s: Sums, r: Row) {
+  s.orders++
+  if (r.open) { s.open++; s.openValue += r.sale; return }
+  if (!r.done) { s.cancelled++; return }
+  s.completed++
+  s.sales += r.sale
+  s.delivery += r.o.shipping
+  if (r.profit === null) s.uncosted++
+  else { s.costed++; s.profit += r.profit }
+}
+function finish(s: Sums) {
+  s.sales = r2(s.sales); s.delivery = r2(s.delivery); s.openValue = r2(s.openValue); s.profit = r2(s.profit)
+  s.average = s.completed ? Math.round(s.sales / s.completed) : 0
+  return s
+}
+
 /** Sums for all orders, website ones and ones added by hand; plus each completed order with its profit. */
 export function statsOf(list: Order[], costs: CostMap | null, web: Record<string, string>) {
   const all = zero(), website = zero(), manual = zero()
-  const lines: OrderLine[] = []
-  for (const o of list) {
-    const parts = [all, isManual(o) ? manual : website]
-    for (const s of parts) s.orders++
-    if (o.status === 'new' || o.status === 'confirmed') {
-      for (const s of parts) { s.open++; s.openValue += priceOf(o) }
-      continue
-    }
-    if (o.status !== 'completed') { for (const s of parts) s.cancelled++; continue }
-    const sale = priceOf(o)
-    const c = costs ? orderCost(o, costs, web) : null
-    const profit = c && !c.missing ? r2(sale - o.shipping - c.cost) : null
-    lines.push({ o, sale, profit })
-    for (const s of parts) {
-      s.completed++
-      s.sales += sale
-      s.delivery += o.shipping
-      if (profit === null) s.uncosted++
-      else { s.costed++; s.profit += profit }
-    }
-  }
-  for (const s of [all, website, manual]) {
-    s.sales = r2(s.sales); s.delivery = r2(s.delivery); s.openValue = r2(s.openValue); s.profit = r2(s.profit)
-    s.average = s.completed ? Math.round(s.sales / s.completed) : 0
-  }
+  const rows = rowsOf(list, costs, web)
+  for (const r of rows) { add(all, r); add(isManual(r.o) ? manual : website, r) }
+  const lines: OrderLine[] = rows.filter((r) => r.done).map(({ o, sale, profit }) => ({ o, sale, profit }))
   lines.sort((a, b) => b.o.placedAt - a.o.placedAt)
-  return { all, website, manual, lines }
+  return { all: finish(all), website: finish(website), manual: finish(manual), lines }
+}
+
+/** Sums by any key (sales rep, category, where the order came from), biggest sales first. Empty keys count as "". */
+export function sumsBy(list: Order[], costs: CostMap | null, web: Record<string, string>, key: (o: Order) => string): [string, Sums][] {
+  const m = new Map<string, Sums>()
+  for (const r of rowsOf(list, costs, web)) {
+    const k = key(r.o).trim()
+    if (!m.has(k)) m.set(k, zero())
+    add(m.get(k)!, r)
+  }
+  return [...m.entries()].map(([k, s]) => [k, finish(s)] as [string, Sums]).sort((a, b) => b[1].sales - a[1].sales || b[1].orders - a[1].orders)
 }

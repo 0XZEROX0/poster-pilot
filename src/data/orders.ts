@@ -21,10 +21,17 @@ import { paperDate, waNumber } from './tickets'
 // The page listens only to open orders. Closed ones are read once, when someone looks at them.
 
 /** Where an order came from. Website orders have no `source` field. */
-export const SOURCES = ['website', 'whatsapp', 'phone', 'store', 'other'] as const
+export const SOURCES = ['website', 'whatsapp', 'phone', 'callcenter', 'facebook', 'instagram', 'store', 'site', 'other'] as const
 export type Source = (typeof SOURCES)[number]
-export const MANUAL_SOURCES: Source[] = ['whatsapp', 'phone', 'store', 'other']
-export const SOURCE_LABEL: Record<Source, string> = { website: 'Website', whatsapp: 'WhatsApp', phone: 'Phone call', store: 'In the shop', other: 'Other' }
+/** 'site' = a website order known only from the old sales sheet (not linked to a website order). */
+export const MANUAL_SOURCES: Source[] = ['whatsapp', 'phone', 'callcenter', 'facebook', 'instagram', 'store', 'site', 'other']
+export const SOURCE_LABEL: Record<Source, string> = {
+  website: 'Website', whatsapp: 'WhatsApp', phone: 'Phone call', callcenter: 'Call center', facebook: 'Facebook', instagram: 'Instagram', store: 'In the shop', site: 'Website (old sheet)', other: 'Other',
+}
+/** What the order is, for the sales page. Free text in the database; these are offered first. */
+export const CATEGORIES = ['Monitor', 'Hardware part', 'PC', 'Accessories'] as const
+/** The sales people in the old sheet, offered first; anyone can be typed. */
+export const DEFAULT_REPS = ['Octo', 'JR', 'AHMED'] as const
 export const isManual = (o: Pick<Order, 'source'>) => o.source !== 'website'
 
 /** Where an order is, in the app. */
@@ -113,6 +120,11 @@ export type Order = {
   updatedAt: number
   /** Oldest first. */
   steps: Step[]
+  /** Who sold it, what kind of order it is, the shipping label used and the shipping state (from the old sheet). Empty when not set. */
+  rep: string
+  category: string
+  label: string
+  shipState: string
 }
 
 export const orderNo = (o: Pick<Order, 'number' | 'wooId'>) => `#${o.number || o.wooId}`
@@ -231,6 +243,7 @@ export function toOrder(id: string, d: DocumentData): Order {
     delivery: d.delivery === 'delivery' ? 'delivery' : 'pickup', shipping: num(d.shipping), payMethod: str(d.payMethod, 80), items, webTotal: num(d.webTotal),
     agreed: typeof d.agreed === 'number' ? d.agreed : null, customerNote: str(d.customerNote), date: str(d.date, 10), time: str(d.time, 5),
     webError: str(d.webError, 500), updatedAt: millis(d.updatedAt), steps,
+    rep: str(d.rep, 80), category: str(d.category, 80), label: str(d.label, 120), shipState: str(d.shipState, 120),
   }
 }
 
@@ -252,7 +265,7 @@ export function stepBy(kind: StepKind, note: string, extra: Partial<Pick<Step, '
 }
 
 /** What the add / edit form fills in for an order added by hand. */
-export type Draft = Pick<Order, 'customer' | 'phone' | 'email' | 'address' | 'city' | 'area' | 'delivery' | 'shipping' | 'payMethod' | 'items' | 'customerNote' | 'date' | 'time'> & {
+export type Draft = Pick<Order, 'customer' | 'phone' | 'email' | 'address' | 'city' | 'area' | 'delivery' | 'shipping' | 'payMethod' | 'items' | 'customerNote' | 'date' | 'time' | 'rep' | 'category'> & {
   source: Exclude<Source, 'website'>
   status: 'new' | 'confirmed'
   /** The price agreed with the customer when it differs from the lines + delivery; null = the same. */
@@ -272,6 +285,7 @@ export function draftFields(d: Draft) {
     source: d.source, customer: d.customer.trim().slice(0, 200), phone: d.phone.trim().slice(0, 40), email: d.email.trim().slice(0, 200), address: d.address.trim().slice(0, 500),
     city: d.city.trim().slice(0, 120), area: d.area.trim().slice(0, 120), delivery: d.delivery, shipping, payMethod: d.payMethod.slice(0, 80), items,
     webTotal: Math.round((itemsTotal(items) + shipping) * 100) / 100, customerNote: d.customerNote.trim().slice(0, 2000),
+    rep: d.rep.trim().slice(0, 80), category: d.category.trim().slice(0, 80),
   }
 }
 
@@ -289,7 +303,7 @@ export function manualOrder(d: Draft, step: Step, now = Date.now()): Omit<Order,
   const { id, number } = newManualId(now)
   const f = draftFields(d)
   return {
-    id, ...f, wooId: 0, number, webStatus: '', want: '', status: d.status, closed: false, agreed: d.agreed, date: d.date, time: d.time, webError: '', steps: [step],
+    id, ...f, wooId: 0, number, webStatus: '', want: '', status: d.status, closed: false, agreed: d.agreed, date: d.date, time: d.time, webError: '', steps: [step], label: '', shipState: '',
   }
 }
 
@@ -302,6 +316,8 @@ export interface OrderBackend {
   add(d: Draft): Promise<string>
   /** New details for an order added by hand, with an "edited" step. */
   edit(o: Order, d: Draft, step: Step): Promise<void>
+  /** The sales rep and category of any order (website ones too), with an "edited" step. */
+  tag(o: Order, rep: string, category: string, step: Step): Promise<void>
   addStep(o: Order, step: Step): Promise<void>
   removeStep(o: Order, index: number): Promise<void>
   remove(o: Order): Promise<void>
@@ -329,6 +345,9 @@ function firestoreOrders(fs: NonNullable<typeof firestore>): OrderBackend {
     async edit(o, d, step) {
       await updateDoc(doc(col, o.id), { ...draftFields(d), agreed: d.agreed, date: d.date, time: d.time, steps: [...o.steps, step], updatedAt: serverTimestamp() })
     },
+    async tag(o, rep, category, step) {
+      await updateDoc(doc(col, o.id), { rep: rep.trim().slice(0, 80), category: category.trim().slice(0, 80), steps: [...o.steps, step], updatedAt: serverTimestamp() })
+    },
     async addStep(o, step) {
       await updateDoc(doc(col, o.id), { ...applyStep(o, step), updatedAt: serverTimestamp() })
     },
@@ -350,7 +369,7 @@ function demoOrders(): Order[] {
   const today = cairoNow().date
   const at = (n: number, h: number) => new Date(`${addDays(today, n)}T${String(h).padStart(2, '0')}:00:00+02:00`).getTime()
   const s = (kind: StepKind, n: number, h: number, byName: string, note = '', extra: Partial<Step> = {}): Step => ({ at: at(n, h), by: byName, byName, kind, note, ...extra })
-  const base = { email: '', want: '', webError: '', customerNote: '', agreed: null, date: '', time: '', closed: false }
+  const base = { email: '', want: '', webError: '', customerNote: '', agreed: null, date: '', time: '', closed: false, rep: '', category: '', label: '', shipState: '' }
   const mk = (wooId: number, webStatus: string, o: Partial<Order> & Pick<Order, 'customer' | 'phone' | 'items' | 'steps'>): Order => {
     const shipping = o.shipping ?? 0
     const webTotal = o.items.reduce((n, x) => n + x.total, 0) + shipping
@@ -402,6 +421,7 @@ function localOrders(): OrderBackend {
       localPut([o, ...localGet()])
       return o.id
     },
+    async tag(o, rep, category, step) { localChange(o.id, { rep, category, steps: [...o.steps, step] }) },
     async edit(o, d, step) { localChange(o.id, { ...draftFields(d), agreed: d.agreed, date: d.date, time: d.time, steps: [...o.steps, step] }) },
     async addStep(o, step) { localChange(o.id, applyStep(o, step)) },
     async removeStep(o, index) { localChange(o.id, withoutStep(o, index)) },

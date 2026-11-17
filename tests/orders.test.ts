@@ -67,7 +67,7 @@ import { orderCost, periodDays, cairoStart, statsOf, webIndex } from '../src/dat
 
 const draft = (over: Partial<Draft> = {}): Draft => ({
   source: 'whatsapp', status: 'new', agreed: null, customer: ' Sara ', phone: '0100', email: '', address: 'x', city: 'Giza', area: '', delivery: 'pickup', shipping: 200,
-  payMethod: 'Cash', items: [{ name: 'RAM 16GB', qty: 2, total: 3000, pid: 0, vid: 0, cat: 'ram', ref: 'r1' }, { name: ' ', qty: 1, total: 5, pid: 0, vid: 0 }], customerNote: '', date: '', time: '', ...over,
+  payMethod: 'Cash', items: [{ name: 'RAM 16GB', qty: 2, total: 3000, pid: 0, vid: 0, cat: 'ram', ref: 'r1' }, { name: ' ', qty: 1, total: 5, pid: 0, vid: 0 }], customerNote: '', date: '', time: '', rep: 'Octo', category: 'Monitor', ...over,
 })
 
 describe('orders added by hand', () => {
@@ -120,5 +120,14 @@ describe('sales and profit', () => {
     expect(periodDays('lastmonth', '2026-03-05')).toEqual({ from: '2026-02-01', to: '2026-02-28' })
     expect(periodDays('custom', '2026-11-17', '2026-11-10', '2026-11-01')).toEqual({ from: '2026-11-01', to: '2026-11-10' })
     expect(new Date(cairoStart('2026-11-17')).toISOString()).toBe('2026-11-16T22:00:00.000Z')
+  })
+})
+
+import { sumsBy } from '../src/data/orderStats'
+describe('sales by rep', () => {
+  it('groups orders by any key, biggest sales first', () => {
+    const mk = (id: string, rep: string, total: number, status = 'completed') => toOrder(id, { source: 'whatsapp', status, webTotal: total, rep, steps: [], items: [] })
+    const g = sumsBy([mk('M1', 'Octo', 100), mk('M2', 'JR', 500), mk('M3', 'Octo', 300), mk('M4', '', 50, 'new')], null, {}, (o) => o.rep)
+    expect(g.map(([k, s]) => [k, s.sales, s.orders])).toEqual([['JR', 500, 1], ['Octo', 400, 2], ['', 0, 1]])
   })
 })
