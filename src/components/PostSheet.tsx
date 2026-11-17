@@ -5,6 +5,7 @@ import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { problemText } from './FixView'
 import { PostHistory } from './History'
+import { ResultsBox } from './Results'
 import { PhotoPicker } from './PhotoPicker'
 import { Poster } from './Poster'
 import { StageChip } from './PostRow'
@@ -189,6 +190,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
           <p className="post-state"><StageChip post={post} />{when && posted && <span className="muted small">{when.date} · {when.time}</span>}</p>
         </div>
         <div className="form">
+          {posted && <ResultsBox postId={post.id} results={data.results} />}
           {post.offer === 'Rejected' && <div className="alert"><b><Icon name="fix" size={18} />{t('Offer sent back')}{post.offerBy ? ` · ${post.offerBy}` : ''}</b>{post.offerNote && <p dir="auto">{post.offerNote}</p>}</div>}
           {problem && (
             <div className="alert">

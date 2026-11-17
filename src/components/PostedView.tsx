@@ -26,7 +26,7 @@ export function PostedView({ data, onOpen }: { data: Data; onOpen: (id: string) 
       {[...groups].map(([date, list]) => (
         <section key={date}>
           <h2>{date ? dayLabel(date) : t('Posted')} <span className="group-count">{list.length}</span></h2>
-          <div className="cards cards-sm">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><PostCard post={p} onOpen={onOpen} /></Pick>)}</div>
+          <div className="cards cards-sm">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><PostCard post={p} onOpen={onOpen} results={data.results?.posts?.[p.id]} /></Pick>)}</div>
         </section>
       ))}
       <BulkBar bulk={bulk} actions={actions} />
