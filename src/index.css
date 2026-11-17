@@ -708,44 +708,45 @@ button.stock:hover { filter: brightness(1.15); }
 .saved-open { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: start; }
 .saved-total { font-variant-numeric: tabular-nums; direction: ltr; }
 
-/* The printed quotation: hidden on screen, the only thing on the paper. */
+/* The quotation paper. Hidden on screen, the only thing on the printed paper; the preview shows a copy of it. */
 .quote-print { display: none; }
+/* Nothing else may take room on the paper (an empty second page came from the screen's full-height body). */
+.quote-print { width: 100%; max-width: 100%; box-sizing: border-box; padding-inline-end: 1px; }
+/* Watermark: small Static marks in a staggered pattern, faint enough to read through, printed over the table. */
+.quote-print { position: relative; }
+.quote-print .q-mark { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0.16; background-repeat: repeat; background-size: 46% auto; }
+.quote-print .q-mark + table { position: relative; z-index: 0; }
+.quote-print tr { break-inside: avoid; }
+.quote-print table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13pt; }
+.quote-print td, .quote-print th { border: 1px solid #000; padding: 6px 8px; vertical-align: middle; font-weight: 700; }
+.quote-print .q-type { width: 17%; }
+.quote-print .q-n { width: 9%; }
+.quote-print .q-n2 { width: 13%; }
+.quote-print .q-c { text-align: center; }
+.quote-print .q-top td { height: 70px; }
+.quote-print .q-top img { display: block; width: 100%; max-height: 60px; object-fit: contain; }
+.quote-print .q-title { text-align: center; font-weight: 700; font-size: 13pt; line-height: 1.3; }
+.quote-print .q-customer { font-weight: 400; font-size: 11pt; }
+.quote-print .q-head th, .quote-print .q-sum th { background: #1155cc; color: #f1c232; font-weight: 700; text-align: center; }
+.quote-print .q-sum td { font-weight: 700; }
+.quote-print .q-link { color: #1155cc; text-decoration: underline; }
+.quote-print .q-foot { font-size: 13pt; }
+/* Without prices: four columns, the product gets the room. */
+.quote-print.q-plain .q-type { width: 18%; }
+.quote-print.q-plain .q-qty { width: 11%; }
+.quote-print.q-plain .q-war { width: 15%; }
+.quote-print.q-plain tbody tr:not(.q-top):not(.q-head):not(.q-info) td { padding-top: 9px; padding-bottom: 9px; }
+.quote-print table { max-width: 100%; }
+/* Numbers and dates never break inside; product names wrap. */
+.quote-print tr:not(.q-info) > td:nth-child(n+3), .quote-print .q-sum td { white-space: nowrap; }
+.quote-print { color: #000; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 @media print {
   body > *:not(.quote-print):not(.ticket-print) { display: none !important; }
   body.printing-ticket > .quote-print { display: none !important; }
   html, body { background: #fff !important; min-height: 0 !important; height: auto !important; width: auto !important; overflow: visible !important; }
-  /* Nothing else may take room on the paper (an empty second page came from the screen's full-height body). */
-  .quote-print { width: 100%; max-width: 100%; box-sizing: border-box; padding-inline-end: 1px; }
-  /* Watermark: small Static marks in a staggered pattern, faint enough to read through, printed over the table. */
-  .quote-print { position: relative; }
-  .quote-print .q-mark { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0.16; background-repeat: repeat; background-size: 46% auto; }
-  .quote-print .q-mark + table { position: relative; z-index: 0; }
-  .quote-print tr { break-inside: avoid; }
-  .quote-print { display: block; color: #000; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .quote-print table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13pt; }
-  .quote-print td, .quote-print th { border: 1px solid #000; padding: 6px 8px; vertical-align: middle; font-weight: 700; }
-  .quote-print .q-type { width: 17%; }
-  .quote-print .q-n { width: 9%; }
-  .quote-print .q-n2 { width: 13%; }
-  .quote-print .q-c { text-align: center; }
-  .quote-print .q-top td { height: 70px; }
-  .quote-print .q-top img { display: block; width: 100%; max-height: 60px; object-fit: contain; }
-  .quote-print .q-title { text-align: center; font-weight: 700; font-size: 13pt; line-height: 1.3; }
-  .quote-print .q-customer { font-weight: 400; font-size: 11pt; }
-  .quote-print .q-head th, .quote-print .q-sum th { background: #1155cc; color: #f1c232; font-weight: 700; text-align: center; }
-  .quote-print .q-sum td { font-weight: 700; }
-  .quote-print .q-link { color: #1155cc; text-decoration: underline; }
-  .quote-print .q-foot { font-size: 13pt; }
-  /* Without prices: four columns, the product gets the room. */
-  .quote-print.q-plain .q-type { width: 18%; }
-  .quote-print.q-plain .q-qty { width: 11%; }
-  .quote-print.q-plain .q-war { width: 15%; }
-  .quote-print.q-plain tbody tr:not(.q-top):not(.q-head):not(.q-info) td { padding-top: 9px; padding-bottom: 9px; }
-  /* Narrow paper (a phone printing on A5 or A4 portrait): smaller text so every column fits the page. */
-  .quote-print table { max-width: 100%; }
-  /* Numbers and dates never break inside; product names wrap. */
-  .quote-print tr:not(.q-info) > td:nth-child(n+3), .quote-print .q-sum td { white-space: nowrap; }
+  body > .quote-print { display: block; }
 }
+/* Narrow paper (a phone printing on A5 or A4 portrait): smaller text so every column fits the page. */
 @media print and (max-width: 230mm) {
   .quote-print table { font-size: 8pt; }
   .quote-print td, .quote-print th { padding: 3px 4px; }
@@ -760,6 +761,44 @@ button.stock:hover { filter: brightness(1.15); }
   .quote-print .q-head th { font-size: 7pt; padding: 3px 2px; }
   .quote-print.q-plain tbody tr:not(.q-top):not(.q-head):not(.q-info) td { padding-top: 5px; padding-bottom: 5px; }
 }
+/* The same narrow layout for the preview of a phone print. */
+.quote-print.q-narrow table { font-size: 8pt; }
+.quote-print.q-narrow td, .quote-print.q-narrow th { padding: 3px 4px; }
+.quote-print.q-narrow .q-top td { height: 40px; }
+.quote-print.q-narrow .q-top img { max-height: 34px; }
+.quote-print.q-narrow .q-title, .quote-print.q-narrow .q-foot { font-size: 9pt; }
+.quote-print.q-narrow .q-customer { font-size: 8pt; }
+.quote-print.q-narrow .q-type { width: 15%; }
+.quote-print.q-narrow .q-n { width: 9%; }
+.quote-print.q-narrow .q-n2 { width: 12%; }
+.quote-print.q-narrow td, .quote-print.q-narrow th { line-height: 1.25; }
+.quote-print.q-narrow .q-head th { font-size: 7pt; padding: 3px 2px; }
+.quote-print.q-narrow.q-plain tbody tr:not(.q-top):not(.q-head):not(.q-info) td { padding-top: 5px; padding-bottom: 5px; }
+
+/* Quotation preview: the paper, full screen, before printing. The paper keeps its real size in mm and is scaled. */
+.qp { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: #2b2f36; color: #fff; }
+.qp-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top)); background: #1d2026; box-shadow: 0 2px 10px rgba(0,0,0,.3); flex-wrap: wrap; }
+.qp-bar h2 { margin: 0; font-size: 1rem; font-weight: 700; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qp-bar .btn { color: #fff; background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.25); }
+.qp-bar .btn-primary { background: var(--orange, #f39200); border-color: transparent; }
+.qp-zoom { display: flex; align-items: center; gap: 4px; }
+.qp-zoom .btn { padding: 8px 10px; min-width: 40px; justify-content: center; }
+.qp-zoom output { min-width: 3.4em; text-align: center; font-variant-numeric: tabular-nums; font-size: 0.85rem; direction: ltr; }
+.qp-stage { flex: 1; overflow: auto; touch-action: pan-x pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.qp-sizer { margin: 16px auto; position: relative; }
+.qp-paper { position: absolute; top: 0; left: 0; transform-origin: 0 0; background: #fff; box-shadow: 0 6px 30px rgba(0,0,0,.45); box-sizing: border-box; }
+.qp-paper .quote-print { display: block; }
+.qp-note { margin: 0; padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); text-align: center; font-size: 0.75rem; opacity: 0.7; }
+@media (max-width: 600px) {
+  .qp-bar { flex-wrap: nowrap; gap: 6px; padding-inline: 8px; }
+  .qp-bar h2 { display: none; }
+  .qp-zoom { flex: 1; }
+  .qp-zoom .btn { min-width: 36px; padding: 8px; }
+  .qp-close span { display: none; }
+}
+.bx-bar .bx-bar-preview { flex: none; background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); color: #fff; padding: 8px 10px; }
+@media print { .qp { display: none !important; } }
+
 .saved-by { font-size: 0.75rem; font-weight: 700; color: var(--accent); }
 .choice-new { display: flex; align-items: center; gap: 8px; }
 .choice-new input { flex: 1; min-width: 0; font-size: 1rem; }

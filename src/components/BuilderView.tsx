@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { nameOf, useProfiles } from '../data/profiles'
 import { createPortal } from 'react-dom'
 import { builderOpen, chosen, complete, DRAFT_KEY, edits, emptyLine, fresh, grants, live, shape, type Grant, LIVE_IDLE_MS, misfit, newBuild, pick, quoteLabel, quotes, type LiveBuild, SHOP, slotOf, SLOTS, START_SLOTS, totals, type Build, type Line, type SavedQuote } from '../data/builder'
@@ -127,6 +127,8 @@ export function BuilderView() {
   // It stays on this screen: it is never part of the shared live quote, a saved quote or the printed quotation.
   const seeCost = allowed('cost')
   // Whether the printed quotation shows each part's price. Off: only the parts, the discount and the total.
+  // The full-screen look at the paper before printing, to show the customer. Nothing is saved.
+  const [previewing, setPreviewing] = useState(false)
   const [printPrices, setPrintPricesState] = useState(() => { try { return localStorage.getItem(PRINT_PRICES_KEY) !== 'off' } catch { return true } })
   const setPrintPrices = (on: boolean) => { setPrintPricesState(on); try { localStorage.setItem(PRINT_PRICES_KEY, on ? 'on' : 'off') } catch { /* lasts while the page is open */ } }
   const { costs: costMap } = useCosts()
@@ -210,6 +212,10 @@ export function BuilderView() {
   const print = () => {
     if (!filled.length) return showToast(t('Pick at least one product first.'))
     printQuote(['Quotation', build.customer.trim(), today().replace(/\//g, '-')].filter(Boolean).join(' '))
+  }
+  const preview = () => {
+    if (!filled.length) return showToast(t('Pick at least one product first.'))
+    setPreviewing(true)
   }
   const startEditing = (one: LiveBuild) => {
     mine.current = build
@@ -445,6 +451,7 @@ export function BuilderView() {
             <label className="bx-switch bx-print-prices"><input type="checkbox" checked={printPrices} onChange={(e) => setPrintPrices(e.target.checked)} /><i aria-hidden="true" /><span>{t('Prices on the printed quotation')}</span><b>{printPrices ? t('On') : t('Off')}</b></label>
             <div className="actions">
               <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print quotation')}</button>
+              <button className="btn" onClick={preview}><Icon name="expand" size={18} />{t('Preview quotation')}</button>
               {!editing && <button className="btn" disabled={busy} onClick={save}>{build.id ? t('Save changes') : t('Save quote')}</button>}
             </div>
           </div>
@@ -454,6 +461,7 @@ export function BuilderView() {
       <div className="bx-bar">
         <span><small>{t('TOTAL')}</small><b>{money(sum.total)}</b>{costOn && filled.length > 0 && <small className="bx-bar-cost">{t('Cost')} {money(bc.cost)} · {t('Profit')} {profitText(profitOf(sum.total, bc.cost))}</small>}</span>
         {seeCost && <CostEye compact />}
+        <button className="btn bx-bar-preview" onClick={preview} aria-label={t('Preview quotation')} title={t('Preview quotation')}><Icon name="expand" size={18} /></button>
         <button className="btn btn-primary" onClick={print}><Icon name="print" size={18} />{t('Print')}</button>
       </div>
 
@@ -461,6 +469,7 @@ export function BuilderView() {
       {watching && <LiveSheet onCopy={(b) => { setBuild({ customer: b.customer, sales: build.sales, lines: complete(b.lines), extra: b.extra + b.grant, buildDiscount: b.buildDiscount }); setWatching(false); setSure(false); void grants.clearMine() }} onEdit={startEditing} onClose={() => setWatching(false)} />}
       {saved && <SavedSheet onOpen={(q) => { setBuild({ ...q, id: q.by === myId() || q.by === 'demo-you' || isOwner() ? q.id : undefined, lines: complete(q.lines) }); setSaved(false); setSure(false); void grants.clearMine() }} onClose={() => setSaved(false)} />}
       {createPortal(<QuotePrint build={build} lines={filled} sum={sum} prices={printPrices} />, document.body)}
+      {previewing && createPortal(<QuotePreview onPrint={print} onClose={() => setPreviewing(false)}><QuotePrint build={build} lines={filled} sum={sum} prices={printPrices} narrow={phonePrint()} /></QuotePreview>, document.body)}
     </div>
   )
 }
@@ -751,9 +760,11 @@ const PRINT_PRICES_KEY = 'posterpilot.builder.printPrices'
  * its print screen (often A5 or A4 portrait): forcing A4 landscape there made Android shrink and cut the page, so the
  * phone leaves the paper alone and the print styles fit the table to whatever width the paper has.
  */
+const phonePrint = () => window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900
+
 function printQuote(name: string) {
   const title = document.title
-  const phone = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900
+  const phone = phonePrint()
   const page = document.createElement('style')
   page.textContent = phone ? '@page { margin: 6mm; }' : '@page { size: A4 landscape; margin: 8mm; }'
   document.head.appendChild(page)
@@ -775,13 +786,116 @@ function printQuote(name: string) {
   window.addEventListener('afterprint', () => setTimeout(restore, 2000), { once: true })
 }
 
-function QuotePrint({ build, lines, sum, prices }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean }) {
+/**
+ * The quotation paper on screen, full size, before printing: the same paper the print uses (A4 landscape on a computer,
+ * A4 portrait with the narrow layout on a phone), scaled to fit the screen. Zoom with the buttons, Ctrl + wheel or two
+ * fingers. Nothing here is saved, and cost or profit is never on it.
+ */
+function QuotePreview({ children, onPrint, onClose }: { children: ReactNode; onPrint: () => void; onClose: () => void }) {
+  const narrow = phonePrint()
+  const stage = useRef<HTMLDivElement>(null)
+  const paper = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ w: 0, h: 0 })
+  const [fit, setFit] = useState(1)
+  const [zoom, setZoom] = useState<number | null>(null) // null: fit the screen
+  const scale = zoom ?? fit
+  const clamp = (z: number) => Math.min(4, Math.max(0.2, z))
+
+  // Measure the paper (it grows with long builds) and the screen, and work out the scale that fits the whole page.
+  useEffect(() => {
+    const measure = () => {
+      const p = paper.current, s = stage.current
+      if (!p || !s) return
+      const w = p.offsetWidth, h = p.offsetHeight
+      setSize({ w, h })
+      setFit(Math.max(0.1, Math.min((s.clientWidth - 24) / w, (s.clientHeight - 32) / h)))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    if (paper.current) ro.observe(paper.current)
+    if (stage.current) ro.observe(stage.current)
+    return () => ro.disconnect()
+  }, [])
+
+  // Escape closes; the page behind does not scroll while the preview is open.
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', key)
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', key); document.body.style.overflow = overflow }
+  }, [onClose])
+
+  const fitRef = useRef(fit)
+  const scaleRef = useRef(scale)
+  useEffect(() => { fitRef.current = fit; scaleRef.current = scale }, [fit, scale])
+
+  // Ctrl + mouse wheel (and a laptop's pinch) zooms; two fingers zoom on a phone or tablet.
+  useEffect(() => {
+    const s = stage.current
+    if (!s) return
+    let pinch: { d: number; z: number } | null = null
+    const dist = (e: TouchEvent) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
+    const wheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      setZoom((z) => clamp((z ?? fitRef.current) * Math.exp(-e.deltaY / 300)))
+    }
+    const start = (e: TouchEvent) => { if (e.touches.length === 2) pinch = { d: dist(e), z: scaleRef.current } }
+    const move = (e: TouchEvent) => {
+      if (!pinch || e.touches.length !== 2) return
+      e.preventDefault()
+      const p = pinch
+      setZoom(clamp(p.z * dist(e) / p.d))
+    }
+    const end = (e: TouchEvent) => { if (e.touches.length < 2) pinch = null }
+    s.addEventListener('wheel', wheel, { passive: false })
+    s.addEventListener('touchstart', start, { passive: true })
+    s.addEventListener('touchmove', move, { passive: false })
+    s.addEventListener('touchend', end)
+    s.addEventListener('touchcancel', end)
+    return () => {
+      s.removeEventListener('wheel', wheel)
+      s.removeEventListener('touchstart', start)
+      s.removeEventListener('touchmove', move)
+      s.removeEventListener('touchend', end)
+      s.removeEventListener('touchcancel', end)
+    }
+  }, [])
+
+  const step = (f: number) => setZoom(clamp(Math.round(scale * f * 20) / 20))
+  return (
+    <div className="qp" role="dialog" aria-modal="true" aria-label={t('Quotation preview')}>
+      <div className="qp-bar">
+        <h2>{t('Quotation preview')}</h2>
+        <div className="qp-zoom">
+          <button className="btn" onClick={() => step(1 / 1.25)} aria-label={t('Zoom out')} title={t('Zoom out')}><Icon name="minus" size={18} /></button>
+          <output>{Math.round(scale * 100)}%</output>
+          <button className="btn" onClick={() => step(1.25)} aria-label={t('Zoom in')} title={t('Zoom in')}><Icon name="plus" size={18} /></button>
+          <button className="btn" onClick={() => setZoom(null)} aria-pressed={zoom === null}>{t('Fit')}</button>
+        </div>
+        <button className="btn btn-primary" onClick={onPrint}><Icon name="print" size={18} />{t('Print')}</button>
+        <button className="btn qp-close" onClick={onClose} aria-label={t('Close')}><Icon name="close" size={18} /><span>{t('Close')}</span></button>
+      </div>
+      <div className="qp-stage" ref={stage}>
+        <div className="qp-sizer" style={{ width: size.w * scale, height: size.h * scale }}>
+          <div className="qp-paper" ref={paper} style={{ ...(narrow ? { width: '210mm', minHeight: '297mm', padding: '6mm' } : { width: '297mm', minHeight: '210mm', padding: '8mm' }), transform: `scale(${scale})` }}>
+            {children}
+          </div>
+        </div>
+      </div>
+      <p className="qp-note">{narrow ? t('A4 paper, as this device prints it. Nothing is saved.') : t('A4 landscape, as it prints. Nothing is saved.')}</p>
+    </div>
+  )
+}
+
+function QuotePrint({ build, lines, sum, prices, narrow }: { build: Build; lines: Line[]; sum: ReturnType<typeof totals>; prices: boolean; narrow?: boolean }) {
   const logo = `${import.meta.env.BASE_URL}static-logo.png`
   const mark = `${import.meta.env.BASE_URL}quote-watermark.png`
   // Without prices: its own four-column layout (type, product, quantity, warranty), only the totals show money.
   const cols = prices ? 6 : 4
   return (
-    <div className={`quote-print${prices ? '' : ' q-plain'}`} dir="ltr" lang="en">
+    <div className={`quote-print${prices ? '' : ' q-plain'}${narrow ? ' q-narrow' : ''}`} dir="ltr" lang="en">
       {/* A faint pattern of small Static marks over the table, as a watermark. */}
       <div className="q-mark" aria-hidden="true" style={{ backgroundImage: `url(${mark})` }} />
       <table>
