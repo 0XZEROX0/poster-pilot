@@ -72,19 +72,43 @@ export type LineCost = {
   unit: number | null
   from: 'order' | 'list' | null
   suggest: number | null
-  /** The price list product the line is (`cat/pid`), and how that is known: from the order or a confirmed website
-   * link ('own'), or picked by someone for this line, this website product or this name ('picked'). */
+  /** The price list product the line is (`cat/pid`), and how that is known: picked for this one line ('line'), from
+   * the order itself or a confirmed website link ('own'), or picked for every line of this website product or name ('all'). */
   key?: string
-  via?: 'own' | 'picked'
+  via?: LinkVia
+  /** The price list cost is already kept with the order (it no longer changes with the price list). */
+  kept?: boolean
+}
+
+/**
+ * Completed orders whose price list costs are not kept with the order yet: what to save so each holds the cost it
+ * was sold with, even when the price list cost changes later or the product is removed. Typed costs stay as they are.
+ */
+export function toKeep(lines: OrderLine[], saved: SavedCosts): { id: string; placedAt: number; lines: { n: string; c: number | null; k?: string; a?: string }[] }[] {
+  const out = []
+  for (const l of lines) {
+    if (!l.lines || !l.lines.some((c) => c.from === 'list' && !c.kept)) continue
+    const cur = saved[l.o.id]
+    out.push({ id: l.o.id, placedAt: l.o.placedAt, lines: l.o.items.map((it, i) => {
+      const was = cur?.[i]?.n === it.name ? cur[i] : undefined
+      const c = l.lines![i]
+      if (c.from === 'list' && c.unit !== null && c.key) return was?.k ? { n: it.name, c: c.unit, k: was.k, a: c.key } : { n: it.name, c: c.unit, a: c.key }
+      return was ? { ...was } : { n: it.name, c: null }
+    }) })
+  }
+  return out
 }
 
 /** The price list product a line is, if known. */
-export function lineKey(o: Pick<Order, 'id'>, it: Order['items'][number], i: number, ctx: Pick<CostCtx, 'web' | 'saved' | 'links'>): { key: string; via: 'own' | 'picked' } | null {
+export type LinkVia = 'line' | 'own' | 'all'
+/** The price list product a line is, if known. A product picked for that one line wins (it corrects a wrong match). */
+export function lineKey(o: Pick<Order, 'id'>, it: Order['items'][number], i: number, ctx: Pick<CostCtx, 'web' | 'saved' | 'links'>): { key: string; via: LinkVia } | null {
+  const s = ctx.saved[o.id]?.[i]
+  if (s && s.n === it.name && s.k) return { key: s.k, via: 'line' }
   const own = it.cat && it.ref ? costKey(it.cat, it.ref) : it.pid ? ctx.web[`${it.pid}:${it.vid}`] : undefined
   if (own) return { key: own, via: 'own' }
-  const s = ctx.saved[o.id]?.[i]
-  const picked = (s && s.n === it.name && s.k) || (it.pid ? ctx.links?.web[`${it.pid}:${it.vid}`] : undefined) || ctx.links?.names[plainName(it.name)]
-  return picked ? { key: picked, via: 'picked' } : null
+  const all = (it.pid ? ctx.links?.web[`${it.pid}:${it.vid}`] : undefined) || ctx.links?.names[plainName(it.name)]
+  return all ? { key: all, via: 'all' } : null
 }
 
 export function lineCosts(o: Pick<Order, 'id' | 'items' | 'placedAt'>, ctx: CostCtx): LineCost[] {
@@ -93,7 +117,11 @@ export function lineCosts(o: Pick<Order, 'id' | 'items' | 'placedAt'>, ctx: Cost
     const s = saved?.[i]
     const k = lineKey(o, it, i, ctx)
     const link = k ? { key: k.key, via: k.via } : {}
-    if (s && s.c !== null && s.n === it.name) return { unit: s.c, from: 'order', suggest: null, ...link }
+    if (s && s.c !== null && s.n === it.name) {
+      if (!s.a) return { unit: s.c, from: 'order', suggest: null, ...link }
+      // Kept automatically from the price list: holds while the line is still that product.
+      if (s.a === k?.key) return { unit: s.c, from: 'list', suggest: null, kept: true, ...link }
+    }
     const exact = k?.key
     if (exact && ctx.costs[exact] !== undefined) {
       // Without a history (the demo) the cost counts for every day.

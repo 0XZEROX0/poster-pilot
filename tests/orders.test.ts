@@ -63,7 +63,7 @@ describe('search', () => {
 })
 
 import { draftFields, manualOrder, type Draft } from '../src/data/orders'
-import { lineCosts, orderCost, periodDays, cairoStart, statsOf, webIndex, type CostCtx } from '../src/data/orderStats'
+import { lineCosts, orderCost, periodDays, cairoStart, statsOf, toKeep, webIndex, type CostCtx } from '../src/data/orderStats'
 
 const draft = (over: Partial<Draft> = {}): Draft => ({
   source: 'whatsapp', status: 'new', agreed: null, customer: ' Sara ', phone: '0100', email: '', address: 'x', city: 'Giza', area: '', delivery: 'pickup', shipping: 200,
@@ -114,9 +114,28 @@ describe('sales and profit', () => {
     expect(orderCost(o, ctx())).toMatchObject({ missing: 2 })
     const links = { web: { '900:0': 'ram/r1' }, names: { 'kingston ram 8gb': 'ram/r2' } }
     expect(orderCost(o, ctx({ links }))).toMatchObject({ cost: 2100, missing: 0 })
-    expect(lineCosts(o, ctx({ links }))[0]).toMatchObject({ key: 'ram/r2', via: 'picked', from: 'list' })
+    expect(lineCosts(o, ctx({ links }))[0]).toMatchObject({ key: 'ram/r2', via: 'all', from: 'list' })
     const saved = { MS2: [{ n: 'Kingston  RAM 8GB!', c: null, k: 'ram/r1' }] }
-    expect(lineCosts(o, ctx({ links, saved }))[0]).toMatchObject({ key: 'ram/r1', unit: 1200 })
+    expect(lineCosts(o, ctx({ links, saved }))[0]).toMatchObject({ key: 'ram/r1', unit: 1200, via: 'line' })
+    // a product picked for one line corrects even the order's own (or the website's) link
+    const w = { id: 'W9', placedAt: 0, items: [line('a', { pid: 500 })] }
+    expect(lineCosts(w, ctx({ saved: { W9: [{ n: 'a', c: null, k: 'ram/r1' }] } }))[0]).toMatchObject({ key: 'ram/r1', unit: 1200, via: 'line' })
+  })
+  it('keeps the price list cost with each completed order, so a later change does not move its profit', () => {
+    const hist = { 'ram/r2': [{ at: 1000, cost: 100 }] }
+    const mk = (id: string, more: Record<string, unknown>) => toOrder(id, { closed: true, status: 'completed', webStatus: 'completed', steps: [], webTotal: 200, ...more })
+    const o = mk('W5', { placedAt: 2000, items: [{ name: 'a', qty: 1, total: 200, pid: 500, vid: 0 }, { name: 'typed', qty: 1, total: 0, pid: 0, vid: 0 }] })
+    const saved = { W5: [{ n: 'a', c: null }, { n: 'typed', c: 40 }] }
+    const keep = toKeep(statsOf([o], ctx({ hist, saved })).lines, saved)
+    expect(keep).toEqual([{ id: 'W5', placedAt: o.placedAt, lines: [{ n: 'a', c: 100, a: 'ram/r2' }, { n: 'typed', c: 40 }] }])
+    // later the price list cost goes up to 200 (and even if the product is removed): the order still costs 100
+    const kept = { W5: keep[0].lines }
+    expect(lineCosts(o, ctx({ costs: { 'ram/r2': 200 }, hist: { 'ram/r2': [{ at: 5000, cost: 200 }] }, saved: kept }))[0]).toMatchObject({ unit: 100, from: 'list', kept: true })
+    expect(lineCosts(o, ctx({ costs: {}, hist: {}, saved: kept }))[0]).toMatchObject({ unit: 100, kept: true })
+    expect(toKeep(statsOf([o], ctx({ hist, saved: kept })).lines, kept)).toEqual([])
+    // the line is matched to another product: the kept cost no longer counts
+    const moved = { W5: [{ ...keep[0].lines[0], k: 'ram/r1' }, keep[0].lines[1]] }
+    expect(lineCosts(o, ctx({ saved: moved }))[0]).toMatchObject({ key: 'ram/r1', unit: 1200 })
   })
   it('a cost saved on the order wins, while the line keeps its name', () => {
     const o = { id: 'MS1', placedAt: 0, items: [line('Old PC specs', { total: 20000 }), line('a', { qty: 2, pid: 500 })] }
@@ -190,8 +209,10 @@ describe('costs saved on orders', () => {
   })
   it('reads a month document', () => {
     const out = {}
-    savedOf({ orders: { MS1: { lines: [{ n: 'PC', c: 100 }, { n: 'x', c: null }, { n: 'y' }] }, bad: {} } }, out)
+    const logs = {}
+    savedOf({ orders: { MS1: { lines: [{ n: 'PC', c: 100 }, { n: 'x', c: null }, { n: 'y' }], log: [{ at: 5, byName: 'A', note: 'n2' }, { at: 2, byName: 'B', note: 'n1' }] }, bad: {} } }, out, logs)
     expect(out).toEqual({ MS1: [{ n: 'PC', c: 100 }, { n: 'x', c: null }, { n: 'y', c: null }] })
+    expect(logs).toEqual({ MS1: [{ at: 2, byName: 'B', note: 'n1' }, { at: 5, byName: 'A', note: 'n2' }] })
   })
 })
 
