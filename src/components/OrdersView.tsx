@@ -3,6 +3,7 @@ import { getAuth } from 'firebase/auth'
 import { track } from '../data/activity'
 import { firestore } from '../data/firebase'
 import { cairoNow } from '../data/logic'
+import { PERIOD_LABEL, PERIODS, periodDays, periodRange, type Period } from '../data/orderStats'
 import { nudgeEngine } from '../data/nudge'
 import { nameOf } from '../data/profiles'
 import {
@@ -17,8 +18,10 @@ import { Sheet } from './Sheet'
 import { useDesktop } from './useDesktop'
 import { Empty, Icon, SearchBox, showToast } from './ui'
 
-type Filter = 'open' | 'new' | 'confirmed' | 'completed' | 'cancelled'
-const FILTERS: Filter[] = ['open', 'new', 'confirmed', 'completed', 'cancelled']
+type Filter = 'all' | 'open' | 'new' | 'confirmed' | 'completed' | 'cancelled'
+const FILTERS: Filter[] = ['all', 'open', 'new', 'confirmed', 'completed', 'cancelled']
+/** Newest placed first (every status mixed), or the soonest pickup / delivery day first. */
+type Sort = 'newest' | 'due'
 
 /** Names for each step, in the log and on the buttons that add them. */
 const STEP_TITLE: Record<StepKind, string> = {
@@ -63,30 +66,53 @@ export function OrdersView() {
   const [open, setOpen] = useState<Order[] | null>(null)
   const [closed, setClosed] = useState<Order[] | null>(null)
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState<Filter>('open')
+  const [filter, setFilter] = useState<Filter>('all')
+  const [sort, setSort] = useState<Sort>('newest')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [view, setView] = useState<'list' | 'stats'>('list')
   const [form, setForm] = useState<{ edit?: Order } | null>(null)
+  /** Placed between two days (like the sales page); 'all' = no date filter. */
+  const [period, setPeriod] = useState<Period | 'all'>('all')
+  const [from, setFrom] = useState(today)
+  const [to, setTo] = useState(today)
+  const days = period === 'all' ? null : periodDays(period, today, from, to)
+  const [placed, setPlaced] = useState<Order[] | null>(null)
   const canEdit = allowed('orders.edit')
   /** An order opened from the sales page that is not among the loaded ones. */
   const [extra, setExtra] = useState<Order | null>(null)
 
   useEffect(() => orders.watchOpen((list) => { setOpen(list); setError('') }, (e) => setError(String(e))), [])
   // Closed orders are read once, only when someone looks for them.
-  const wantClosed = filter === 'completed' || filter === 'cancelled' || search.trim().length >= 3
+  const wantClosed = filter === 'all' || filter === 'completed' || filter === 'cancelled' || search.trim().length >= 3
   useEffect(() => {
     if (!wantClosed || closed) return
     orders.loadClosed().then(setClosed, (e) => setError(String(e)))
   }, [wantClosed, closed])
 
+  useEffect(() => {
+    if (!days) { setPlaced(null); return }
+    let live = true
+    setPlaced(null)
+    const r = periodRange(days)
+    orders.loadPlaced(r.from, r.to).then((l) => { if (live) setPlaced(l) }, (e) => { if (live) setError(String(e)) })
+    return () => { live = false }
+  }, [days?.from, days?.to]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const all = useMemo(() => {
     const byId = new Map<string, Order>()
+    if (days) {
+      // Only the orders placed in those days; open ones as they are now.
+      const range = periodRange(days)
+      for (const x of placed ?? []) byId.set(x.id, x)
+      for (const x of open ?? []) if (x.placedAt >= range.from && x.placedAt < range.to) byId.set(x.id, x)
+      return [...byId.values()]
+    }
     for (const x of closed ?? []) byId.set(x.id, x)
     for (const x of open ?? []) byId.set(x.id, x)
     if (extra && !byId.has(extra.id)) byId.set(extra.id, extra)
     return [...byId.values()]
-  }, [open, closed, extra])
+  }, [open, closed, extra, placed, days?.from, days?.to]) // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useMemo(() => {
     const c: Record<string, number> = { open: 0 }
     for (const x of open ?? []) { c[x.status] = (c[x.status] ?? 0) + 1; if (!x.closed) c.open++ }
@@ -97,13 +123,14 @@ export function OrdersView() {
   const list = all
     .filter((x) => {
       if (search.trim()) return matchesOrder(x, search)
+      if (filter === 'all') return true
       if (filter === 'open') return !x.closed
       if (filter === 'cancelled') return ['cancelled', 'refunded', 'failed'].includes(x.status)
       return x.status === filter
     })
     .sort((a, b) => {
-      // Open: the soonest date first, then the newest without a date. Closed: the newest first.
-      if (filter === 'completed' || filter === 'cancelled' || search.trim()) return b.updatedAt - a.updatedAt
+      // Newest placed first, whatever the status; or the soonest pickup / delivery day first, then the newest without one.
+      if (sort === 'newest') return b.placedAt - a.placedAt
       const da = a.date || '9999', db = b.date || '9999'
       return da !== db ? (da < db ? -1 : 1) : (a.time || '99') !== (b.time || '99') ? ((a.time || '99') < (b.time || '99') ? -1 : 1) : b.placedAt - a.placedAt
     })
@@ -153,19 +180,37 @@ export function OrdersView() {
         <div className="filters">
           {FILTERS.map((f) => (
             <button key={f} className={`filter${filter === f && !search.trim() ? ' on' : ''}`} onClick={() => { setFilter(f); setSearch('') }}>
-              {t(f === 'open' ? 'Open' : STATUS_LABEL[f as Status])}
+              {t(f === 'all' ? 'All' : f === 'open' ? 'Open' : STATUS_LABEL[f as Status])}
               {(f === 'open' || f === 'new' || f === 'confirmed') && counts[f] ? <i>{counts[f]}</i> : null}
             </button>
           ))}
         </div>
       </div>
-      <SearchBox value={search} onChange={setSearch} placeholder={t('Search name, phone, product, order number')} />
+      <div className="filters or-days">
+        <button className={`filter${period === 'all' ? ' on' : ''}`} onClick={() => setPeriod('all')}>{t('Any day')}</button>
+        {PERIODS.map((p) => <button key={p} className={`filter${period === p ? ' on' : ''}`} onClick={() => setPeriod(p)}>{t(PERIOD_LABEL[p])}</button>)}
+      </div>
+      {period === 'custom' && (
+        <div className="form"><div className="two">
+          <label><span>{t('From')}</span><input type="date" value={from} max={today} onChange={(e) => setFrom(e.target.value)} /></label>
+          <label><span>{t('To')}</span><input type="date" value={to} max={today} onChange={(e) => setTo(e.target.value)} /></label>
+        </div></div>
+      )}
+      <div className="or-searchrow">
+        <SearchBox value={search} onChange={setSearch} placeholder={t('Search name, phone, product, order number')} />
+        <label className="or-sort"><span>{t('Sort')}</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+            <option value="newest">{t('Newest first')}</option>
+            <option value="due">{t('Pickup / delivery day')}</option>
+          </select>
+        </label>
+      </div>
       {today2 > 0 && !search.trim() && filter === 'open' && <p className="banner mt-late">{tn(today2 === 1 ? '%n order is due today.' : '%n orders are due today.', { n: today2 })}</p>}
       {error && <p className="banner banner-bad mt-late" dir="ltr">{/permission/i.test(error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error}</p>}
       <div className={desktop ? 'mt-split' : ''}>
         <div className="mt-list">
-          {open === null ? <p className="muted">{t('Loading…')}</p>
-            : list.length === 0 ? <Empty icon="cart" text={search.trim() ? t('No order matches the search.') : filter === 'open' ? t('No open orders. New website orders show up here by themselves.') : t('No orders here.')} />
+          {open === null || (days && placed === null) ? <p className="muted">{t('Loading…')}</p>
+            : list.length === 0 ? <Empty icon="cart" text={search.trim() ? t('No order matches the search.') : days ? t('No orders here for these days.') : filter === 'open' || filter === 'all' ? t('No open orders. New website orders show up here by themselves.') : t('No orders here.')} />
               : list.map((x) => {
                 const now = whereNow(x)
                 const left = leftOf(x)
@@ -202,6 +247,7 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
   const done = progressOf(o)
   const owner = isOwner()
   const canEdit = allowed('orders.edit')
+  const canChange = allowed('orders.change')
   const price = priceOf(o)
   const paid = paidOf(o)
   const left = leftOf(o)
@@ -283,8 +329,8 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         <div className="mt-acts">
           {wa && <a className="btn btn-sm mt-wa" href={`https://wa.me/${wa}?text=${encodeURIComponent(waMessage(o))}`} target="_blank" rel="noreferrer"><Icon name="whatsapp" size={18} />WhatsApp</a>}
           {o.phone && <a className="btn btn-sm" href={`tel:${o.phone.replace(/[^\d+]/g, '')}`}><Icon name="user" size={18} />{t('Call')}</a>}
-          {manual && canEdit && <button className="btn btn-sm" onClick={onEdit}><Icon name="edit" size={18} />{t('Edit')}</button>}
-          {owner && <button className="btn btn-sm mt-del" onClick={remove} aria-label={t('Remove from the app')}><Icon name="trash" size={18} /></button>}
+          {canChange && <button className="btn btn-sm" onClick={onEdit}><Icon name="edit" size={18} />{t('Edit')}</button>}
+          {(owner || allowed('orders.delete')) && <button className="btn btn-sm mt-del" onClick={remove} aria-label={t('Remove from the app')}><Icon name="trash" size={18} /></button>}
         </div>
       </div>
       <div className="or-status">
@@ -292,6 +338,9 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         {manual ? <span className="small t2">{tn('Added in the app · %s', { s: t(SOURCE_LABEL[o.source]) })}</span>
           : <span className="small t2">{tn('Website: %s', { s: t(WEB_LABEL[o.webStatus] ?? o.webStatus ?? '—') })}</span>}
         <SyncChip o={o} />
+        {o.local && (o.push
+          ? <span className="chip" title={t('The changes are on their way to the website order.')}>{t('Sending changes to the website')}</span>
+          : <span className="chip" title={t('Changed in the app and sent to the website. The app keeps these details now.')}>{t('Changed in the app')}</span>)}
       </div>
       <div>
         <div className="mt-bar">{PROGRESS.map((p, i) => <span key={p} className={done[i] ? 'on' : ''} />)}</div>
@@ -332,7 +381,7 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
             <tr key={n}><td dir="auto">{i.name}</td><td className="num">{i.qty > 1 ? `× ${i.qty}` : ''}</td><td className="num" dir="ltr">{money(i.total)}</td></tr>
           ))}
           {o.shipping > 0 && <tr><td>{t('Delivery')}</td><td /><td className="num" dir="ltr">{money(o.shipping)}</td></tr>}
-          <tr className="sum"><td>{t(manual ? 'Total' : 'Website total')}</td><td /><td className="num" dir="ltr">{money(o.webTotal)}</td></tr>
+          <tr className="sum"><td>{t(manual || o.local ? 'Total' : 'Website total')}</td><td /><td className="num" dir="ltr">{money(o.webTotal)}</td></tr>
         </tbody>
       </table>
       <div className="or-money">

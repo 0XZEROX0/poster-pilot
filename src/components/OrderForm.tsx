@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
+import { getAuth } from 'firebase/auth'
 import { track } from '../data/activity'
+import { firestore } from '../data/firebase'
 import { cairoNow } from '../data/logic'
 import { CATEGORIES, DEFAULT_REPS, itemsTotal, MANUAL_SOURCES, orderNo, orders, PAY_METHODS, SOURCE_LABEL, stepBy, type Draft, type Item, type Order } from '../data/orders'
+import { nudgeEngine } from '../data/nudge'
 import { matches, usePrices, type PriceItem } from '../data/prices'
 import { t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -10,7 +13,7 @@ import { Icon, showToast } from './ui'
 // Add an order by hand (a customer who ordered on WhatsApp, by phone or in the shop), or change one added that way.
 // Lines are picked from the price list (so the sales page knows their cost) or typed in.
 
-type Line = { name: string; qty: string; unit: string; cat?: string; ref?: string }
+type Line = { name: string; qty: string; unit: string; cat?: string; ref?: string; pid?: number; vid?: number }
 const money = (n: number) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} EGP`
 const REP_KEY = 'staticos.orders.rep'
 const lastRep = () => { try { return localStorage.getItem(REP_KEY) ?? '' } catch { return '' } }
@@ -18,12 +21,33 @@ const keepRep = (r: string) => { try { localStorage.setItem(REP_KEY, r) } catch 
 const numOf = (s: string) => (s.trim() && isFinite(Number(s)) ? Number(s) : 0)
 
 function linesOf(items: Item[]): Line[] {
-  return items.map((x) => ({ name: x.name, qty: String(x.qty), unit: String(Math.round((x.total / (x.qty || 1)) * 100) / 100), cat: x.cat, ref: x.ref }))
+  return items.map((x) => ({ name: x.name, qty: String(x.qty), unit: String(Math.round((x.total / (x.qty || 1)) * 100) / 100), cat: x.cat, ref: x.ref, pid: x.pid, vid: x.vid }))
+}
+
+/** What an edit changed, for the order log: "Items: 2× A, B · Delivery: Store pickup". */
+function changes(o: Order, d: Draft, items: Item[]): string {
+  const out: string[] = []
+  const lines = (l: Item[]) => l.map((x) => `${x.qty > 1 ? `${x.qty}× ` : ''}${x.name}`).join(', ')
+  if (lines(o.items) !== lines(items) || o.items.some((x, i) => x.total !== items[i]?.total)) out.push(`${t('Items')}: ${lines(items)}`)
+  if (o.delivery !== d.delivery) out.push(t(d.delivery === 'pickup' ? 'Store pickup' : 'Home delivery'))
+  if (d.delivery === 'delivery' && (o.address !== d.address.trim() || o.city !== d.city.trim())) out.push(`${t('Address')}: ${[d.address.trim(), d.city.trim()].filter(Boolean).join(', ')}`)
+  if ((o.delivery === 'delivery' ? o.shipping : 0) !== d.shipping) out.push(`${t('Delivery')}: ${money(d.shipping)}`)
+  if (o.customer !== d.customer.trim()) out.push(`${t('Name')}: ${d.customer.trim()}`)
+  if (o.phone !== d.phone.trim()) out.push(`${t('Phone')}: ${d.phone.trim()}`)
+  if (o.agreed !== d.agreed) out.push(`${t('Agreed price')}: ${d.agreed === null ? '—' : money(d.agreed)}`)
+  if (o.source !== d.source) out.push(t(SOURCE_LABEL[d.source]))
+  if (o.payMethod !== d.payMethod) out.push(`${t('Pays by')}: ${t(d.payMethod)}`)
+  if (o.rep !== d.rep.trim()) out.push(`${t('Sales rep')}: ${d.rep.trim() || '—'}`)
+  if (o.category !== d.category.trim()) out.push(`${t('Category')}: ${t(d.category.trim()) || '—'}`)
+  if (o.customerNote !== d.customerNote.trim()) out.push(t('Note changed'))
+  if (o.date !== d.date || o.time !== d.time) out.push(`${t('Date and time')}: ${[d.date, d.time].filter(Boolean).join(' ') || '—'}`)
+  return out.join(' · ').slice(0, 1000)
 }
 
 export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: () => void; onSaved: (id: string) => void }) {
   const { cats } = usePrices()
-  const [source, setSource] = useState<Draft['source']>(edit && edit.source !== 'website' ? edit.source : 'whatsapp')
+  const web = edit?.source === 'website'
+  const [source, setSource] = useState<Draft['source']>(edit ? edit.source : 'whatsapp')
   const [customer, setCustomer] = useState(edit?.customer ?? '')
   const [phone, setPhone] = useState(edit?.phone ?? '')
   const [delivery, setDelivery] = useState<Draft['delivery']>(edit?.delivery ?? 'pickup')
@@ -31,6 +55,7 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
   const [city, setCity] = useState(edit?.city ?? '')
   const [shipping, setShipping] = useState(edit?.shipping ? String(edit.shipping) : '')
   const [payMethod, setPayMethod] = useState(edit?.payMethod || 'Cash')
+  const payMethods: string[] = [...PAY_METHODS, ...(edit?.payMethod && !(PAY_METHODS as readonly string[]).includes(edit.payMethod) ? [edit.payMethod] : [])]
   const [lines, setLines] = useState<Line[]>(edit ? linesOf(edit.items) : [])
   const [agreed, setAgreed] = useState(edit?.agreed != null ? String(edit.agreed) : '')
   const [date, setDate] = useState(edit?.date ?? '')
@@ -52,7 +77,7 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
 
   const items: Item[] = lines.map((l) => {
     const qty = Math.max(1, Math.round(numOf(l.qty) || 1))
-    const it: Item = { name: l.name, qty, total: Math.round(numOf(l.unit) * qty * 100) / 100, pid: 0, vid: 0 }
+    const it: Item = { name: l.name, qty, total: Math.round(numOf(l.unit) * qty * 100) / 100, pid: l.pid ?? 0, vid: l.vid ?? 0 }
     if (l.cat && l.ref) { it.cat = l.cat; it.ref = l.ref }
     return it
   })
@@ -81,8 +106,11 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
     if (rep.trim()) keepRep(rep.trim())
     try {
       if (edit) {
-        await orders.edit(edit, d, stepBy('edited', ''))
-        track('orders', 'order.edited', { what: `${orderNo(edit)} · ${customer.trim()}`, ref: edit.id })
+        const what = changes(edit, d, d.items)
+        if (!what) { onClose(); return }
+        await orders.edit(edit, d, stepBy('edited', what))
+        if (web && firestore) nudgeEngine(getAuth(firestore.app), ['orders'])
+        track('orders', 'order.edited', { what: `${orderNo(edit)} · ${customer.trim()}`, note: what, ref: edit.id })
         onSaved(edit.id)
       } else {
         const id = await orders.add(d)
@@ -106,9 +134,10 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
       </>}
     >
       <div className="form">
-        <label><span>{t('Ordered by')}</span>
-          <select value={source} onChange={(e) => setSource(e.target.value as Draft['source'])}>{MANUAL_SOURCES.map((s) => <option key={s} value={s}>{t(SOURCE_LABEL[s])}</option>)}</select>
-        </label>
+        {web ? <p className="banner">{t('Changes are sent to the order on the website too. After that, the app keeps these details: changes made on the website itself no longer come in (the status still does).')}</p>
+          : <label><span>{t('Ordered by')}</span>
+            <select value={source} onChange={(e) => setSource(e.target.value as Draft['source'])}>{MANUAL_SOURCES.map((s) => <option key={s} value={s}>{t(SOURCE_LABEL[s])}</option>)}</select>
+          </label>}
         <div className="form-row two">
           <label><span>{t('Sales rep')}</span><input value={rep} onChange={(e) => setRep(e.target.value)} list="or-reps" dir="auto" /></label>
           <label><span>{t('Category')}</span><input value={category} onChange={(e) => setCategory(e.target.value)} list="or-cats" dir="auto" /></label>
@@ -124,11 +153,11 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
           <span className="or-label">{t('Items')}</span>
           {lines.map((l, i) => (
             <div key={i} className="or-line">
-              <input className="or-line-name" value={l.name} onChange={(e) => setLine(i, { name: e.target.value, ...(l.ref ? { cat: undefined, ref: undefined } : {}) })} dir="auto" placeholder={t('Product')} aria-label={t('Product')} />
+              <input className="or-line-name" value={l.name} onChange={(e) => setLine(i, { name: e.target.value, ...(l.ref || l.pid ? { cat: undefined, ref: undefined, pid: 0, vid: 0 } : {}) })} dir="auto" placeholder={t('Product')} aria-label={t('Product')} />
               <label className="or-line-qty"><small>{t('Qty')}</small><input value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value.replace(/\D/g, '') })} inputMode="numeric" dir="ltr" /></label>
               <label className="or-line-price"><small>{t('Price each')}</small><input value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value.replace(/[^\d.]/g, '') })} inputMode="decimal" dir="ltr" /></label>
               <button type="button" className="icon-btn" onClick={() => setLines((ls) => ls.filter((_, n) => n !== i))} aria-label={t('Remove this line')}><Icon name="close" size={16} /></button>
-              {!l.ref && l.name.trim() && <small className="muted or-line-hint">{t('Not from the price list: no cost for profit')}</small>}
+              {!l.ref && !l.pid && l.name.trim() && <small className="muted or-line-hint">{t('Not from the price list: no cost for profit')}</small>}
             </div>
           ))}
           <label className="mt-pickwrap">
@@ -165,13 +194,13 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
           <label><span>{t('Time (optional)')}</span><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
         </div>
         <div className="form-row two">
-          <label><span>{t('Pays by')}</span><select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>{PAY_METHODS.map((m) => <option key={m} value={m}>{t(m)}</option>)}</select></label>
+          <label><span>{t('Pays by')}</span><select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>{payMethods.map((m) => <option key={m} value={m}>{t(m)}</option>)}</select></label>
           <label><span>{t('Agreed price (optional)')}</span><input value={agreed} onChange={(e) => setAgreed(e.target.value.replace(/[^\d.]/g, ''))} inputMode="decimal" dir="ltr" placeholder={String(total)} /></label>
         </div>
         <p className="or-form-total">{t('Total')}: <b dir="ltr">{money(agreed.trim() && agreedOk ? Number(agreed) : total)}</b>{ship > 0 && <small className="muted"> · {tn('with %m delivery', { m: money(ship) })}</small>}</p>
         <label><span>{t('Note (optional)')}</span><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} dir="auto" /></label>
         {!edit && <label className="check-line"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /><span>{t('Already confirmed with the customer')}</span></label>}
-        <p className="small t2">{t('Orders added here stay in the app. They are not sent to the website.')}</p>
+        {!edit && <p className="small t2">{t('Orders added here stay in the app. They are not sent to the website.')}</p>}
       </div>
     </Sheet>
   )

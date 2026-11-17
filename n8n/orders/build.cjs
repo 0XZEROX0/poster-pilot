@@ -11,7 +11,7 @@ const DT = "{ __rl: true, mode: 'id', value: 'qRho6PXhcLVZDIrj', cachedResultNam
 const code = (name, file, common = true) => `node({ type: 'n8n-nodes-base.code', version: 2, config: { name: ${J(name)}, parameters: { mode: 'runOnceForAllItems', language: 'javaScript', jsCode: ${R(file, common)} } } })`;
 const cond = (name, left) => `ifElse({ version: 2.2, config: { name: ${J(name)}, parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 }, conditions: [ { id: ${J(name)}, leftValue: expr(${J(left)}), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } } ], combinator: 'and' }, options: {} } } })`;
 const fsPost = (name, path, body, more = '') => `node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: ${J(name)}${more}, credentials: ${FB}, parameters: { method: 'POST', url: expr(${J(FS + path)}), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', sendBody: true, contentType: 'json', specifyBody: 'json', jsonBody: expr(${J(body)}), options: { timeout: 60000 } } } })`;
-const QUERY = '{{ JSON.stringify({ structuredQuery: { from: [{ collectionId: "orders" }], where: { fieldFilter: { field: { fieldPath: "want" }, op: "IN", value: { arrayValue: { values: ["on-hold", "processing", "completed", "cancelled"].map(s => ({ stringValue: s })) } } } }, limit: 50 } }) }}';
+const QUERY = '{{ JSON.stringify({ structuredQuery: { from: [{ collectionId: "orders" }], where: { compositeFilter: { op: "OR", filters: [ { fieldFilter: { field: { fieldPath: "want" }, op: "IN", value: { arrayValue: { values: ["on-hold", "processing", "completed", "cancelled"].map(s => ({ stringValue: s })) } } } }, { fieldFilter: { field: { fieldPath: "push" }, op: "EQUAL", value: { booleanValue: true } } } ] } }, limit: 50 } }) }}';
 console.log(`import { workflow, node, trigger, ifElse, expr } from '@n8n/workflow-sdk';
 const hook = trigger({ type: 'n8n-nodes-base.webhook', version: 2, config: { name: 'Website order changed', parameters: { httpMethod: 'POST', path: ${J(PATH)}, responseMode: 'onReceived', options: { noResponseBody: true } } } });
 const check = ${code('Real order change?', 'hook-check.js', false)};
@@ -26,6 +26,8 @@ const settings = node({ type: 'n8n-nodes-base.set', version: 3.4, config: { name
 const toSend = ${fsPost('Find orders to send', ':runQuery', QUERY, ", alwaysOutputData: true, retryOnFail: true, maxTries: 2, waitBetweenTries: 3000")};
 const sendPlan = ${code('What to send', 'send-plan.js')};
 const sendIt = ${cond('Send?', '{{ $json.send }}')};
+const readWeb = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Read orders to change', alwaysOutputData: true, onError: 'continueRegularOutput', retryOnFail: true, maxTries: 2, waitBetweenTries: 3000, credentials: ${WOO}, parameters: { method: 'GET', url: expr('{{ $json.readUrl }}'), authentication: 'predefinedCredentialType', nodeCredentialType: 'wooCommerceApi', options: { timeout: 60000 } } } });
+const buildSend = ${code('Build the website update', 'build-send.js')};
 const send = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Send to website', onError: 'continueRegularOutput', credentials: ${WOO}, parameters: { method: 'POST', url: 'https://static-eg.com/wp-json/wc/v3/orders/batch', authentication: 'predefinedCredentialType', nodeCredentialType: 'wooCommerceApi', sendBody: true, contentType: 'json', specifyBody: 'json', jsonBody: expr('{{ JSON.stringify($json.body) }}'), options: { timeout: 60000 } } } });
 const results = ${code('Save what the website answered', 'send-results.js')};
 const saveSent = ${fsPost('Save sends to the app', ':batchWrite', '{{ JSON.stringify({ writes: $json.writes }) }}', ", onError: 'continueRegularOutput'")};
@@ -47,7 +49,7 @@ export default workflow('website-orders', 'Static OS - Website orders')
   .add(hook).to(check).to(remember).to(wait).to(timing).to(newest).to(started).to(settings)
   .add(hourly).to(settings)
   .add(asked).to(settings)
-  .add(settings).to(toSend).to(sendPlan).to(sendIt.onTrue(send.to(results).to(saveSent).to(pause).to(readPlan)).onFalse(readPlan))
+  .add(settings).to(toSend).to(sendPlan).to(sendIt.onTrue(readWeb.to(buildSend).to(send).to(results).to(saveSent).to(pause).to(readPlan)).onFalse(readPlan))
   .add(readPlan).to(read).to(toCheck).to(appRead).to(decide).to(saveIt.onTrue(save.to(done)))
   .add(hookHour).to(hookSettings).to(readHooks).to(keep).to(fix)
 ;

@@ -11,3 +11,5 @@ const rid = () => Array.from({ length: 20 }, () => 'abcdefghijklmnopqrstuvwxyzAB
 const fromWeb = w => (w === 'processing' ? 'confirmed' : ['completed', 'cancelled', 'refunded', 'failed'].includes(w) ? w : 'new');
 const OPEN = ['new', 'confirmed'];
 const WEB_LABEL = { pending: 'Pending payment', 'on-hold': 'On hold', processing: 'Processing', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded', failed: 'Failed' };
+// WooCommerce state codes (Egypt) -> the area names the app shows.
+const STATES = { EGALX: 'Alexandria', EGASN: 'Aswan', EGAST: 'Asyut', EGBA: 'Red Sea', EGBH: 'Beheira', EGBNS: 'Beni Suef', EGC: 'Cairo', EGDK: 'Dakahlia', EGDT: 'Damietta', EGFYM: 'Faiyum', EGGH: 'Gharbia', EGGZ: 'Giza', EGIS: 'Ismailia', EGJS: 'South Sinai', EGKB: 'Qalyubia', EGKFS: 'Kafr el-Sheikh', EGKN: 'Qena', EGLX: 'Luxor', EGMN: 'Minya', EGMNF: 'Monufia', EGMT: 'Matrouh', EGPTS: 'Port Said', EGSHG: 'Sohag', EGSHR: 'Sharqia', EGSIN: 'North Sinai', EGSUZ: 'Suez', EGWAD: 'New Valley' };
