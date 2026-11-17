@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { cairoNow } from '../data/logic'
 import { locale, t } from '../i18n'
-import { Icon } from './ui'
+import { Avatar, Icon } from './ui'
 
 export type LauncherItem = { id: string; label: string; icon: string }
 
@@ -39,10 +39,12 @@ export function AppIcon({ id, icon, size = 64 }: { id: string; icon: string; siz
 }
 
 /** The home screen: every app the person can open, as an icon. Opening one shows only that app. */
-export function Launcher({ items, counts, name, onGo, onSettings }: {
+export function Launcher({ items, counts, name, uid, photo, onGo, onSettings }: {
   items: LauncherItem[]
   counts: Partial<Record<string, number>>
   name: string
+  uid?: string
+  photo?: string
   onGo: (id: string) => void
   onSettings: () => void
 }) {
@@ -63,8 +65,11 @@ export function Launcher({ items, counts, name, onGo, onSettings }: {
   return (
     <div className="launcher">
       <header className="launch-head">
-        <h2 dir="auto">{first ? `${hello}, ${first}` : hello}</h2>
-        <p className="muted">{new Date(`${cairoNow().date}T12:00:00Z`).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}</p>
+        <div className="launch-hello">
+          <h2 dir="auto">{first ? `${hello}, ${first}` : hello}</h2>
+          <p className="muted">{new Date(`${cairoNow().date}T12:00:00Z`).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}</p>
+        </div>
+        {name && <button className="avatar-btn" onClick={onSettings} aria-label={t('Settings')}><Avatar uid={uid} name={name} photo={photo} size={44} /></button>}
       </header>
       <nav className="launch-grid" aria-label={t('Apps')}>
         {list.map((x) => tile(x, () => onGo(x.id)))}

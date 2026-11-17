@@ -12,7 +12,7 @@ import { BuilderView } from './components/BuilderView'
 import { PostSheet } from './components/PostSheet'
 import { ReviewView } from './components/ReviewView'
 import { agoLabel, SettingsSheet } from './components/SettingsSheet'
-import { Icon, showToast, Toast } from './components/ui'
+import { Avatar, Icon, showToast, Toast } from './components/ui'
 import { AppsMenu, usePins } from './components/AppsMenu'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
@@ -174,7 +174,7 @@ export default function App() {
   const page = !data.loaded ? (
     <div className="splash">{t('Loading…')}</div>
   ) : tab === 'home' && solo ? (
-    <Launcher items={TABS.filter((x) => x.id !== 'home')} counts={counts} name={session.user?.displayName || ''} onGo={(id) => go(id as Tab)} onSettings={() => setOverlay({ kind: 'settings' })} />
+    <Launcher items={TABS.filter((x) => x.id !== 'home')} counts={counts} name={session.user?.displayName || ''} uid={session.user?.uid} photo={session.user?.photoURL ?? ''} onGo={(id) => go(id as Tab)} onSettings={() => setOverlay({ kind: 'settings' })} />
   ) : tab === 'home' || tab === 'dashboard' ? (
     <HomeView data={data} go={go} onOpen={open} desktop={desktop} />
   ) : tab === 'prices' ? (
@@ -243,7 +243,7 @@ export default function App() {
           {desktop && addHere && <button className="btn btn-primary" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New offer')}</button>}
           {session.mode === 'cloud' && postWork() && <span className={`health${dotBad ? ' health-bad' : ''}`} title={dotTitle} />}
           <button className="icon-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')} title={t('Settings')}><Icon name="settings" /></button>
-          {desktop && <span className="avatar" title={name}>{name.slice(0, 1).toUpperCase()}</span>}
+          {desktop && <button className="avatar-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')}><Avatar uid={session.user?.uid} name={name} photo={session.user?.photoURL ?? ''} title={name} /></button>}
         </span>
       </header>
     )
@@ -297,7 +297,7 @@ export default function App() {
               <p className="side-engine" title={dotTitle}><span className={`health${dotBad ? ' health-bad' : ''}`} />{t('Engine')}: {health ? agoLabel(health.lastSync) : '—'}</p>
             )}
             <div className="side-user">
-              <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
+              <Avatar uid={session.user?.uid} name={name} photo={session.user?.photoURL ?? ''} />
               <strong dir="auto">{name}</strong>
             </div>
           </div>

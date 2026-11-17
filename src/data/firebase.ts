@@ -27,6 +27,6 @@ if (import.meta.env.DEV && import.meta.env.VITE_EMULATOR && auth && firestore) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
   connectFirestoreEmulator(firestore, '127.0.0.1', 8085)
   const a = auth
-  ;(window as unknown as Record<string, unknown>).__testSignIn = (sub: string, email: string, name: string) =>
-    signInWithCredential(a, GoogleAuthProvider.credential(JSON.stringify({ sub, email, name, email_verified: true })))
+  ;(window as unknown as Record<string, unknown>).__testSignIn = (sub: string, email: string, name: string, picture?: string) =>
+    signInWithCredential(a, GoogleAuthProvider.credential(JSON.stringify({ sub, email, name, picture, email_verified: true })))
 }

@@ -498,5 +498,21 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('role without Maintenance reads tickets', getDocs(collection(pricer, 'tickets')))
   await no('role without Maintenance opens a ticket', open(pricer, 4, 'u-hr2'))
 }
+{
+  // Profile pictures
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'members/u-pic'), { email: 'pic@x.com', name: 'Pic', role: 'member', joinedAt: 1 }) })
+  const pic = as('u-pic', 'pic@x.com'), nobody = as('u-nobody', 'nobody@x.com')
+  const P = (photo, more = {}) => ({ name: 'Pic', photo, custom: false, at: 1, ...more })
+  await ok('member saves own Google photo', setDoc(doc(pic, 'profiles/u-pic'), P('https://lh3.googleusercontent.com/a/abc=s96-c')))
+  await ok('member saves own small picture', setDoc(doc(pic, 'profiles/u-pic'), P('data:image/jpeg;base64,' + 'A'.repeat(20000), { custom: true })))
+  await ok('member removes own photo', setDoc(doc(pic, 'profiles/u-pic'), P('', { custom: true })))
+  await no('picture too big', setDoc(doc(pic, 'profiles/u-pic'), P('data:image/jpeg;base64,' + 'A'.repeat(70000))))
+  await no('not a picture address', setDoc(doc(pic, 'profiles/u-pic'), P('javascript:alert(1)')))
+  await no('extra field on profile', setDoc(doc(pic, 'profiles/u-pic'), P('', { role: 'owner' })))
+  await no("member writes someone else's profile", setDoc(doc(pic, 'profiles/u-boss'), P('')))
+  await no('outsider writes own profile', setDoc(doc(nobody, 'profiles/u-nobody'), P('')))
+  await ok('member reads all profiles', getDocs(collection(pic, 'profiles')))
+  await no('outsider reads profiles', getDocs(collection(nobody, 'profiles')))
+}
 console.log(`${n} checks, ${bad} wrong`)
 await env.cleanup(); process.exit(bad ? 1 : 0)

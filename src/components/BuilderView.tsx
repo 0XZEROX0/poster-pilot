@@ -7,7 +7,7 @@ import { allowed, isOwner, myId, myName } from '../data/store'
 import { CostEye } from './PricesView'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
-import { Chip, Empty, Icon, SearchBox, showToast } from './ui'
+import { Avatar, Chip, Empty, Icon, SearchBox, showToast } from './ui'
 
 const loadDraft = (): Build => {
   try {
@@ -624,6 +624,7 @@ function SavedSheet({ onOpen, onClose }: { onOpen: (q: SavedQuote) => void; onCl
         <ul className="changes">
           {shown.map((q) => (
             <li key={q.id} className="saved-quote">
+              {everyone && <Avatar uid={q.by} name={q.byName || q.sales || '?'} />}
               <button className="saved-open" onClick={() => onOpen(q)}>
                 <span className="row-title" dir="auto">{q.customer || t('No customer name')}</span>
                 {everyone && <span className="saved-by">{tn('Made by %s', { s: mine(q) ? t('you') : q.byName || q.sales || t('Someone') })}</span>}
@@ -688,6 +689,7 @@ function LiveSheet({ onCopy, onEdit, onClose }: { onCopy: (b: LiveBuild) => void
         <ul className="changes">
           {others.map((b) => (
             <li key={b.uid} className="saved-quote">
+              <Avatar uid={b.uid} name={b.byName || b.sales || '?'} />
               <button className="saved-open" onClick={() => setOpen(b.uid)}>
                 <span className="row-title"><span className={now - b.at < LIVE_IDLE_MS ? 'live-dot' : 'live-dot idle'} aria-hidden="true" />{b.byName || b.sales || t('Someone')}</span>
                 <span className="muted">{b.customer ? `${b.customer} · ` : ''}{tn('%n parts', { n: b.lines.length })} · {ago(b.at)}</span>

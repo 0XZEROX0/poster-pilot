@@ -6,7 +6,7 @@ import { locale, t, tn, useLang } from '../i18n'
 import { useCostShown } from '../data/costs'
 import { allowed } from '../data/store'
 import { CostEye } from './PricesView'
-import { Chip, Empty, Icon, SearchBox } from './ui'
+import { Avatar, Chip, Empty, Icon, SearchBox } from './ui'
 
 /** How many lines one "Load more" adds. Each line is about one database read. */
 /** Price list lines for the website prices, left out for roles without 'See website prices'. */
@@ -163,6 +163,7 @@ export function ActivityView({ data, onOpen }: { data: Data; onOpen: (id: string
                   <div className="log-head">
                     <b>{t(actText(r.act))}</b>
                     <span className="act-meta">
+                      {r.kind === 'person' && <Avatar uid={r.by} name={r.who} size={22} />}
                       <Chip tone={r.kind === 'person' ? 'neutral' : 'info'}>{r.kind === 'person' ? r.who : t(r.who)}</Chip>
                       <span className="muted small">{t(APP_LABEL[r.app])}</span>
                       <time className="muted small" dateTime={new Date(r.at).toISOString()}>{clock(r.at)}</time>

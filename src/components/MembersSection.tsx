@@ -3,7 +3,7 @@ import { firestore } from '../data/firebase'
 import type { Session } from '../data/store'
 import { accept, BUILT_IN, decline, deleteRole, loadTeam, newRoleId, PAGE_LABEL, PAGES, PERM_LABEL, PERMS, removeMember, resetCode, saveRole, setRole, type Member, type Page, type Perm, type RoleDef, type Team } from '../data/team'
 import { t, tn } from '../i18n'
-import { Chip, Icon, showToast } from './ui'
+import { Avatar, Chip, Icon, showToast } from './ui'
 
 /** The people, requests, code and roles, read once when Settings opens and again after each change. */
 export function useTeam(enabled = true) {
@@ -61,7 +61,7 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
         {!team.requests.length && <p className="hint">{t('Nobody is waiting.')}</p>}
         {team.requests.map((r) => (
           <div key={r.uid} className="person">
-            <span className="avatar">{(r.name || r.email).slice(0, 1).toUpperCase()}</span>
+            <Avatar uid={r.uid} name={r.name || r.email} />
             <span className="person-main"><b dir="auto">{r.name || r.email}</b><span className="muted small" dir="ltr">{r.email}</span></span>
             <span className="person-acts">
               <button className="btn btn-primary" onClick={() => act(accept(db, r), 'Accepted')}>{t('Accept')}</button>
@@ -75,7 +75,7 @@ export function PeoplePanel({ session, state }: { session: Session; state: TeamS
         <header className="set-card-head"><h3>{t('Members')}</h3><span className="group-count">{team.members.length}</span></header>
         {team.members.map((m) => (
           <div key={m.uid} className="person">
-            <span className="avatar">{(m.name || m.email).slice(0, 1).toUpperCase()}</span>
+            <Avatar uid={m.uid} name={m.name || m.email} />
             <span className="person-main"><b dir="auto">{m.name || m.email}{m.uid === me && ` (${t('you')})`}</b><span className="muted small" dir="ltr">{m.email}</span></span>
             <span className="person-acts">
               {owner && m.role !== 'owner' ? (
