@@ -40,3 +40,9 @@ App -> website: Confirm order / Open again = processing, Delivered = completed, 
 - `Hook settings.hooks` (true = create/keep the two WooCommerce order webhooks on static-eg.com).
 
 WooCommerce emails the customer when an order moves to Processing or Completed, as when it is changed on the site.
+
+## Live (2026-11-17)
+- Published with `dryRun` false and `hooks` true. First import: 57 orders (execution 56330). WooCommerce webhooks
+  id 2 (order.created) and id 3 (order.updated) point at this workflow.
+- The App engine (qRX3fplFZLoSmgir) starts this workflow for `run=orders` (output 10 of "Run which",
+  node "Start website orders"); operations in `engine-ops.cjs` (Run which rules are set as a whole array).
