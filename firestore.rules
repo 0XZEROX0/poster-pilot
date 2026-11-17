@@ -227,7 +227,7 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
         && request.resource.data.perms is list
-        && request.resource.data.perms.size() <= 20
+        && request.resource.data.perms.size() <= 40
         && request.resource.data.perms.hasOnly(allPerms());
       allow delete: if isOwner() && !(id in ['admin', 'member']);
     }
