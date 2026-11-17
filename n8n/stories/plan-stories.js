@@ -1,7 +1,8 @@
 // Stories part of "Static OS - Schedule Posters" (Oa5WOuoSdrNquHHe): "Plan Stories" Code node.
 // Input: the Posts store rows of queue 'story' (raw). Output: one item per post that needs work now:
 //   { id, make, fb, ig, poster, image, photoId, late }
-// - make: the 1080x1920 story picture is missing or was made from an older poster -> make it first.
+// - make: the 1080x1920 story picture is missing or was made from an older poster -> make it first
+//   (never for a picture designed in the story editor).
 // - fb / ig: the story's time has come (post time + Story delay, Cairo) and the post itself went out
 //   (Facebook scheduled time passed, or Published on Facebook or Instagram) -> publish the story there.
 // At most MAX posts per run; Instagram allows 50 API posts a day, so a run never posts more than a few.
@@ -24,7 +25,9 @@ for (const r of rows) {
   const poster = clean(r['Image link']);
   if (!places.length || !fileId(poster)) continue;
   const image = clean(r['Story image']);
-  const make = !fileId(image) || clean(r['Story from']) !== poster;
+  // A picture designed in the app's story editor ('Story from' = 'design') is kept even when the poster changes.
+  const designed = /^design/i.test(clean(r['Story from']));
+  const make = !fileId(image) || (!designed && clean(r['Story from']) !== poster);
   // When the post goes out: the time Facebook holds, else the person's Post date and time.
   const postAt = mins(r['Scheduled for']) ?? mins(`${clean(r['Post date'])} ${clean(r['Post time'])}`);
   const fbs = clean(r['FB status']), igs = clean(r['IG status']);

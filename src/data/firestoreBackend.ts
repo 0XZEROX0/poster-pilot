@@ -20,7 +20,7 @@ import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry,
 // tell what the person changed and carry it out. `appDirty` is true while something is waiting, so
 // the engine can ask for just those posts. The engine removes each entry when it is done.
 
-const APP_ONLY = new Set(['ignoredProblem', 'offerNote', 'offerBy', 'marketAsk', 'photoAsk'])
+const APP_ONLY = new Set(['ignoredProblem', 'offerNote', 'offerBy', 'marketAsk', 'photoAsk', 'storyDesign'])
 
 const blankPost: Omit<Post, 'id'> = {
   order: 0, items: [], company: '', priceBefore: '', priceAfter: '', style: '', details: '', posterUrl: '', photoStatus: '', feedback: '',

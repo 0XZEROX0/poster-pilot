@@ -50,3 +50,34 @@ starts the `instagram` scheduler part at once.
 
 Every Meta call has no retry (a retry could post twice); a failure waits for "Try the story again" in the app.
 Post now needs nothing extra: the scheduler's "Start Instagram now" runs the Instagram part, and Stories with it.
+
+## Applying (ops.cjs)
+
+`ops.cjs` prints the `update_workflow` operations, patched onto the live workflows (other threads edit the same
+nodes): `node ops.cjs store store.json`, `node ops.cjs engine engine.json`, `node ops.cjs sched sched.json`, where
+each `.json` is the live workflow from `get_workflow_details`. The store write / read and turn nodes are copied from
+`Save Slot To Sheet`, `Read Posts Sheet (Instagram)` and `Take/Give back turn (Instagram)`; Meta auth from
+`Schedule Facebook Post`.
+
+As built in ops.cjs (differs a little from the plan above):
+- Own turn `sched-stories` (600 s), taken after `Give back turn (Instagram)`, so a story never posts twice.
+- Three straight branches from `Plan Stories`: make pictures, Facebook, Instagram. A picture made in a run posts in
+  the next run (pictures are made as soon as the post is approved, so normally long before the story is due).
+- Story picture (`fit-poster.js` + Edit Image): poster fitted into 960x1180, centred, on a blurred, darkened copy of
+  itself, 1080x1920 JPEG, saved to AI Designs / Stories (folder made on first use), shared "anyone with the link".
+- Instagram always gets its own hidden Facebook photo for the public link.
+- Over 45 Instagram API posts today: Story IG status "Waiting - Instagram daily limit reached, trying again later".
+
+## Story editor (step 2, phase A)
+
+The app's story editor (`src/components/StoryEditor.tsx`, Konva, loaded only when opened) draws the 1080x1920 story:
+the poster, a background (blurred poster, a colour or two colours) and text in five Instagram-like styles. The design
+is kept on the post as `storyDesign` (JSON text, app only, needs `schedule`) so it can be opened again.
+
+n8n workflow "Static OS - Story editor" (`Lid6aS3Y0ykvHqWy`, SDK code in `story-editor-workflow.js`), two webhooks
+on the same address as the app nudge, both checking the member's Firebase token like the nudge does:
+- `POST /webhook/static-os-story-asset` `{token, id}`: sends the poster's Drive file as a JPEG up to 1600 px, so the
+  browser can draw it into a picture it may save (Drive pictures cannot be read back from a canvas).
+- `POST /webhook/static-os-story` `{token, postId, image}`: saves the JPEG to AI Designs / Stories, shares it, and
+  writes `storyImage`, `storyDesignedAt` and `ex.storyFrom = 'design'` on the post. `plan-stories.js` never remakes a
+  picture whose Story from starts with `design`, so the poster maker cannot replace it.

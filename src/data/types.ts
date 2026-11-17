@@ -79,6 +79,10 @@ export type Post = {
   /** Engine only: '', 'Waiting', 'Posted', or an error text, for each place the story goes. */
   storyFbStatus?: string
   storyIgStatus?: string
+  /** The story as designed in the story editor (layers, as JSON text), so it can be opened and changed again. App only. */
+  storyDesign?: string
+  /** Engine only: when the designed story picture was saved. */
+  storyDesignedAt?: string
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
   /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */
