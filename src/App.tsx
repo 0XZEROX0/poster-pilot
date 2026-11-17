@@ -13,6 +13,7 @@ import { PostSheet } from './components/PostSheet'
 import { ReviewView } from './components/ReviewView'
 import { agoLabel, SettingsSheet } from './components/SettingsSheet'
 import { Avatar, Icon, showToast, Toast } from './components/ui'
+import { myNameFor, useProfiles } from './data/profiles'
 import { AppsMenu, usePins } from './components/AppsMenu'
 import { useDesktop } from './components/useDesktop'
 import { cairoNow, offerOf, stageOf } from './data/logic'
@@ -61,6 +62,7 @@ const QUIET_MS = 75 * 60 * 1000
 export default function App() {
   useLang()
   const session = useSession()
+  useProfiles()
   const signal = useEngineSignal()
   const [wanted, setTab] = useState<Tab>(tabFromHash)
   // The app grid (default) or the older sidebar layout, chosen in Settings.
@@ -174,7 +176,7 @@ export default function App() {
   const page = !data.loaded ? (
     <div className="splash">{t('Loading…')}</div>
   ) : tab === 'home' && solo ? (
-    <Launcher items={TABS.filter((x) => x.id !== 'home')} counts={counts} name={session.user?.displayName || ''} uid={session.user?.uid} photo={session.user?.photoURL ?? ''} onGo={(id) => go(id as Tab)} onSettings={() => setOverlay({ kind: 'settings' })} />
+    <Launcher items={TABS.filter((x) => x.id !== 'home')} counts={counts} name={myNameFor(session.user)} uid={session.user?.uid} photo={session.user?.photoURL ?? ''} onGo={(id) => go(id as Tab)} onSettings={() => setOverlay({ kind: 'settings' })} />
   ) : tab === 'home' || tab === 'dashboard' ? (
     <HomeView data={data} go={go} onOpen={open} desktop={desktop} />
   ) : tab === 'prices' ? (
@@ -226,7 +228,7 @@ export default function App() {
       </nav>
     )
     const home = tab === 'home'
-    const name = session.user?.displayName || session.user?.email || t('Demo mode')
+    const name = myNameFor(session.user) || t('Demo mode')
     const addHere = canAdd && postWork() && (tab === 'offers' || tab === 'dashboard')
     const bar = (
       <header className="appbar">
@@ -273,7 +275,7 @@ export default function App() {
 
   // Desktop website: a sidebar and a dashboard that fills the window.
   if (desktop) {
-    const name = session.user?.displayName || session.user?.email || t('Demo mode')
+    const name = myNameFor(session.user) || t('Demo mode')
     return (
       <div className="desk">
         <aside className="sidebar">

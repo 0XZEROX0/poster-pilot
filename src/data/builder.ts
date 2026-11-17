@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth'
+import { myNameFor } from './profiles'
 import { addDoc, collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { track, trackLiveEdit } from './activity'
 import { firestore } from './firebase'
@@ -181,7 +182,7 @@ function firestoreQuotes(): QuoteBackend {
         track('builder', 'quote.updated', { what: label, ref: b.id })
         return b.id
       }
-      const ref = await addDoc(collection(db, 'quotes'), { ...body, by: me?.uid ?? '', byName: me?.displayName || me?.email || '' })
+      const ref = await addDoc(collection(db, 'quotes'), { ...body, by: me?.uid ?? '', byName: myNameFor(me) })
       track('builder', 'quote.saved', { what: label, ref: ref.id })
       return ref.id
     },
@@ -255,7 +256,7 @@ export const live = {
     const me = getAuth(firestore.app).currentUser
     if (!me) return
     const body = clean(b)
-    await setDoc(doc(firestore, 'drafts', me.uid), { customer: body.customer, sales: body.sales, lines: body.lines, extra: body.extra, grant, buildDiscount: body.buildDiscount, total, at: serverTimestamp(), byName: me.displayName || me.email || '' })
+    await setDoc(doc(firestore, 'drafts', me.uid), { customer: body.customer, sales: body.sales, lines: body.lines, extra: body.extra, grant, buildDiscount: body.buildDiscount, total, at: serverTimestamp(), byName: myNameFor(me) })
   },
   /** One person's open build, live. */
   watchOne(uid: string, onData: (b: LiveBuild | null) => void): () => void {
@@ -309,7 +310,7 @@ export const grants = {
       track('builder', 'quote.discount_removed', { what: whose, ref: uid })
       return
     }
-    await setDoc(doc(firestore, 'grants', uid), { amount, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() })
+    await setDoc(doc(firestore, 'grants', uid), { amount, by: me.uid, byName: myNameFor(me), at: serverTimestamp() })
     track('builder', 'quote.discount', { what: whose, note: `${amount.toLocaleString('en-US')} EGP`, ref: uid })
   },
   /** Ends the discount given on one's own quote, for example when starting a new quote. */
@@ -337,7 +338,7 @@ export const edits = {
     if (!me) return
     const body = clean(b)
     const batch = writeBatch(firestore)
-    batch.set(doc(firestore, 'edits', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, by: me.uid, byName: me.displayName || me.email || '', at: serverTimestamp() })
+    batch.set(doc(firestore, 'edits', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, by: me.uid, byName: myNameFor(me), at: serverTimestamp() })
     batch.update(doc(firestore, 'drafts', uid), { customer: body.customer, lines: body.lines, extra: body.extra, buildDiscount: body.buildDiscount, total, at: serverTimestamp() })
     await batch.commit()
     trackLiveEdit(uid, whose, quoteLabel(body.customer, total))

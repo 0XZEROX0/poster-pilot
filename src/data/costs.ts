@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth'
+import { myNameFor } from './profiles'
 import { collection, deleteField, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch, type Firestore } from 'firebase/firestore'
 import { useEffect, useSyncExternalStore } from 'react'
 import { firestore } from './firebase'
@@ -36,7 +37,7 @@ const show = (n: number | null) => (n === null ? '' : money(n))
 
 function firestoreCosts(db: Firestore): CostBackend {
   const me = () => getAuth(db.app).currentUser
-  const who = () => ({ by: me()?.uid ?? '', byName: me()?.displayName || me()?.email || '' })
+  const who = () => ({ by: me()?.uid ?? '', byName: myNameFor(me()) })
   return {
     watch(onData, onError) {
       return onSnapshot(

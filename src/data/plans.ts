@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth'
+import { myNameFor } from './profiles'
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { firestore } from './firebase'
 import { addDays } from './logic'
@@ -105,6 +106,6 @@ export const plans = {
     }
     const me = getAuth(firestore.app).currentUser
     if (!me) return
-    await setDoc(doc(firestore, 'plans', start), { days, at: serverTimestamp(), by: me.uid, byName: me.displayName || me.email || '' })
+    await setDoc(doc(firestore, 'plans', start), { days, at: serverTimestamp(), by: me.uid, byName: myNameFor(me) })
   },
 }

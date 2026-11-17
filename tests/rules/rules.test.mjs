@@ -511,6 +511,9 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('extra field on profile', setDoc(doc(pic, 'profiles/u-pic'), P('', { role: 'owner' })))
   await no("member writes someone else's profile", setDoc(doc(pic, 'profiles/u-boss'), P('')))
   await no('outsider writes own profile', setDoc(doc(nobody, 'profiles/u-nobody'), P('')))
+  await ok('member saves a chosen name', setDoc(doc(pic, 'profiles/u-pic'), P('', { name: 'Pico', nameCustom: true })))
+  await no('name flag not true/false', setDoc(doc(pic, 'profiles/u-pic'), P('', { nameCustom: 'yes' })))
+  await no('name far too long', setDoc(doc(pic, 'profiles/u-pic'), P('', { name: 'x'.repeat(300) })))
   await ok('member reads all profiles', getDocs(collection(pic, 'profiles')))
   await no('outsider reads profiles', getDocs(collection(nobody, 'profiles')))
 }

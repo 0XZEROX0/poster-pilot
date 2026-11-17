@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { nameOf, useProfiles } from '../data/profiles'
 import { ACT_TEXT, cairoTime, FIELD_TEXT, sortLog } from '../data/history'
 import { backend } from '../data/store'
 import type { LogEntry } from '../data/types'
@@ -6,11 +7,12 @@ import { locale, t, useLang } from '../i18n'
 import { Sheet } from './Sheet'
 import { Icon } from './ui'
 
-const who = (e: LogEntry) => (e.by === 'sheet' ? t('Sheet') : e.by === 'system' ? t('System') : e.byName || t('Someone'))
+const who = (e: LogEntry) => (e.by === 'sheet' ? t('Sheet') : e.by === 'system' ? t('System') : nameOf(e.by, e.byName) || t('Someone'))
 const tone = (act: string) => (/^(offer\.rejected|poster\.failed|fb\.error|ig\.error|delete\.refused|deleted|removed|cleared)$/.test(act) ? 'log-bad' : /approved|published|built|scheduled$/.test(act) ? 'log-good' : '')
 
 /** The lines of a history, newest first. */
 export function LogList({ entries }: { entries: LogEntry[] }) {
+  useProfiles()
   useLang()
   if (!entries.length) return <p className="muted small">{t('Nothing recorded yet. Every action from now on is listed here.')}</p>
   return (

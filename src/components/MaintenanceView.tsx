@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { nameOf } from '../data/profiles'
 import { createPortal } from 'react-dom'
 import { track } from '../data/activity'
 import { cairoNow } from '../data/logic'
@@ -216,7 +217,7 @@ function TicketDetail({ tk, today, onEdit, onPrint, onDeleted, onClosed }: { tk:
     <div className="mt-detail">
       <div className="mt-head">
         <div>
-          <div className="mt-no"><bdi dir="ltr">#{ticketNo(tk.no)}</bdi> · {tn('opened by %n', { n: tk.createdByName || t('Someone') })}</div>
+          <div className="mt-no"><bdi dir="ltr">#{ticketNo(tk.no)}</bdi> · {tn('opened by %n', { n: nameOf(tk.createdBy, tk.createdByName) || t('Someone') })}</div>
           <h2 dir="auto">{tk.product || t('No product')}</h2>
         </div>
         <div className="mt-acts">
@@ -274,7 +275,7 @@ function TicketDetail({ tk, today, onEdit, onPrint, onDeleted, onClosed }: { tk:
               <div>
                 <h4>{t(STEP_TITLE[s.kind])}</h4>
                 {s.note && <p dir="auto">{s.note}</p>}
-                <small>{when(s.at)} · {s.byName || t('Someone')}</small>
+                <small>{when(s.at)} · {nameOf(s.by, s.byName) || t('Someone')}</small>
               </div>
               {owner && s.kind !== 'opened' && <button className="icon-btn mt-x" onClick={() => takeOut(i)} aria-label={t('Take this step out')}><Icon name="close" size={16} /></button>}
             </li>

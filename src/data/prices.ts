@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth'
+import { myNameFor } from './profiles'
 import { collection, deleteField, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch, type DocumentData, type Firestore } from 'firebase/firestore'
 import { useEffect, useSyncExternalStore } from 'react'
 import { firestore } from './firebase'
@@ -288,7 +289,7 @@ export interface PriceBackend {
 
 function firestorePrices(db: Firestore): PriceBackend {
   const me = () => getAuth(db.app).currentUser
-  const who = () => ({ by: me()?.uid ?? '', byName: me()?.displayName || me()?.email || '' })
+  const who = () => ({ by: me()?.uid ?? '', byName: myNameFor(me()) })
   const fieldsFor = (id: string, patch: ItemPatch, byName: string): Record<string, unknown> => {
     const out: Record<string, unknown> = { [`items.${id}.at`]: serverTimestamp(), [`items.${id}.byName`]: byName }
     for (const [k, v] of Object.entries(patch)) {
