@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useCosts, useCostShown, type CostMap } from '../data/costs'
 import { cairoNow } from '../data/logic'
-import { PERIOD_LABEL, PERIODS, periodDays, periodRange, statsOf, webIndex, type Period, type Sums } from '../data/orderStats'
+import { PERIOD_LABEL, PERIODS, periodDays, periodRange, statsOf, sumsBy, webIndex, type Period, type Sums } from '../data/orderStats'
 import { orderNo, orders, SOURCE_LABEL, type Order } from '../data/orders'
 import { usePrices } from '../data/prices'
 import { allowed } from '../data/store'
@@ -83,16 +83,10 @@ function Body({ list, costs, web, onOpen, costRole }: { list: Order[]; costs: Co
         <div className="tile" style={{ '--tone': 'var(--warn)' } as CSSProperties}><span>{t('Still open')}</span><b dir="ltr">{money(s.all.openValue)}</b><small className="muted">{tn(s.all.open === 1 ? '%n order' : '%n orders', { n: s.all.open })} · {tn('%n cancelled', { n: s.all.cancelled })}</small></div>
       </div>
 
-      <table className="or-items-table os-table">
-        <thead><tr><th /><th className="num">{t('Orders')}</th><th className="num">{t('Completed')}</th><th className="num">{t('Sales')}</th>{costRole && <th className="num">{t('Profit')}</th>}</tr></thead>
-        <tbody>
-          {([['Website', s.website], ['Added in the app', s.manual], ['All', s.all]] as [string, Sums][]).map(([label, x]) => (
-            <tr key={label} className={label === 'All' ? 'sum' : ''}>
-              <td>{t(label)}</td><td className="num">{x.orders}</td><td className="num">{x.completed}</td><td className="num" dir="ltr">{money(x.sales)}</td>{costRole && <td className="num" dir="ltr">{profit(x)}</td>}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Split title="Where orders came from" rows={[['Website', s.website], ['Added in the app', s.manual], ['All', s.all]]} profit={profit} costRole={costRole} total />
+      <Split title="By where the customer ordered" rows={sumsBy(list, costs, web, (o) => SOURCE_LABEL[o.source])} profit={profit} costRole={costRole} />
+      <Split title="By sales rep" rows={sumsBy(list, costs, web, (o) => o.rep).map(([k, x]) => [k || 'No sales rep', x] as [string, Sums])} profit={profit} costRole={costRole} />
+      <Split title="By category" rows={sumsBy(list, costs, web, (o) => (o.category === 'ACC' ? 'Accessories' : o.category)).map(([k, x]) => [k || 'No category', x] as [string, Sums])} profit={profit} costRole={costRole} />
 
       {s.lines.length > 0 && (
         <>
@@ -110,5 +104,25 @@ function Body({ list, costs, web, onOpen, costRole }: { list: Order[]; costs: Co
         </>
       )}
     </>
+  )
+}
+
+/** One table of sums: orders, completed, sales and (for cost roles) profit per row. */
+function Split({ title, rows, profit, costRole, total }: { title: string; rows: [string, Sums][]; profit: (x: Sums) => string | null; costRole?: boolean; total?: boolean }) {
+  if (!rows.length) return null
+  return (
+    <div>
+      <h3 className="mt-h3">{t(title)}</h3>
+      <table className="or-items-table os-table">
+        <thead><tr><th /><th className="num">{t('Orders')}</th><th className="num">{t('Completed')}</th><th className="num">{t('Sales')}</th>{costRole && <th className="num">{t('Profit')}</th>}</tr></thead>
+        <tbody>
+          {rows.map(([label, x], i) => (
+            <tr key={label} className={total && i === rows.length - 1 ? 'sum' : ''}>
+              <td dir="auto">{t(label)}</td><td className="num">{x.orders}</td><td className="num">{x.completed}</td><td className="num" dir="ltr">{money(x.sales)}</td>{costRole && <td className="num" dir="ltr">{profit(x)}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

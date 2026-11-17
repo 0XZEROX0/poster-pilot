@@ -6,7 +6,7 @@ import { cairoNow } from '../data/logic'
 import { nudgeEngine } from '../data/nudge'
 import { nameOf } from '../data/profiles'
 import {
-  ADDABLE, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, priceOf, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
+  ADDABLE, CATEGORIES, DEFAULT_REPS, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, priceOf, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
   type Order, type Status, type Step, type StepKind,
 } from '../data/orders'
 import { allowed, isOwner } from '../data/store'
@@ -206,6 +206,18 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
   const paid = paidOf(o)
   const left = leftOf(o)
   const manual = isManual(o)
+  const [tagging, setTagging] = useState(false)
+  const [repIn, setRepIn] = useState(o.rep)
+  const [catIn, setCatIn] = useState(o.category)
+  async function saveTag() {
+    setBusy(true)
+    try {
+      await orders.tag(o, repIn, catIn, stepBy('edited', [repIn.trim() && `${t('Sales rep')}: ${repIn.trim()}`, catIn.trim() && `${t('Category')}: ${catIn.trim()}`].filter(Boolean).join(' · ')))
+      track('orders', 'order.edited', { what: `${orderNo(o)} · ${o.customer}`, note: [repIn, catIn].filter((x) => x.trim()).join(' · '), ref: o.id })
+      setTagging(false)
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
   const reopenable = o.status === 'completed' || o.status === 'cancelled'
   const choices: StepKind[] = o.closed ? (reopenable ? ['reopened', 'paid', 'note'] : ['note'])
     : ADDABLE.filter((k) => !(k === 'confirmed' && o.status === 'confirmed') && !(k === 'ready' && o.delivery === 'delivery') && !(k === 'out' && o.delivery === 'pickup'))
@@ -287,8 +299,26 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         <dd dir="auto">{o.date ? whenLabel(o) : t('No date yet')}</dd>
         {(o.delivery === 'delivery' || o.address) && <><dt>{t('Address')}</dt><dd className="plain" dir="auto">{[o.address, o.city, o.area].filter(Boolean).join(', ') || '—'}</dd></>}
         <dt>{t('Pays by')}</dt><dd dir="auto">{o.payMethod ? t(o.payMethod) : '—'}</dd>
+        <dt>{t('Sales rep')}</dt>
+        <dd dir="auto">{o.rep || '—'}{o.category ? ` · ${t(o.category)}` : ''}{canEdit && !manual && !tagging && <button className="link-btn or-tag" onClick={() => { setRepIn(o.rep); setCatIn(o.category); setTagging(true) }}>{t('Change')}</button>}</dd>
+        {o.label && <><dt>{t('Label used')}</dt><dd dir="auto">{o.label}</dd></>}
+        {o.shipState && <><dt>{t('Shipping state')}</dt><dd dir="auto">{o.shipState}</dd></>}
         {o.customerNote && <><dt>{t('Customer note')}</dt><dd className="plain" dir="auto">{o.customerNote}</dd></>}
       </dl>
+      {tagging && (
+        <div className="form or-tagform">
+          <div className="two">
+            <label><span>{t('Sales rep')}</span><input value={repIn} onChange={(e) => setRepIn(e.target.value)} list="or-reps2" dir="auto" autoFocus /></label>
+            <label><span>{t('Category')}</span><input value={catIn} onChange={(e) => setCatIn(e.target.value)} list="or-cats2" dir="auto" /></label>
+          </div>
+          <datalist id="or-reps2">{DEFAULT_REPS.map((r) => <option key={r} value={r} />)}</datalist>
+          <datalist id="or-cats2">{CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist>
+          <div className="mt-acts end">
+            <button className="btn btn-sm" onClick={() => setTagging(false)}>{t('Cancel')}</button>
+            <button className="btn btn-sm btn-primary" disabled={busy || (repIn.trim() === o.rep && catIn.trim() === o.category)} onClick={saveTag}>{t('Save')}</button>
+          </div>
+        </div>
+      )}
       <table className="or-items-table">
         <tbody>
           {o.items.map((i, n) => (

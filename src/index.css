@@ -1468,3 +1468,6 @@ button.stock:hover { filter: brightness(1.15); }
 @media (max-width: 520px) {
   .os-line { grid-template-columns: minmax(0, 1fr) auto; }
 }
+.or-tag { margin-inline-start: 10px; color: var(--accent); font-weight: 600; font-size: 0.85rem; background: none; padding: 0; }
+.or-tagform { background: var(--surface-2); border-radius: 12px; padding: 10px; }
+.os-table { margin-top: 4px; }

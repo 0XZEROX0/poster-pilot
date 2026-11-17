@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { track } from '../data/activity'
 import { cairoNow } from '../data/logic'
-import { itemsTotal, MANUAL_SOURCES, orderNo, orders, PAY_METHODS, SOURCE_LABEL, stepBy, type Draft, type Item, type Order } from '../data/orders'
+import { CATEGORIES, DEFAULT_REPS, itemsTotal, MANUAL_SOURCES, orderNo, orders, PAY_METHODS, SOURCE_LABEL, stepBy, type Draft, type Item, type Order } from '../data/orders'
 import { matches, usePrices, type PriceItem } from '../data/prices'
 import { t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -12,6 +12,9 @@ import { Icon, showToast } from './ui'
 
 type Line = { name: string; qty: string; unit: string; cat?: string; ref?: string }
 const money = (n: number) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} EGP`
+const REP_KEY = 'staticos.orders.rep'
+const lastRep = () => { try { return localStorage.getItem(REP_KEY) ?? '' } catch { return '' } }
+const keepRep = (r: string) => { try { localStorage.setItem(REP_KEY, r) } catch { /* only a convenience */ } }
 const numOf = (s: string) => (s.trim() && isFinite(Number(s)) ? Number(s) : 0)
 
 function linesOf(items: Item[]): Line[] {
@@ -34,6 +37,8 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
   const [time, setTime] = useState(edit?.time ?? '')
   const [confirmed, setConfirmed] = useState(false)
   const [note, setNote] = useState(edit?.customerNote ?? '')
+  const [rep, setRep] = useState(edit ? edit.rep : lastRep())
+  const [category, setCategory] = useState(edit?.category ?? '')
   const [find, setFind] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -71,7 +76,9 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
       delivery, shipping: ship, payMethod, items: items.filter((x) => x.name.trim()), customerNote: note, date, time,
       status: edit ? (edit.status === 'confirmed' ? 'confirmed' : 'new') : confirmed ? 'confirmed' : 'new',
       agreed: agreed.trim() === '' ? null : Math.round(Number(agreed) * 100) / 100,
+      rep, category,
     }
+    if (rep.trim()) keepRep(rep.trim())
     try {
       if (edit) {
         await orders.edit(edit, d, stepBy('edited', ''))
@@ -102,6 +109,12 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
         <label><span>{t('Ordered by')}</span>
           <select value={source} onChange={(e) => setSource(e.target.value as Draft['source'])}>{MANUAL_SOURCES.map((s) => <option key={s} value={s}>{t(SOURCE_LABEL[s])}</option>)}</select>
         </label>
+        <div className="form-row two">
+          <label><span>{t('Sales rep')}</span><input value={rep} onChange={(e) => setRep(e.target.value)} list="or-reps" dir="auto" /></label>
+          <label><span>{t('Category')}</span><input value={category} onChange={(e) => setCategory(e.target.value)} list="or-cats" dir="auto" /></label>
+          <datalist id="or-reps">{DEFAULT_REPS.map((r) => <option key={r} value={r} />)}</datalist>
+          <datalist id="or-cats">{CATEGORIES.map((c) => <option key={c} value={c}>{t(c)}</option>)}</datalist>
+        </div>
         <div className="form-row two">
           <label><span>{t('Customer name')}</span><input value={customer} onChange={(e) => setCustomer(e.target.value)} dir="auto" autoFocus={!edit} /></label>
           <label><span>{t('Phone')}</span><input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" inputMode="tel" placeholder="01xxxxxxxxx" /></label>
