@@ -11,6 +11,7 @@ const COLORS: Record<string, string> = {
   prices: '#f05828',
   builder: '#2f6bd8',
   maintenance: '#0f9488',
+  orders: '#c2410c',
   offers: '#e04a7a',
   review: '#7a5af0',
   fix: '#e5484d',
@@ -24,7 +25,7 @@ const COLORS: Record<string, string> = {
 
 /** Apps that belong together: inside one of them, the others of its group show as a small menu. */
 export const APP_GROUPS: { title: string; ids: string[] }[] = [
-  { title: 'Shop', ids: ['prices', 'builder', 'maintenance'] },
+  { title: 'Shop', ids: ['prices', 'builder', 'orders', 'maintenance'] },
   { title: 'Posters', ids: ['dashboard', 'offers', 'review', 'fix', 'calendar', 'brainstorm', 'posted', 'database'] },
   { title: 'Team', ids: ['activity'] },
 ]

@@ -502,6 +502,55 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('role without Maintenance reads tickets', getDocs(collection(pricer, 'tickets')))
   await no('role without Maintenance opens a ticket', open(pricer, 4, 'u-hr2'))
 }
+// website orders: only the engine makes them; the app changes the shop part and adds steps
+{
+  const out = as('u-out', 'out@x.com')
+  const O = (over = {}) => ({ wooId: 12915, number: '12915', webStatus: 'on-hold', want: '', status: 'new', closed: false, placedAt: 1, customer: 'Karim', phone: '0100', email: '', address: '', city: 'Cairo', area: 'Cairo', delivery: 'pickup', shipping: 0, payMethod: 'Instapay', items: [{ name: 'Case', qty: 1, total: 4999, pid: 1, vid: 0 }], webTotal: 4999, agreed: null, customerNote: '', date: '', time: '', webError: '', updatedAt: 1, steps: [{ at: 1, by: 'website', byName: 'Website', kind: 'placed', note: '' }], ...over })
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'orders/W12915'), O()); await setDoc(doc(c.firestore(), 'orders/W12916'), O({ wooId: 12916 })) })
+  const first = O().steps[0]
+  const st = (by, kind, more = {}) => ({ at: 2, by, byName: 'X', kind, note: '', ...more })
+  await ok('owner makes an Orders role', setDoc(doc(boss, 'roles/orders'), { name: 'Orders', perms: ['orders', 'orders.edit'] }))
+  await ok('owner makes an Orders viewer role', setDoc(doc(boss, 'roles/ordview'), { name: 'Order viewer', perms: ['orders'] }))
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'members/u-ord'), { email: 'ord@x.com', name: 'Ord', role: 'orders', joinedAt: 1 })
+    await setDoc(doc(c.firestore(), 'members/u-ov'), { email: 'ov@x.com', name: 'Ov', role: 'ordview', joinedAt: 1 })
+    await setDoc(doc(c.firestore(), 'members/u-nor'), { email: 'nor@x.com', name: 'Nor', role: 'member', joinedAt: 1 })
+  })
+  const ord = as('u-ord', 'ord@x.com'), ov = as('u-ov', 'ov@x.com'), nor = as('u-nor', 'nor@x.com')
+  await no('outsider reads orders', getDocs(collection(out, 'orders')))
+  await no('built-in member reads orders (customer data)', getDocs(query(collection(nor, 'orders'), where('closed', '==', false))))
+  await ok('viewer reads open orders', getDocs(query(collection(ov, 'orders'), where('closed', '==', false))))
+  await ok('handler reads an order', getDoc(doc(ord, 'orders/W12915')))
+  await no('handler makes an order', setDoc(doc(ord, 'orders/W1'), O({ wooId: 1 })))
+  await no('owner makes an order (engine only)', setDoc(doc(boss, 'orders/W2'), O({ wooId: 2 })))
+  await no('viewer adds a step', updateDoc(doc(ov, 'orders/W12915'), { steps: [first, st('u-ov', 'called')], updatedAt: serverTimestamp() }))
+  await ok('handler adds a called step', updateDoc(doc(ord, 'orders/W12915'), { steps: [first, st('u-ord', 'called')], updatedAt: serverTimestamp() }))
+  const two = [first, st('u-ord', 'called')]
+  await ok('handler confirms (want processing)', updateDoc(doc(ord, 'orders/W12915'), { steps: [...two, st('u-ord', 'confirmed')], status: 'confirmed', want: 'processing', closed: false, updatedAt: serverTimestamp() }))
+  const three = [...two, st('u-ord', 'confirmed')]
+  await no('step under someone else', updateDoc(doc(ord, 'orders/W12915'), { steps: [...three, st('u-boss', 'note')], updatedAt: serverTimestamp() }))
+  await no('handler writes a website step', updateDoc(doc(ord, 'orders/W12915'), { steps: [...three, st('u-ord', 'website', { web: 'completed' })], updatedAt: serverTimestamp() }))
+  await no('handler changes the customer', updateDoc(doc(ord, 'orders/W12915'), { customer: 'Evil', steps: [...three, st('u-ord', 'note')], updatedAt: serverTimestamp() }))
+  await no('handler changes the website total', updateDoc(doc(ord, 'orders/W12915'), { webTotal: 1, steps: [...three, st('u-ord', 'note')], updatedAt: serverTimestamp() }))
+  await no('handler sends a strange status', updateDoc(doc(ord, 'orders/W12915'), { want: 'trash', steps: [...three, st('u-ord', 'note')], updatedAt: serverTimestamp() }))
+  await no('closed does not match status', updateDoc(doc(ord, 'orders/W12915'), { status: 'completed', want: 'completed', closed: false, steps: [...three, st('u-ord', 'delivered')], updatedAt: serverTimestamp() }))
+  await no('negative payment', updateDoc(doc(ord, 'orders/W12915'), { steps: [...three, st('u-ord', 'paid', { amount: -5, method: 'Cash' })], updatedAt: serverTimestamp() }))
+  await no('without the server time', updateDoc(doc(ord, 'orders/W12915'), { steps: [...three, st('u-ord', 'note')], updatedAt: 5 }))
+  await ok('handler adds a payment', updateDoc(doc(ord, 'orders/W12915'), { steps: [...three, st('u-ord', 'paid', { amount: 300, method: 'Instapay' })], updatedAt: serverTimestamp() }))
+  const four = [...three, st('u-ord', 'paid', { amount: 300, method: 'Instapay' })]
+  await ok('handler sets date and agreed price', updateDoc(doc(ord, 'orders/W12915'), { steps: [...four, st('u-ord', 'price', { amount: 4800 })], agreed: 4800, updatedAt: serverTimestamp() }))
+  const five = [...four, st('u-ord', 'price', { amount: 4800 })]
+  await ok('handler sets the date', updateDoc(doc(ord, 'orders/W12915'), { steps: [...five, st('u-ord', 'date', { date: '2026-11-18', time: '17:00' })], date: '2026-11-18', time: '17:00', updatedAt: serverTimestamp() }))
+  const six = [...five, st('u-ord', 'date', { date: '2026-11-18', time: '17:00' })]
+  await no('handler takes a step out', updateDoc(doc(ord, 'orders/W12915'), { steps: five, updatedAt: serverTimestamp() }))
+  await ok('handler completes it', updateDoc(doc(ord, 'orders/W12915'), { steps: [...six, st('u-ord', 'delivered')], status: 'completed', want: 'completed', closed: true, updatedAt: serverTimestamp() }))
+  await ok('owner takes a step out', updateDoc(doc(boss, 'orders/W12915'), { steps: six, updatedAt: serverTimestamp() }))
+  await no('handler removes an order', deleteDoc(doc(ord, 'orders/W12916')))
+  await ok('owner removes an order from the app', deleteDoc(doc(boss, 'orders/W12916')))
+  await ok('handler writes an order step line', setDoc(doc(ord, 'activity/o1'), { app: 'orders', act: 'order.step', what: '#12915', by: 'u-ord', byName: 'Ord', at: serverTimestamp() }))
+  await no('viewer writes an order step line', setDoc(doc(ov, 'activity/o2'), { app: 'orders', act: 'order.step', what: '#12915', by: 'u-ov', byName: 'Ov', at: serverTimestamp() }))
+  await no('handler writes an order deleted line', setDoc(doc(ord, 'activity/o3'), { app: 'orders', act: 'order.deleted', what: '#12915', by: 'u-ord', byName: 'Ord', at: serverTimestamp() }))
+}
 {
   // Profile pictures
   await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'members/u-pic'), { email: 'pic@x.com', name: 'Pic', role: 'member', joinedAt: 1 }) })
