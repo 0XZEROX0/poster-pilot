@@ -1,7 +1,8 @@
 import Konva from 'konva'
+import { useEffect, useState } from 'react'
 import { Group, Image as KImage, Rect, Text } from 'react-konva'
 import { hasOffer, itemName, priceOf, titleOf, toNumber } from '../data/logic'
-import { EMOJI, hasArabic, layerId, STORY_H, STORY_W, type StickerKind, type StoryLayer } from '../data/storyDesign'
+import { EMOJI, giphyReady, hasArabic, layerId, searchGifs, STORY_H, STORY_W, type Gif, type StickerKind, type StoryLayer } from '../data/storyDesign'
 import type { Post } from '../data/types'
 import { t } from '../i18n'
 import { Icon } from './ui'
@@ -146,17 +147,66 @@ export function newSticker(make: Pick): StickerLayer {
   return { id: layerId(), kind: 'sticker', x: STORY_W / 2, y: STORY_H / 2, scale: 1, rotation: make.sticker === 'badge' ? -6 : 0, ...make }
 }
 
-/** The sticker tray, as in Instagram: the shop's and the post's stickers first, then emoji. */
-export function StickerTray({ post, onPick, onClose }: { post: Post; onPick: (l: StickerLayer) => void; onClose: () => void }) {
+/** Moving stickers: the shop's own, ready to post as they are; every one can still be changed like any sticker. */
+const MOVING: { label: string; make: () => StoryLayer }[] = [
+  { label: '💓 SALE', make: () => ({ ...newSticker({ sticker: 'badge', text: 'Sale', color: '#ef4444' }), motion: 'pulse' }) },
+  { label: '✨ NEW', make: () => ({ ...newSticker({ sticker: 'badge', text: 'New', color: '#2563eb' }), motion: 'flash' }) },
+  { label: '🔥', make: () => ({ ...newSticker({ sticker: 'emoji', text: '🔥', color: '#ffffff' }), motion: 'wiggle' }) },
+  { label: '⭐', make: () => ({ ...newSticker({ sticker: 'emoji', text: '⭐', color: '#ffffff' }), motion: 'spin' }) },
+  { label: '👇', make: () => ({ ...newSticker({ sticker: 'emoji', text: '👇', color: '#ffffff' }), motion: 'bounce' }) },
+  { label: '🎁 عرض خاص', make: () => ({ ...newSticker({ sticker: 'badge', text: 'عرض خاص', color: '#f97316' }), motion: 'wiggle' }) },
+  { label: '⌨️ LIMITED OFFER', make: () => ({ id: layerId(), kind: 'text', x: STORY_W / 2, y: STORY_H / 2, scale: 1, rotation: 0, text: 'Limited offer', style: 'typewriter', color: '#ffffff', box: 'solid', align: 'center', size: 72, motion: 'type' }) },
+  { label: '🌊 static-eg.com', make: () => ({ ...newSticker({ sticker: 'website', text: 'static-eg.com', color: '#ffffff' }), motion: 'float' }) },
+]
+
+/** GIPHY search: trending GIF stickers first, then what the person types (English or Arabic). */
+function GifSearch({ onPick }: { onPick: (l: StoryLayer) => void }) {
+  const [q, setQ] = useState('')
+  const [asked, setAsked] = useState('')
+  const [gifs, setGifs] = useState<Gif[] | null>(null)
+  const [problem, setProblem] = useState('')
+  // Searches only when the person presses Search (or Enter): the GIPHY key allows 100 searches an hour.
+  useEffect(() => {
+    let live = true
+    searchGifs(asked).then((g) => { if (live) { setGifs(g); setProblem('') } }).catch((e) => {
+      if (!live) return
+      const why = e instanceof Error ? e.message : String(e)
+      setProblem(why === 'giphy-limit' ? t('GIPHY is busy: the shop used its 100 GIF searches for this hour. Try again later.') : why)
+    })
+    return () => { live = false }
+  }, [asked])
+  const pick = (g: Gif) => onPick({ id: layerId(), kind: 'gif', x: STORY_W / 2, y: STORY_H / 2, scale: 1, rotation: 0, src: g.src, w: g.w, h: g.h, title: g.title })
+  return (
+    <div className="se-gifs">
+      <form className="se-gif-form" onSubmit={(e) => { e.preventDefault(); setAsked(q) }}>
+        <input className="se-words" type="search" dir="auto" placeholder={t('Search GIPHY')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <button type="submit" className="se-style on">{t('Search')}</button>
+      </form>
+      {problem && <p className="se-hint">{problem}</p>}
+      <div className="se-gif-grid">
+        {(gifs ?? []).map((g) => <button key={g.id} type="button" onClick={() => pick(g)} aria-label={g.title}><img src={g.preview} alt="" loading="lazy" /></button>)}
+      </div>
+      <p className="se-powered">Powered by GIPHY</p>
+    </div>
+  )
+}
+
+/** The sticker tray, as in Instagram: the shop's and the post's stickers, moving ones, GIFs, then emoji. */
+export function StickerTray({ post, onPick, onClose }: { post: Post; onPick: (l: StoryLayer) => void; onClose: () => void }) {
   const pick = (make: Pick) => onPick(newSticker(make))
+  const [tab, setTab] = useState<'stickers' | 'gifs'>('stickers')
   return (
     <div className="se-tray-back" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="se-tray" role="dialog" aria-label={t('Stickers')}>
         <div className="se-tray-head">
-          <b>{t('Stickers')}</b>
+          <div className="se-tabs">
+            <button type="button" className={`se-style${tab === 'stickers' ? ' on' : ''}`} onClick={() => setTab('stickers')}>{t('Stickers')}</button>
+            <button type="button" className={`se-style${tab === 'gifs' ? ' on' : ''}`} onClick={() => setTab('gifs')}>GIF</button>
+          </div>
           <button type="button" className="se-round" onClick={onClose} aria-label={t('Close')}><Icon name="close" /></button>
         </div>
         <div className="se-tray-body">
+          {tab === 'gifs' ? (giphyReady() ? <GifSearch onPick={onPick} /> : <p className="se-hint">{t('GIF search starts once the GIPHY key is added to the app.')}</p>) : <>
           <div className="se-chips">
             {[...postStickers(post), ...SHOP].map((s) => (
               <button key={s.label} type="button" className={`se-chip se-chip-${s.make.sticker}`} style={COLOURED.includes(s.make.sticker) ? { background: s.make.color, color: ink(s.make.color) } : undefined} onClick={() => pick(s.make)} dir="auto">
@@ -164,9 +214,14 @@ export function StickerTray({ post, onPick, onClose }: { post: Post; onPick: (l:
               </button>
             ))}
           </div>
+          <b className="se-tray-title">{t('Moving')}</b>
+          <div className="se-chips">
+            {MOVING.map((m) => <button key={m.label} type="button" className="se-chip se-chip-moving" onClick={() => onPick(m.make())} dir="auto">{m.label}</button>)}
+          </div>
           <div className="se-emoji">
             {EMOJI.map((e) => <button key={e} type="button" onClick={() => pick({ sticker: 'emoji', text: e, color: '#ffffff' })} aria-label={e}>{e}</button>)}
           </div>
+          </>}
         </div>
       </div>
     </div>

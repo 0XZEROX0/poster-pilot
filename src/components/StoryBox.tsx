@@ -10,10 +10,14 @@ import { Chip, dayLabel, Icon, timeLabel } from './ui'
  * goes out.
  */
 export function StoryPreview({ post }: { post: Post }) {
+  if (post.storyVideo && !/drive\.google|googleusercontent/.test(post.storyVideo)) {
+    return <div className="story-frame"><video src={post.storyVideo} autoPlay muted loop playsInline aria-label={`${t('Story')}: ${titleOf(post)}`} /></div>
+  }
   if (post.storyImage) {
     return (
       <div className="story-frame">
         <img src={previewUrl(post.storyImage, 600)} alt={`${t('Story')}: ${titleOf(post)}`} loading="lazy" referrerPolicy="no-referrer" />
+        {post.storyVideo && <span className="story-video-mark">▶ {t('Video')}</span>}
       </div>
     )
   }

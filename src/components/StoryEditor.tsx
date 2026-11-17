@@ -1,13 +1,13 @@
 import Konva from 'konva'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Group, Image as KImage, Label, Layer, Line, Rect, Stage, Tag, Text, Transformer } from 'react-konva'
 import { backend } from '../data/store'
 import { titleOf } from '../data/logic'
-import { COLORS, hasArabic, layerId, readDesign, SAFE_BOTTOM, SAFE_TOP, saveStoryPicture, loadPoster, shownText, STORY_H, STORY_W, storySaving, TEXT_STYLES, type StoryBg, type StoryDesign, type PenKind, type StoryLayer, type TextStyle } from '../data/storyDesign'
+import { COLORS, designMoves, MOTIONS, saveStoryVideo, VIDEO_SECONDS, type Motion, hasArabic, layerId, readDesign, SAFE_BOTTOM, SAFE_TOP, saveStoryPicture, loadPoster, shownText, STORY_H, STORY_W, storySaving, TEXT_STYLES, type StoryBg, type StoryDesign, type PenKind, type StoryLayer, type TextStyle } from '../data/storyDesign'
 import type { Post } from '../data/types'
 import { t } from '../i18n'
-import { COLOURED, ink, LOGO_URL, StickerShape, stickerSize, StickerTray, WORDED, type StickerLayer } from './StoryStickers'
+import { COLOURED, ink, LOGO_URL, StickerShape, stickerSize, StickerTray, WORDED } from './StoryStickers'
 import { Icon } from './ui'
 
 // Two fingers on a sticker while it is being dragged resize and turn it.
@@ -96,6 +96,100 @@ function Background({ bg, poster }: { bg: StoryBg; poster: HTMLImageElement | nu
   return <Rect listening={false} width={STORY_W} height={STORY_H} fill={bg.kind === 'blur' ? '#0b1f3a' : bg.color} />
 }
 
+/** Where a moving layer is at `t` seconds: changes made to its inner group only. */
+function applyMotion(node: Konva.Node, motion: Motion, t: number) {
+  const g = node as Konva.Group
+  const wave = (period: number) => Math.sin((2 * Math.PI * t) / period)
+  g.scale({ x: 1, y: 1 }); g.rotation(0); g.y(0); g.opacity(1)
+  if (motion === 'pulse') { const k = 1 + 0.09 * (wave(0.9) + 1) / 2; g.scale({ x: k, y: k }) }
+  else if (motion === 'bounce') g.y(-46 * Math.abs(Math.sin((Math.PI * t) / 0.7)))
+  else if (motion === 'wiggle') g.rotation(9 * wave(0.45))
+  else if (motion === 'spin') g.rotation((360 * t) / 2.5)
+  else if (motion === 'flash') g.opacity(t % 0.8 < 0.5 ? 1 : 0.12)
+  else if (motion === 'float') g.y(22 * wave(2))
+}
+
+/** What the browser's ImageDecoder gives (WebCodecs; not yet in every TypeScript library). */
+type FrameImage = { image: CanvasImageSource & { close(): void; duration: number | null } }
+type Decoder = { tracks: { ready: Promise<void>; selectedTrack: { frameCount: number } | null }; decode(o: { frameIndex: number }): Promise<FrameImage>; close(): void }
+type DecoderMaker = new (o: { data: ArrayBuffer; type: string }) => Decoder
+
+/**
+ * A GIF as a canvas that shows the right frame for the moment: its frames are read once (ImageDecoder), then
+ * `draw(t)` paints the frame for `t` seconds. Browsers without ImageDecoder get the GIF picture itself, which plays
+ * while it is in the page (kept hidden there).
+ */
+export type GifPlayer = { image: CanvasImageSource; draw: (t: number) => void }
+async function makeGif(src: string, box: HTMLDivElement): Promise<{ player: GifPlayer; stop: () => void }> {
+  const Maker = (window as unknown as { ImageDecoder?: DecoderMaker }).ImageDecoder
+  if (Maker) {
+    try {
+      const res = await fetch(src)
+      const data = await res.arrayBuffer()
+      const dec = new Maker({ data, type: res.headers.get('content-type') || (/\.gif/i.test(src) ? 'image/gif' : 'image/webp') })
+      await dec.tracks.ready
+      const count = Math.min(dec.tracks.selectedTrack?.frameCount ?? 1, 150)
+      const frames: { bmp: ImageBitmap; until: number }[] = []
+      let total = 0
+      for (let i = 0; i < count; i++) {
+        const f = await dec.decode({ frameIndex: i })
+        total += Math.max(0.02, (f.image.duration ?? 100000) / 1e6)
+        frames.push({ bmp: await createImageBitmap(f.image), until: total })
+        f.image.close()
+      }
+      dec.close()
+      const canvas = document.createElement('canvas')
+      canvas.width = frames[0]?.bmp.width ?? 1
+      canvas.height = frames[0]?.bmp.height ?? 1
+      const ctx = canvas.getContext('2d')
+      let last = -1
+      const draw = (t: number) => {
+        const at = total ? t % total : 0
+        const i = Math.max(0, frames.findIndex((f) => at < f.until))
+        if (i === last || !ctx) return
+        last = i
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(frames[i].bmp, 0, 0)
+      }
+      draw(0)
+      return { player: { image: canvas, draw }, stop: () => frames.forEach((f) => f.bmp.close()) }
+    } catch {
+      // Falls back to the picture below.
+    }
+  }
+  const img = new window.Image()
+  img.crossOrigin = 'anonymous'
+  img.src = src
+  box.appendChild(img)
+  await img.decode().catch(() => undefined)
+  return { player: { image: img, draw: () => undefined }, stop: () => img.remove() }
+}
+
+function useGifs(srcs: string[], box: HTMLDivElement | null): Record<string, GifPlayer> {
+  const [players, setPlayers] = useState<Record<string, GifPlayer>>({})
+  const key = [...new Set(srcs)].sort().join('|')
+  useEffect(() => {
+    if (!box) return
+    let live = true
+    const stops: (() => void)[] = []
+    for (const src of key ? key.split('|') : []) {
+      makeGif(src, box).then(({ player, stop }) => {
+        stops.push(stop)
+        if (live) setPlayers((m) => ({ ...m, [src]: player }))
+        else stop()
+      })
+    }
+    return () => { live = false; stops.forEach((s) => s()) }
+  }, [key, box])
+  return players
+}
+
+/** The best video kind this browser can record: MP4 (Instagram and Facebook take it as it is), else nothing. */
+function videoType(): string {
+  if (typeof MediaRecorder === 'undefined') return ''
+  return ['video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4;codecs=avc1', 'video/mp4'].find((m) => MediaRecorder.isTypeSupported(m)) ?? ''
+}
+
 const GRADIENTS: [string, string][] = [['#0b1f3a', '#f97316'], ['#f97316', '#ec4899'], ['#2563eb', '#a855f7'], ['#16a34a', '#14b8a6'], ['#000000', '#374151'], ['#facc15', '#ef4444']]
 
 /**
@@ -131,6 +225,13 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState('')
   const [dirty, setDirty] = useState(false)
+  // While a moving story is recorded: the story is drawn at video size (720x1280) for 5 seconds.
+  const [recording, setRecording] = useState(false)
+  const [gifBox, setGifBox] = useState<HTMLDivElement | null>(null)
+  const gifs = useGifs(design.layers.flatMap((l) => (l.kind === 'gif' ? [l.src] : [])), gifBox)
+  const clock = useRef(0)
+  const gifsRef = useRef(gifs)
+  useEffect(() => { gifsRef.current = gifs }, [gifs])
 
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
@@ -235,8 +336,50 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
     }
   }
 
-  const scale = view.w / STORY_W
-  const addSticker = (l: StickerLayer) => {
+  const VIDEO_W = 720
+  const stageW = recording ? VIDEO_W : view.w
+  const scale = stageW / STORY_W
+  const moving = designMoves(design)
+
+  // Moving layers and GIFs play all the time in the editor, so the person sees what the video will show.
+  useEffect(() => {
+    if (!moving) return
+    let raf = 0
+    clock.current = performance.now()
+    const frame = (now: number) => {
+      const stage = stageRef.current
+      const t = (now - clock.current) / 1000
+      if (stage) {
+        for (const l of designRef.current.layers) {
+          if (l.kind === 'draw' || !l.motion || l.motion === 'none') continue
+          const node = stage.findOne(`#${l.id}-m`)
+          if (!node) continue
+          if (l.motion === 'type' && l.kind === 'text') {
+            const tx = (node as Konva.Group).findOne('Text') as Konva.Text | undefined
+            const full = shownText(l)
+            tx?.text(full.slice(0, Math.max(1, Math.ceil(full.length * Math.min(1, (t % 3) / 1.8)))))
+          } else applyMotion(node, l.motion, t)
+        }
+        for (const g of Object.values(gifsRef.current)) g.draw(t)
+        stage.getLayers()[0]?.batchDraw()
+      }
+      raf = requestAnimationFrame(frame)
+    }
+    raf = requestAnimationFrame(frame)
+    return () => {
+      cancelAnimationFrame(raf)
+      // Back to still: every layer where it was set, with all its words.
+      const stage = stageRef.current
+      for (const l of designRef.current.layers) {
+        const node = l.kind === 'draw' ? null : stage?.findOne(`#${l.id}-m`)
+        if (!node) continue
+        applyMotion(node, 'none', 0)
+        if (l.kind === 'text') ((node as Konva.Group).findOne('Text') as Konva.Text | undefined)?.text(shownText(l) || ' ')
+      }
+      stage?.getLayers()[0]?.batchDraw()
+    }
+  }, [moving, design])
+  const addSticker = (l: StoryLayer) => {
     change((d) => ({ ...d, layers: [...d.layers, l] }))
     setTool('')
     setSelected(l.id)
@@ -291,6 +434,45 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
   }
   const selectedLayer = design.layers.find((l) => l.id === selected)
 
+  /** Records the story as it moves, 5 seconds at 30 frames a second, 720x1280 MP4. */
+  async function record(): Promise<Blob> {
+    const type = videoType()
+    if (!type) throw new Error('no-video')
+    setRecording(true)
+    // Two frames: the stage is redrawn at video size first.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))))
+    const stage = stageRef.current
+    if (!stage) throw new Error('no-stage')
+    const layers = stage.getLayers()
+    const ratio = layers[0]?.getCanvas().getPixelRatio() ?? 1
+    layers.forEach((l) => { l.getCanvas().setPixelRatio(1); l.batchDraw() })
+    const out = document.createElement('canvas')
+    out.width = VIDEO_W
+    out.height = Math.round((VIDEO_W * STORY_H) / STORY_W)
+    const ctx = out.getContext('2d')
+    if (!ctx) throw new Error('no-canvas')
+    const rec = new MediaRecorder(out.captureStream(30), { mimeType: type, videoBitsPerSecond: 6_000_000 })
+    const parts: Blob[] = []
+    rec.ondataavailable = (e) => e.data.size && parts.push(e.data)
+    const done = new Promise<Blob>((resolve) => { rec.onstop = () => resolve(new Blob(parts, { type: 'video/mp4' })) })
+    clock.current = performance.now()
+    rec.start(250)
+    await new Promise<void>((resolve) => {
+      const frame = () => {
+        ctx.fillStyle = '#000'
+        ctx.fillRect(0, 0, out.width, out.height)
+        for (const l of layers) ctx.drawImage(l.getNativeCanvasElement(), 0, 0, out.width, out.height)
+        if (performance.now() - clock.current >= VIDEO_SECONDS * 1000) resolve()
+        else requestAnimationFrame(frame)
+      }
+      requestAnimationFrame(frame)
+    })
+    rec.stop()
+    const video = await done
+    layers.forEach((l) => { l.getCanvas().setPixelRatio(ratio); l.batchDraw() })
+    return video
+  }
+
   async function save() {
     const stage = stageRef.current
     if (!stage) return
@@ -302,8 +484,19 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
     await new Promise((r) => requestAnimationFrame(() => r(null)))
     try {
       trRef.current?.nodes([])
-      const jpeg = stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.9, pixelRatio: STORY_W / view.w })
       const text = JSON.stringify(design)
+      if (moving) {
+        const video = await record()
+        const jpeg = stageRef.current?.toDataURL({ mimeType: 'image/jpeg', quality: 0.9, pixelRatio: STORY_W / VIDEO_W }) ?? ''
+        setRecording(false)
+        if (storySaving()) {
+          await saveStoryVideo(post.id, jpeg, video)
+          await backend.updatePost(post.id, { storyDesign: text })
+        } else await backend.updatePost(post.id, { storyDesign: text, storyImage: jpeg, storyVideo: URL.createObjectURL(video) })
+        onClose()
+        return
+      }
+      const jpeg = stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.9, pixelRatio: STORY_W / view.w })
       if (storySaving()) {
         await saveStoryPicture(post.id, jpeg)
         await backend.updatePost(post.id, { storyDesign: text })
@@ -313,8 +506,9 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
       }
       onClose()
     } catch (e) {
+      setRecording(false)
       const why = e instanceof Error ? e.message : String(e)
-      setProblem(/tainted|insecure/i.test(why) ? t('The poster could not be used in the picture. Try again in a minute.') : `${t('Not saved')}: ${why}`)
+      setProblem(/no-video/.test(why) ? t('This browser cannot make the video. Open the app in Chrome or Safari to save a moving story.') : /tainted|insecure/i.test(why) ? t('The poster could not be used in the picture. Try again in a minute.') : `${t('Not saved')}: ${why}`)
       setSaving(false)
     }
   }
@@ -345,12 +539,13 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
         )}
         {tool === 'draw'
           ? <button type="button" className="se-done" onClick={() => setTool('')}>{t('Done')}</button>
-          : <button type="button" className="se-done" onClick={save} disabled={saving || posterState === 'loading'}>{saving ? t('Saving…') : t('Done')}</button>}
+          : <button type="button" className="se-done" onClick={save} disabled={saving || posterState === 'loading'}>{saving ? t('Saving…') : moving ? `${t('Done')} ▶` : t('Done')}</button>}
       </header>
 
       <div className="se-stage" ref={boxRef}>
         <div className="se-canvas" style={{ width: view.w, height: view.h }}>
-          <Stage ref={stageRef} width={view.w} height={view.h} scaleX={scale} scaleY={scale}
+          <Stage ref={stageRef} width={stageW} height={Math.round((stageW * STORY_H) / STORY_W)} scaleX={scale} scaleY={scale}
+            style={recording ? { transform: `scale(${view.w / VIDEO_W})`, transformOrigin: '0 0' } : undefined}
             onMouseDown={(e) => { if (tool !== 'draw' && (e.target === e.target.getStage() || e.target.name() === 'bg')) { setSelected(null); setTool('') } }}
             onTouchStart={(e) => { if (tool !== 'draw' && e.evt.touches.length === 1 && (e.target === e.target.getStage() || e.target.name() === 'bg')) { setSelected(null); setTool('') } }}
             onPointerDown={drawStart} onPointerMove={drawMove} onPointerUp={drawEnd} onPointerLeave={drawEnd}
@@ -360,7 +555,7 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
               <Rect name="bg" width={STORY_W} height={STORY_H} fill="rgba(0,0,0,0)" />
               {design.layers.filter((l) => l.kind !== 'draw').map((l) => {
                 const common = {
-                  id: l.id, x: l.x, y: l.y, scaleX: l.scale, scaleY: l.scale, rotation: l.rotation, draggable: tool !== 'draw', listening: tool !== 'draw',
+                  id: l.id, x: l.x, y: l.y, scaleX: l.scale, scaleY: l.scale, rotation: l.rotation, draggable: tool !== 'draw' && !recording, listening: tool !== 'draw',
                   onMouseDown: () => setSelected(l.id), onTouchStart: () => setSelected(l.id),
                   onDragStart: () => { setSelected(l.id); setDragging(true) },
                   onDragMove: dragMove,
@@ -370,12 +565,14 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
                     if (binHot) { setBinHot(false); removeLayer(l.id) } else patchLayer(l.id, { x: e.target.x(), y: e.target.y() })
                   },
                   onTransformEnd: (e: Konva.KonvaEventObject<Event>) => { const n = e.target; patchLayer(l.id, { x: n.x(), y: n.y(), scale: n.scaleX(), rotation: n.rotation() }) },
+                  ...(l.kind === 'text' ? { onDblClick: () => setEditing(l), onDblTap: () => setEditing(l) } : {}),
                 }
+                let body: ReactNode = null
                 if (l.kind === 'poster') {
                   const w = 960
                   const h = poster ? (w * poster.height) / poster.width : 960
-                  return (
-                    <Group key={l.id} {...common} offsetX={w / 2} offsetY={h / 2}>
+                  body = (
+                    <Group offsetX={w / 2} offsetY={h / 2}>
                       {poster
                         ? <KImage image={poster} width={w} height={h} cornerRadius={18} shadowColor="#000" shadowBlur={40} shadowOpacity={0.35} />
                         : (
@@ -386,25 +583,27 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
                         )}
                     </Group>
                   )
-                }
-                if (l.kind === 'sticker') {
+                } else if (l.kind === 'sticker') {
                   const sz = stickerSize(l)
-                  return (
-                    <Group key={l.id} {...common} offsetX={sz.w / 2} offsetY={sz.h / 2}>
-                      <StickerShape l={l} logo={logo} />
-                    </Group>
+                  body = <Group offsetX={sz.w / 2} offsetY={sz.h / 2}><StickerShape l={l} logo={logo} /></Group>
+                } else if (l.kind === 'gif') {
+                  const img = gifs[l.src]?.image
+                  body = img
+                    ? <KImage image={img} width={l.w} height={l.h} offsetX={l.w / 2} offsetY={l.h / 2} />
+                    : <Rect width={l.w} height={l.h} offsetX={l.w / 2} offsetY={l.h / 2} cornerRadius={20} fill="rgba(255,255,255,0.25)" />
+                } else if (l.kind === 'text') {
+                  const k = textLook(l)
+                  body = (
+                    <Label offsetX={k.width / 2} offsetY={k.height / 2}>
+                      <Tag fill={l.box === 'none' ? undefined : l.color} opacity={l.box === 'soft' ? 0.75 : 1} cornerRadius={Math.round(l.size * 0.3)} />
+                      <Text text={k.text} fontFamily={k.fontFamily} fontStyle={k.fontStyle} fontSize={l.size} lineHeight={1.2} letterSpacing={k.spacing} padding={k.padding}
+                        width={k.width} align={k.align} wrap="word" fill={k.neon ? '#ffffff' : k.fill}
+                        shadowColor={k.neon ? l.color : '#000000'} shadowBlur={k.neon ? 28 : l.box === 'none' ? 10 : 0} shadowOpacity={k.neon ? 1 : 0.35} />
+                    </Label>
                   )
                 }
-                if (l.kind !== 'text') return null
-                const k = textLook(l)
-                return (
-                  <Label key={l.id} {...common} offsetX={k.width / 2} offsetY={k.height / 2} onDblClick={() => setEditing(l)} onDblTap={() => setEditing(l)}>
-                    <Tag fill={l.box === 'none' ? undefined : l.color} opacity={l.box === 'soft' ? 0.75 : 1} cornerRadius={Math.round(l.size * 0.3)} />
-                    <Text text={k.text} fontFamily={k.fontFamily} fontStyle={k.fontStyle} fontSize={l.size} lineHeight={1.2} letterSpacing={k.spacing} padding={k.padding}
-                      width={k.width} align={k.align} wrap="word" fill={k.neon ? '#ffffff' : k.fill}
-                      shadowColor={k.neon ? l.color : '#000000'} shadowBlur={k.neon ? 28 : l.box === 'none' ? 10 : 0} shadowOpacity={k.neon ? 1 : 0.35} />
-                  </Label>
-                )
+                // The inner group is what moves (pulse, spin and so on), so the layer's own place and size stay as set.
+                return <Group key={l.id} {...common}><Group id={`${l.id}-m`}>{body}</Group></Group>
               })}
               <Transformer ref={trRef} rotateEnabled keepRatio enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
                 anchorSize={14} anchorCornerRadius={7} borderStroke="#ffffff" anchorStroke="#ffffff" anchorFill="#f97316" rotateAnchorOffset={36}
@@ -457,6 +656,13 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
             {COLORS.map((c) => <button key={c} type="button" className={`se-dot${selectedLayer.color === c ? ' on' : ''}`} style={{ background: c }} onClick={() => patchLayer(selectedLayer.id, { color: c })} aria-label={c} />)}
           </div>
         )}
+        {!tool && selectedLayer && selectedLayer.kind !== 'draw' && (
+          <div className="se-row se-motions" role="group" aria-label={t('Motion')}>
+            {MOTIONS.filter((m) => m.key !== 'type' || selectedLayer.kind === 'text').map((m) => (
+              <button key={m.key} type="button" className={`se-style${(selectedLayer.motion ?? 'none') === m.key ? ' on' : ''}`} onClick={() => patchLayer(selectedLayer.id, { motion: m.key })}>{t(m.label)}</button>
+            ))}
+          </div>
+        )}
         {!tool && selectedLayer && (
           <div className="se-row">
             {selectedLayer.kind === 'text' && <button type="button" className="se-pill" onClick={() => setEditing(selectedLayer)}><Icon name="edit" size={18} />{t('Edit text')}</button>}
@@ -468,6 +674,8 @@ export default function StoryEditor({ post, onClose }: { post: Post; onClose: ()
         {!tool && !selectedLayer && <p className="se-hint">{t('Drag to move, or to the bin to remove. Tap something to resize or turn it (or use two fingers). Double-tap text to change it.')}</p>}
       </footer>
 
+      <div className="se-gif-box" ref={setGifBox} aria-hidden="true" />
+      {recording && <div className="se-recording">{t('Making the video…')}</div>}
       {editing && <TextEntry value={editing} onChange={setEditing} onDone={finishText} />}
       {tool === 'stickers' && <StickerTray post={post} onPick={addSticker} onClose={() => setTool('')} />}
     </div>,
