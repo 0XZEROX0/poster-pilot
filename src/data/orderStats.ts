@@ -1,6 +1,7 @@
 import { addDays } from './logic'
 import { costAt, costKey, type CostHist, type CostMap } from './costMath'
-import type { SavedCosts } from './orderCosts'
+import type { CostLinks, SavedCosts } from './orderCosts'
+import { plainName } from './nameMatch'
 import { isManual, priceOf, type Order } from './orders'
 
 // Sales and profit of orders (website and added by hand), for a period. Pure sums; the page reads the orders.
@@ -58,7 +59,7 @@ export function webIndex(cats: { id: string; items: { id: string; web?: { id: nu
 }
 
 /** Everything needed to say what an order cost: price list costs with their history, website links, and costs saved on orders. */
-export type CostCtx = { costs: CostMap; hist: CostHist; web: Record<string, string>; saved: SavedCosts }
+export type CostCtx = { costs: CostMap; hist: CostHist; web: Record<string, string>; saved: SavedCosts; links?: CostLinks }
 
 /**
  * What one line cost (for one), and where that came from:
@@ -67,22 +68,41 @@ export type CostCtx = { costs: CostMap; hist: CostHist; web: Record<string, stri
  *  - null: not known. `suggest` is then a cost to offer: today's price list cost of the same product (its cost
  *    was typed in after the order) or of another option of the same website product.
  */
-export type LineCost = { unit: number | null; from: 'order' | 'list' | null; suggest: number | null }
+export type LineCost = {
+  unit: number | null
+  from: 'order' | 'list' | null
+  suggest: number | null
+  /** The price list product the line is (`cat/pid`), and how that is known: from the order or a confirmed website
+   * link ('own'), or picked by someone for this line, this website product or this name ('picked'). */
+  key?: string
+  via?: 'own' | 'picked'
+}
+
+/** The price list product a line is, if known. */
+export function lineKey(o: Pick<Order, 'id'>, it: Order['items'][number], i: number, ctx: Pick<CostCtx, 'web' | 'saved' | 'links'>): { key: string; via: 'own' | 'picked' } | null {
+  const own = it.cat && it.ref ? costKey(it.cat, it.ref) : it.pid ? ctx.web[`${it.pid}:${it.vid}`] : undefined
+  if (own) return { key: own, via: 'own' }
+  const s = ctx.saved[o.id]?.[i]
+  const picked = (s && s.n === it.name && s.k) || (it.pid ? ctx.links?.web[`${it.pid}:${it.vid}`] : undefined) || ctx.links?.names[plainName(it.name)]
+  return picked ? { key: picked, via: 'picked' } : null
+}
 
 export function lineCosts(o: Pick<Order, 'id' | 'items' | 'placedAt'>, ctx: CostCtx): LineCost[] {
   const saved = ctx.saved[o.id]
   return o.items.map((it, i) => {
     const s = saved?.[i]
-    if (s && s.c !== null && s.n === it.name) return { unit: s.c, from: 'order', suggest: null }
-    const exact = it.cat && it.ref ? costKey(it.cat, it.ref) : it.pid ? ctx.web[`${it.pid}:${it.vid}`] : undefined
+    const k = lineKey(o, it, i, ctx)
+    const link = k ? { key: k.key, via: k.via } : {}
+    if (s && s.c !== null && s.n === it.name) return { unit: s.c, from: 'order', suggest: null, ...link }
+    const exact = k?.key
     if (exact && ctx.costs[exact] !== undefined) {
       // Without a history (the demo) the cost counts for every day.
       const steps = ctx.hist[exact]
       const then = steps ? costAt(steps, o.placedAt) : ctx.costs[exact]
-      return then !== null ? { unit: then, from: 'list', suggest: null } : { unit: null, from: null, suggest: ctx.costs[exact] }
+      return then !== null ? { unit: then, from: 'list', suggest: null, ...link } : { unit: null, from: null, suggest: ctx.costs[exact], ...link }
     }
     const near = !exact && it.pid ? ctx.web[`${it.pid}:*`] : undefined
-    return { unit: null, from: null, suggest: near && ctx.costs[near] !== undefined ? ctx.costs[near] : null }
+    return { unit: null, from: null, suggest: near && ctx.costs[near] !== undefined ? ctx.costs[near] : null, ...link }
   })
 }
 

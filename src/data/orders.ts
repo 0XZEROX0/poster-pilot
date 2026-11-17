@@ -327,6 +327,9 @@ export interface OrderBackend {
   loadPlaced(from: number, to: number): Promise<Order[]>
   /** A new order added by hand. Returns its id. */
   add(d: Draft): Promise<string>
+  /** New lines for an order added in the app or from the old sheet (needs 'Change order details'), with an "edited"
+   * step: used to rename a line to the price list product it is. Never for website orders (that would change the website order). */
+  relink(o: Order, items: Item[], step: Step): Promise<void>
   /** New details for any order (needs 'Change order details'), with an "edited" step. Website orders change in the app only. */
   edit(o: Order, d: Draft, step: Step): Promise<void>
   /** The sales rep and category of any order (website ones too), with an "edited" step. */
@@ -358,6 +361,10 @@ function firestoreOrders(fs: NonNullable<typeof firestore>): OrderBackend {
     },
     async edit(o, d, step) {
       await updateDoc(doc(col, o.id), { ...editFields(o, d), steps: [...o.steps, step], updatedAt: serverTimestamp() })
+    },
+    async relink(o, items, step) {
+      if (!isManual(o)) throw new Error('Website orders keep their lines')
+      await updateDoc(doc(col, o.id), { items, steps: [...o.steps, step], updatedAt: serverTimestamp() })
     },
     async tag(o, rep, category, step) {
       await updateDoc(doc(col, o.id), { rep: rep.trim().slice(0, 80), category: category.trim().slice(0, 80), steps: [...o.steps, step], updatedAt: serverTimestamp() })
@@ -435,6 +442,7 @@ function localOrders(): OrderBackend {
       localPut([o, ...localGet()])
       return o.id
     },
+    async relink(o, items, step) { localChange(o.id, { items, steps: [...o.steps, step] }) },
     async tag(o, rep, category, step) { localChange(o.id, { rep, category, steps: [...o.steps, step] }) },
     async edit(o, d, step) { localChange(o.id, { ...editFields(o, d), steps: [...o.steps, step] } as Partial<Order>) },
     async addStep(o, step) { localChange(o.id, applyStep(o, step)) },

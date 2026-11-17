@@ -469,6 +469,13 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('costs on orders under a strange id', setDoc(doc(pricer, 'orderCosts/all'), OC))
   await no('costs on orders with a strange field', setDoc(doc(pricer, 'orderCosts/2026-11'), { evil: 1 }, { merge: true }))
   await no('costs on orders removed', deleteDoc(doc(boss, 'orderCosts/2026-11')))
+  await ok('cost role links a line name to a product', setDoc(doc(pricer, 'orderCosts/links'), { names: { 'lenovo legion r24e': 'monitor/m1' } }, { merge: true }))
+  await ok('cost role links a website product', setDoc(doc(pricer, 'orderCosts/links'), { web: { '7234:0': 'monitor/m1' } }, { merge: true }))
+  await ok('cost role reads the links', getDoc(doc(pricer, 'orderCosts/links')))
+  await no('role without See cost reads the links', getDoc(doc(sch, 'orderCosts/links')))
+  await no('role without See cost links a name', setDoc(doc(sch, 'orderCosts/links'), { names: { x: 'cpu/a1' } }, { merge: true }))
+  await no('links with a strange field', setDoc(doc(pricer, 'orderCosts/links'), { orders: {} }, { merge: true }))
+  await no('order costs under the links id', setDoc(doc(pricer, 'orderCosts/links'), { names: 'x' }, { merge: true }))
 }
 // maintenance tickets: one doc per ticket with its log; counters/tickets numbers them
 {
@@ -589,6 +596,8 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('hand order cannot become a website order', updateDoc(doc(ord, 'orders/Mabc123XYZ'), { source: 'website', steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ord', 'edited')], updatedAt: serverTimestamp() }))
   await no('viewer edits a hand order', updateDoc(doc(ov, 'orders/Mabc123XYZ'), { customer: 'X', steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ov', 'edited')], updatedAt: serverTimestamp() }))
   await ok('handler completes a hand order', updateDoc(doc(ord, 'orders/Mabc123XYZ'), { status: 'completed', closed: true, want: '', steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ord', 'delivered')], updatedAt: serverTimestamp() }))
+  await ok('changer renames a hand order line of a completed order to a price list product', updateDoc(doc(chg, 'orders/Mabc123XYZ'), { items: [{ name: 'Lenovo Legion R24e', qty: 1, total: 3000, pid: 0, vid: 0, cat: 'monitor', ref: 'm1' }], steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ord', 'delivered'), st('u-chg', 'edited')], updatedAt: serverTimestamp() }))
+  await no('handler without Change order details renames a line of a completed order', updateDoc(doc(ord, 'orders/Mabc123XYZ'), { items: [{ name: 'X', qty: 1, total: 3000, pid: 0, vid: 0 }], steps: [mFirst, st('u-ord', 'edited'), st('u-ord', 'confirmed'), st('u-ord', 'delivered'), st('u-chg', 'edited'), st('u-ord', 'edited')], updatedAt: serverTimestamp() }))
   await no('website order details still locked', updateDoc(doc(ord, 'orders/W12915'), { customer: 'Evil', steps: [...six, st('u-ord', 'edited')], updatedAt: serverTimestamp() }))
   await ok('handler sets sales rep and category on a website order', updateDoc(doc(ord, 'orders/W12915'), { rep: 'Octo', category: 'Monitor', steps: [...six, st('u-ord', 'edited')], updatedAt: serverTimestamp() }))
   await no('sales rep without a step', updateDoc(doc(ord, 'orders/W12915'), { rep: 'JR', updatedAt: serverTimestamp() }))
