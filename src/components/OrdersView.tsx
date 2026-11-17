@@ -273,6 +273,8 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         : s.kind === 'website' && s.web ? t(WEB_LABEL[s.web] ?? s.web) : ''
   return (
     <div className="mt-detail">
+      {/* Stays at the top while the rest scrolls: who, the buttons, and how far the order got. */}
+      <div className="or-pin">
       <div className="mt-head">
         <div>
           <div className="mt-no"><bdi dir="ltr">{orderNo(o)}</bdi> · {when(o.placedAt)}</div>
@@ -290,6 +292,11 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         {manual ? <span className="small t2">{tn('Added in the app · %s', { s: t(SOURCE_LABEL[o.source]) })}</span>
           : <span className="small t2">{tn('Website: %s', { s: t(WEB_LABEL[o.webStatus] ?? o.webStatus ?? '—') })}</span>}
         <SyncChip o={o} />
+      </div>
+      <div>
+        <div className="mt-bar">{PROGRESS.map((p, i) => <span key={p} className={done[i] ? 'on' : ''} />)}</div>
+        <div className="mt-stages">{PROGRESS.map((p, i) => <span key={p} className={done[i] ? 'on' : ''}>{t(p)}</span>)}</div>
+      </div>
       </div>
       {o.webError && <p className="banner banner-bad mt-late" dir="auto">{tn('The website did not take the last change: %e', { e: o.webError })}</p>}
       <dl className="mt-kv">
@@ -332,10 +339,6 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         <div><small>{t('Agreed price')}</small><b dir="ltr">{money(price)}</b></div>
         <div><small>{t('Paid')}</small><b dir="ltr" className={paid > 0 ? 'good' : ''}>{money(paid)}</b></div>
         <div><small>{left < 0 ? t('Paid too much') : t('Left to pay')}</small><b dir="ltr" className={left > 0 ? 'bad' : 'good'}>{money(Math.abs(left))}</b></div>
-      </div>
-      <div>
-        <div className="mt-bar">{PROGRESS.map((p, i) => <span key={p} className={done[i] ? 'on' : ''} />)}</div>
-        <div className="mt-stages">{PROGRESS.map((p, i) => <span key={p} className={done[i] ? 'on' : ''}>{t(p)}</span>)}</div>
       </div>
       {canEdit && <div className="mt-add">
         <b>{t('Add a step')}</b>
