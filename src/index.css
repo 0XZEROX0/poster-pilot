@@ -333,10 +333,12 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 
 /* ---------- Desktop dashboard (window of 1024px or wider; see useDesktop) ---------- */
 .desk { display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 100dvh; }
-.sidebar { display: flex; flex-direction: column; gap: 18px; padding: 20px 14px 16px; background: var(--surface); border-inline-end: 1px solid var(--border); overflow-y: auto; }
+.sidebar { display: flex; flex-direction: column; gap: 18px; padding: 20px 14px 16px; background: var(--surface); border-inline-end: 1px solid var(--border); overflow: hidden; min-height: 0; }
+/* Logo, New offer and the footer stay put; only the nav list scrolls. */
+.sidebar > .brand, .sidebar > .side-add, .sidebar > .side-foot { flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; font-weight: 700; font-size: 1.125rem; letter-spacing: -0.01em; }
 .side-add { border-radius: 14px; min-height: 48px; box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 28%, transparent); }
-.side-nav { display: grid; gap: 3px; }
+.side-nav { display: grid; gap: 3px; align-content: start; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin-inline: -6px; padding-inline: 6px; scrollbar-width: thin; }
 .side-nav button { display: flex; align-items: center; gap: 12px; width: 100%; text-align: start; border-radius: 12px; padding: 11px 12px; color: var(--text-2); font-size: 0.9375rem; }
 .side-nav button:hover { background: var(--surface-2); color: var(--text); }
 .side-nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
