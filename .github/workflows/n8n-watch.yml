@@ -5,8 +5,9 @@ name: n8n watch
 # Needs repository secrets (Settings > Secrets and variables > Actions):
 #   WHATSAPP_PHONE   your WhatsApp number with country code, e.g. +2010xxxxxxxx
 #   WHATSAPP_APIKEY  the key CallMeBot sends you after activation
-# Optional backup channel (used too if set):
-#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# Telegram (used too if set):
+#   TELEGRAM_BOT_TOKEN  from @BotFather. Press Start on the bot once; the chat
+#                       is found by itself (TELEGRAM_CHAT_ID is optional).
 # Run it by hand (Actions > n8n watch > Run workflow) with "test" ticked to get a test message.
 
 on:
@@ -55,6 +56,24 @@ jobs:
           prev=$(cat .n8n-watch/state 2>/dev/null || echo up)
           since=$(cat .n8n-watch/since 2>/dev/null || date -u +%s)
 
+          changed=false
+
+          # Telegram: if no chat id is saved yet, find it from the last message
+          # someone sent the bot (send the bot /start once), then remember it.
+          chat="$TELEGRAM_CHAT_ID"
+          if [ -z "$chat" ]; then chat=$(cat .n8n-watch/chat 2>/dev/null || true); fi
+          new_chat=false
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -z "$chat" ]; then
+            chat=$(curl -sS -m 30 "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates" \
+              | jq -r '[.result[]? | (.message // .edited_message // .my_chat_member // .channel_post) | .chat.id? // empty] | last // empty' 2>/dev/null) || true
+            if [ -n "$chat" ]; then
+              echo "$chat" > .n8n-watch/chat; new_chat=true; changed=true
+              echo "Found the Telegram chat."
+            else
+              echo "::warning::Telegram bot has no chat yet. Open the bot in Telegram and press Start."
+            fi
+          fi
+
           cairo() { TZ=Africa/Cairo date -d "@$1" '+%a %d %b, %I:%M %p'; }
 
           send() {
@@ -68,9 +87,9 @@ jobs:
               echo "WhatsApp answer: $code $(head -c 300 wa.txt 2>/dev/null | tr -d '\n')"
               [ "$code" = 200 ] && sent=1
             fi
-            if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$chat" ]; then
               code=$(curl -sS -m 30 -o tg.txt -w '%{http_code}' "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-                --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" --data-urlencode "text=$text") || true
+                --data-urlencode "chat_id=$chat" --data-urlencode "text=$text") || true
               code=${code:-000}
               echo "Telegram answer: $code"
               [ "$code" = 200 ] && sent=1
@@ -92,11 +111,10 @@ jobs:
           now=$(date -u +%s)
           echo "Before: $prev  Now: $now_state"
 
-          if [ "$TEST" = "true" ]; then
+          if [ "$TEST" = "true" ] || [ "$new_chat" = true ]; then
             send "✅ Static OS test: n8n watch is working. n8n is ${now_state^^} right now ($(cairo $now) Cairo time)."
           fi
 
-          changed=false
           if [ "$prev" = up ] && [ "$now_state" = down ]; then
             send "🔴 Static OS: n8n server is OFFLINE since about $(cairo $now) Cairo time. Posters, scheduling and website sync are paused. Check the Dell PC (power, internet, Docker, Tailscale)."
             since=$now; changed=true
