@@ -116,6 +116,8 @@ export type Post = {
   takeDownNote?: string
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
+  /** App only: a missing Price before the person chose to ignore, for these products (category|name per item). Empty: shown again. */
+  priceIgnored?: string
   /** App only: when the person last asked for a redo, so a retry that fails again can be told apart from one still running. */
   retriedAt?: number
   /** Engine only: competitor prices for this offer. */

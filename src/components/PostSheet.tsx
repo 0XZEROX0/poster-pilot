@@ -10,6 +10,7 @@ import { ResultsBox } from './Results'
 import { PhotoPicker } from './PhotoPicker'
 import { Poster } from './Poster'
 import { ProductSearch } from './ProductSearch'
+import { ignorePrice, mayIgnorePrice, unignorePrice } from './PriceCheck'
 import { StageChip } from './PostRow'
 import { STORIES_ON, StoryBox } from './StoryBox'
 import { Sheet } from './Sheet'
@@ -248,6 +249,12 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               <p>{problem.advice}</p>
             </div>
           )}
+          {prices.ignored && !itemsChanged && (
+            <p className="hint">
+              {t('No Price before, ignored.')}{' '}
+              {mayIgnorePrice() && <button type="button" className="link" onClick={() => unignorePrice(post)}>{t('Show the warning again')}</button>}
+            </p>
+          )}
           {prices.missing && (
             <div className="alert" role="status">
               <b><Icon name="fix" size={18} />{t('Price before is missing')}</b>
@@ -275,6 +282,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
                   {/[1-9]/.test(listBefore) && <button type="button" className="link" onClick={() => set({ priceBefore: listBefore })}>{t('Use the list price')} {formatPrice(listBefore)} EGP</button>}
                 </p>
               )}
+              {mayIgnorePrice() && !itemsChanged && <button type="button" className="link price-ignore" onClick={() => ignorePrice(post)}><Icon name="close" size={16} />{t('Ignore: this post is fine without a Price before')}</button>}
             </div>
           )}
           {!posted && post.variants && (

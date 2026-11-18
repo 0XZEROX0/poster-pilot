@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs'
 import { describe, expect, it } from 'vitest'
-import { closestProduct, listPriceOf, priceIssues } from '../src/data/logic'
+import { closestProduct, listPriceOf, postsMissingPrice, priceIssues, priceKey } from '../src/data/logic'
 import type { Product } from '../src/data/types'
 
 // The offer editor shows Price before from the price list. It must be the same value the engine writes (lib.js pricesFrom),
@@ -63,5 +63,20 @@ describe('missing Price before', () => {
   it('a priced post is fine, an empty price is not', () => {
     expect(priceIssues(post([{ category: 'MB', name: 'ASUS TUF GAMING X870-PLUS WIFI' }], '16,000'), list).missing).toBe(false)
     expect(priceIssues(post([{ category: 'MB', name: 'ASUS TUF GAMING X870-PLUS WIFI' }], ''), list)).toEqual({ missing: true, items: [] })
+  })
+})
+
+describe('ignoring a missing Price before', () => {
+  const list: Product[] = [{ category: 'MB', name: 'ASUS TUF GAMING X870-PLUS WIFI', price: '16,000', company: 'Asus' }]
+  const base = {
+    id: 'x', order: 1, items: [{ category: 'MB', name: 'Old name', manualPhoto: '', nextPhoto: false }], company: '', priceBefore: 'Check item', priceAfter: '', style: '', details: '',
+    posterUrl: '', photoStatus: '', feedback: '', postDate: '', postTime: '', scheduledFor: '', caption: '', captionStyle: '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: 0, offer: '',
+  } as import('../src/data/types').Post
+  it('hides it for the same products only', () => {
+    const ignored = { ...base, priceIgnored: priceKey(base) }
+    expect(priceIssues(ignored, list)).toMatchObject({ missing: false, ignored: true })
+    expect(postsMissingPrice([base, ignored], list).map((p) => p.priceIgnored ?? '')).toEqual([''])
+    const changed = { ...ignored, items: [{ category: 'MB', name: 'Another', manualPhoto: '', nextPhoto: false }] }
+    expect(priceIssues(changed, list).missing).toBe(true)
   })
 })

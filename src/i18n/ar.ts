@@ -1421,4 +1421,10 @@ export const ar: Record<string, string> = {
   "New · Friday off": "جديد · إجازة الجمعة",
   "Everyone keeps their own weekly days off. Days before the start date keep their old shifts.": "كل شخص يحتفظ بإجازته الأسبوعية. الأيام قبل تاريخ البداية تبقى على ورديّاتها القديمة.",
   "Other hours…": "ساعات أخرى…",
+  'Ignored. Undo it from the post.': 'تم التجاهل. يمكنك التراجع من داخل البوست.',
+  'The warning shows again': 'سيظهر التنبيه مرة أخرى',
+  'Fine without a Price before': 'لا مشكلة بدون سعر قبل',
+  'Ignore: this post is fine without a Price before': 'تجاهل: هذا البوست لا يحتاج سعر قبل',
+  'No Price before, ignored.': 'بدون سعر قبل، تم تجاهله.',
+  'Show the warning again': 'أظهر التنبيه مرة أخرى',
 }
