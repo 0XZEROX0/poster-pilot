@@ -1,5 +1,5 @@
 import { describe as group, expect, it } from 'vitest'
-import { inWindow, promptFor, addMonths, cairoMs, checkSpot, clockOf, daysIn, devicesOf, distance, judgeDay, judgeMonth, metersPerLng, openDay, shiftMinutes, shiftOn, templateDays, templateOf, withDate, withPlan, type Month, type Person } from '../src/data/hr'
+import { inWindow, promptFor, addMonths, cairoMs, checkSpot, clockOf, daysIn, devicesOf, distance, judgeDay, judgeMonth, metersPerLng, openDay, shiftMinutes, shiftOn, giveTemplate, templateOf, weeklyOff, withWeeklyOff, withDate, withPlan, type Month, type Person } from '../src/data/hr'
 
 const week = (s: string, e: string, off: number[] = [5]) => Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), off.includes(d) ? null : { s, e }]))
 const shop = { name: 'Shop', lat: 30.0626, lng: 31.3363, radius: 100, kx: metersPerLng(30.0626) }
@@ -137,20 +137,31 @@ group('HR clock hours and the ask on opening', () => {
   })
 })
 
-group('HR shift templates', () => {
-  const morning = { id: 'm', name: 'Morning', s: '12:00', e: '20:00', off: [5] }
-  const evening = { id: 'e', name: 'Evening', s: '14:00', e: '22:00', off: [5] }
-  it('turns a template into a week with its days off', () => {
-    const days = templateDays(morning)
-    expect(days['5']).toBeNull()
-    expect(days['3']).toEqual({ s: '12:00', e: '20:00' })
+group('HR shift templates and days off', () => {
+  const morning = { id: 'm', name: 'Morning', s: '12:00', e: '20:00' }
+  const evening = { id: 'e', name: 'Evening', s: '14:00', e: '22:00' }
+  const fresh: Person = { name: 'A', plans: [], dates: {} }
+  it('gives a template with Friday off to someone new, and keeps the days off of someone who has them', () => {
+    const a = giveTemplate(fresh, morning, '2026-11-01')
+    expect(weeklyOff(a, '2026-11-18')).toEqual([5])
+    const b = giveTemplate({ name: 'B', plans: [{ from: '2026-01-01', days: week('11:00', '19:00', [2, 6]) }], dates: {} }, evening, '2026-11-20')
+    expect(weeklyOff(b, '2026-11-21')).toEqual([2, 6])
+    expect(shiftOn(b, '2026-11-22')).toEqual({ s: '14:00', e: '22:00' })
+    expect(shiftOn(b, '2026-11-18')).toEqual({ s: '11:00', e: '19:00' })
   })
-  it('knows which template a person is on, and when they switch', () => {
-    const p = withPlan(withPlan({ name: 'A', plans: [], dates: {} }, { from: '2026-11-01', days: templateDays(morning) }), { from: '2026-11-20', days: templateDays(evening) })
+  it('knows which template a person is on, whatever their days off', () => {
+    const p = giveTemplate(giveTemplate(fresh, morning, '2026-11-01'), evening, '2026-11-20')
     expect(templateOf(p, [morning, evening], '2026-11-18')?.name).toBe('Morning')
     expect(templateOf(p, [morning, evening], '2026-11-21')?.name).toBe('Evening')
-    expect(shiftOn(p, '2026-11-22')).toEqual({ s: '14:00', e: '22:00' })
+    expect(templateOf(withWeeklyOff(p, '2026-11-25', [0, 1]), [morning, evening], '2026-11-26')?.name).toBe('Evening')
     expect(templateOf(p, [morning], '2026-11-21')).toBeUndefined()
     expect(templateOf(undefined, [morning], '2026-11-21')).toBeUndefined()
+  })
+  it('changes the weekly days off and keeps the hours', () => {
+    const p = withWeeklyOff(giveTemplate(fresh, morning, '2026-11-01'), '2026-11-22', [6])
+    expect(weeklyOff(p, '2026-11-23')).toEqual([6])
+    expect(shiftOn(p, '2026-11-27')).toEqual({ s: '12:00', e: '20:00' }) // Friday now works, same hours
+    expect(shiftOn(p, '2026-11-28')).toBeNull() // Saturday off
+    expect(shiftOn(p, '2026-11-20')).toBeNull() // before the change, Friday was off
   })
 })
