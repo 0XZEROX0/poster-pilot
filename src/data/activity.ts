@@ -70,6 +70,8 @@ export const ACTIVITY_TEXT: Record<string, string> = {
   'hr.penalty_removed': 'Penalty taken back',
   'website.sent': 'Sent to the website',
   'website.error': 'Website refused a change',
+  'health.problem': 'Needs a person (self-heal)',
+  'health.fixed': 'Fixed again (self-heal)',
   'price.edit': 'Price list changed',
   'price.add': 'Product added',
   'price.remove': 'Product deleted',

@@ -1,0 +1,6 @@
+[Unit]
+Description=Static OS server watchdog (n8n, disk, database log)
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/static-watchdog.sh
