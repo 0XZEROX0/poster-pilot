@@ -27,7 +27,7 @@ export type Person = { name: string; plans: Plan[]; dates: Record<string, Shift>
 export type Shifts = Record<string, Person>
 export type Punch = { lat: number; lng: number; acc: number; place: number; dev: string }
 /** excused: the whole day counts nothing. exLate / exEarly: that late arrival or early leave is excused, with the reason in `why`. */
-export type Day = { in?: number; out?: number; inP?: Punch; outP?: Punch; excused?: boolean; exLate?: boolean; exEarly?: boolean; why?: string; note?: string; fixBy?: string }
+export type Day = { in?: number; out?: number; inP?: Punch; outP?: Punch; excused?: boolean; exLate?: boolean; exEarly?: boolean; why?: string; leaveWhy?: string; leaveNo?: boolean; note?: string; fixBy?: string }
 /** A ready-made shift: a name and hours only. Days off belong to each person (their weekly days off, and single days off). */
 export type Template = { id: string; name: string; s: string; e: string }
 /** The plan in force on a date. */
@@ -116,7 +116,14 @@ export function inWindow(from: string, to: string, time: string): boolean {
 }
 export const clockOpen = (s: HrSettings, kind: 'in' | 'out', time: string) => (kind === 'in' ? inWindow(s.inFrom, s.inTo, time) : inWindow(s.outFrom, s.outTo, time))
 /** "10:00 – 12:00", "from 10:00", "until 12:00" */
-export const windowText = (from: string, to: string) => (from && to ? `${from} – ${to}` : from ? `≥ ${from}` : to ? `≤ ${to}` : '')
+/** 'HH:MM' (24 hours) shown on a 12-hour clock: '14:05' → '2:05 PM'. */
+export function h12(hhmm: string): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm)
+  if (!m) return hhmm
+  const h = Number(m[1]) % 24
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`
+}
+export const windowText = (from: string, to: string) => (from && to ? `${h12(from)} – ${h12(to)}` : from ? `≥ ${h12(from)}` : to ? `≤ ${h12(to)}` : '')
 
 /** What to ask when the app opens: clock in (shift today, not in yet, clock-in hours) or out (still in, clock-out hours). */
 export function promptFor(s: HrSettings, person: Person | undefined, m: Month | undefined, now = Date.now()): 'in' | 'out' | null {
@@ -144,6 +151,8 @@ export function cairoMs(date: string, time: string): number {
 }
 /** 'HH:MM' Cairo time of a moment. */
 export const clockOf = (ms: number) => cairoNow(new Date(ms)).time
+/** A moment as Cairo time on a 12-hour clock, for showing. */
+export const clock12 = (ms: number) => h12(clockOf(ms))
 export const dateOf = (ms: number) => cairoNow(new Date(ms)).date
 export const weekdayOf = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay()
 export const monthOf = (date: string) => date.slice(0, 7)
@@ -309,10 +318,33 @@ export function toTemplates(d: DocumentData | undefined): Template[] {
 export function toMonth(id: string, d: DocumentData): Month {
   const days: Record<string, Day> = {}
   for (const [k, v] of Object.entries((d.days ?? {}) as Record<string, Record<string, unknown>>)) {
-    days[k] = { in: ms(v.in), out: ms(v.out), inP: asPunch(v.inP), outP: asPunch(v.outP), excused: v.excused === true, exLate: v.exLate === true, exEarly: v.exEarly === true, why: str(v.why, 500) || undefined, note: str(v.note, 500) || undefined, fixBy: str(v.fixBy, 200) || undefined }
+    days[k] = { in: ms(v.in), out: ms(v.out), inP: asPunch(v.inP), outP: asPunch(v.outP), excused: v.excused === true, exLate: v.exLate === true, exEarly: v.exEarly === true, why: str(v.why, 500) || undefined, leaveWhy: str(v.leaveWhy, 500) || undefined, leaveNo: v.leaveNo === true, note: str(v.note, 500) || undefined, fixBy: str(v.fixBy, 200) || undefined }
   }
   const pens = Array.isArray(d.pens) ? d.pens.map((p: Record<string, unknown>) => ({ at: num(p.at), by: str(p.by, 128), byName: str(p.byName, 200), date: str(p.date, 10), amount: num(p.amount), unit: (UNITS as readonly string[]).includes(str(p.unit)) ? (p.unit as Unit) : 'EGP', reason: str(p.reason, 500) })) : []
   return { id, uid: str(d.uid, 128), month: str(d.month, 7), days, pens }
+}
+
+/** Minutes before the end of the shift of `date` (0 when the shift is over or there is none). */
+export function earlyBy(p: Person | undefined, date: string, now = Date.now()): number {
+  const sh = shiftOn(p, date)
+  if (!sh) return 0
+  const end = cairoMs(date, sh.s) + shiftMinutes(sh) * 60_000
+  return Math.max(0, Math.ceil((end - now) / 60_000))
+}
+
+/** An early leave HR has not answered yet: the person typed a reason, and it is neither accepted (exEarly) nor declined (leaveNo). */
+export const leavePending = (d: Day | undefined) => Boolean(d?.leaveWhy && !d.exEarly && !d.leaveNo && !d.excused)
+/** Every early leave waiting for HR in these months, oldest first. */
+export function leaveRequests(months: Month[], shifts: Shifts, grace: number): { uid: string; name: string; date: string; r: DayResult }[] {
+  const out: { uid: string; name: string; date: string; r: DayResult }[] = []
+  for (const m of months) {
+    for (const [dd, d] of Object.entries(m.days)) {
+      if (!leavePending(d)) continue
+      const date = `${m.month}-${dd}`
+      out.push({ uid: m.uid, name: shifts[m.uid]?.name ?? m.uid, date, r: judgeDay(date, shiftOn(shifts[m.uid], date), d, grace) })
+    }
+  }
+  return out.sort((a, b) => (a.date < b.date ? -1 : 1))
 }
 
 // ---------- Writing ----------
@@ -325,7 +357,7 @@ function me(): Me {
 }
 export const myUid = () => me().uid
 
-export type DayFix = { in?: number | null; out?: number | null; excused?: boolean; exLate?: boolean; exEarly?: boolean; why?: string; note?: string }
+export type DayFix = { in?: number | null; out?: number | null; excused?: boolean; exLate?: boolean; exEarly?: boolean; leaveNo?: boolean; why?: string; note?: string }
 
 export interface HrBackend {
   loadSettings(): Promise<HrSettings>
@@ -341,7 +373,8 @@ export interface HrBackend {
   /** The people a manager can give shifts to. */
   loadPeople(): Promise<{ uid: string; name: string }[]>
   clockIn(date: string, punch: Punch): Promise<void>
-  clockOut(date: string, punch: Punch): Promise<void>
+  /** leaveWhy: the reason the person typed for leaving before the clock-out hours or their shift's end. */
+  clockOut(date: string, punch: Punch, leaveWhy?: string): Promise<void>
   fixDay(uid: string, date: string, fix: DayFix): Promise<void>
   addPenalty(uid: string, month: string, p: Omit<Penalty, 'at' | 'by' | 'byName'>): Promise<void>
   removePenalty(m: Month, index: number): Promise<void>
@@ -351,11 +384,11 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
   const settingsRef = doc(fs, 'hr', 'settings')
   const shiftsRef = doc(fs, 'hr', 'shifts')
   const col = collection(fs, 'attendance')
-  const punch = (date: string, kind: 'in' | 'out', p: Punch) => {
+  const punch = (date: string, kind: 'in' | 'out', p: Punch, leaveWhy = '') => {
     const m = me()
     const month = monthOf(date)
     const dd = date.slice(8, 10)
-    const field = kind === 'in' ? { in: serverTimestamp(), inP: p } : { out: serverTimestamp(), outP: p }
+    const field = kind === 'in' ? { in: serverTimestamp(), inP: p } : { out: serverTimestamp(), outP: p, ...(leaveWhy.trim() ? { leaveWhy: leaveWhy.trim().slice(0, 500) } : {}) }
     return setDoc(doc(col, monthId(m.uid, month)), { uid: m.uid, month, last: dd, days: { [dd]: field } }, { merge: true })
   }
   return {
@@ -386,7 +419,7 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
       return snap.docs.map((x) => ({ uid: x.id, name: str(x.data().name, 200) || str(x.data().email, 200) }))
     },
     clockIn: (date, p) => punch(date, 'in', p),
-    clockOut: (date, p) => punch(date, 'out', p),
+    clockOut: (date, p, why) => punch(date, 'out', p, why),
     async fixDay(uid, date, fix) {
       const month = monthOf(date)
       const dd = date.slice(8, 10)
@@ -397,6 +430,7 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
       if (fix.excused !== undefined) patch[`days.${dd}.excused`] = fix.excused
       if (fix.exLate !== undefined) patch[`days.${dd}.exLate`] = fix.exLate
       if (fix.exEarly !== undefined) patch[`days.${dd}.exEarly`] = fix.exEarly
+      if (fix.leaveNo !== undefined) patch[`days.${dd}.leaveNo`] = fix.leaveNo
       if (fix.why !== undefined) patch[`days.${dd}.why`] = fix.why.trim().slice(0, 500)
       if (fix.note !== undefined) patch[`days.${dd}.note`] = fix.note.trim().slice(0, 500)
       const ref = doc(col, monthId(uid, month))
@@ -472,6 +506,10 @@ function demoData(): Local {
   const mona = months.get(`mona_${monthOf(today)}`)
   const left = mona && Object.entries(mona.days).find(([dd, d]) => { const sh = shiftOn(shifts.mona, `${monthOf(today)}-${dd}`); return sh && d.out && d.out < cairoMs(`${monthOf(today)}-${dd}`, sh.e) - 10 * 60_000 })
   if (left) Object.assign(left[1], { exEarly: true, why: 'Family emergency, called before leaving.', fixBy: 'You' })
+  // One early leave waiting for HR.
+  const ahmed = months.get(`ahmed_${monthOf(today)}`)
+  const yday = ahmed?.days[addDays(today, -1).slice(8, 10)]
+  if (yday?.out) { yday.out -= 95 * 60_000; yday.leaveWhy = 'My son is sick, I have to take him to the doctor.' }
   // Today: you have not clocked in yet, so the button can be tried.
   const mine = months.get(`demo-you_${monthOf(today)}`)
   if (mine) delete mine.days[today.slice(8, 10)]
@@ -518,7 +556,7 @@ function localHr(): HrBackend {
     watchAll: (month, on) => watch(() => load().months.filter((x) => x.month === month), on),
     async loadPeople() { return Object.entries(load().shifts).map(([uid, p]) => ({ uid, name: p.name })).concat([{ uid: 'sara', name: 'Sara Nabil' }]) },
     async clockIn(date, p) { changeMonth('demo-you', monthOf(date), (m) => ({ ...m, days: { ...m.days, [date.slice(8, 10)]: { in: Date.now(), inP: p } } })) },
-    async clockOut(date, p) { changeMonth('demo-you', monthOf(date), (m) => ({ ...m, days: { ...m.days, [date.slice(8, 10)]: { ...m.days[date.slice(8, 10)], out: Date.now(), outP: p } } })) },
+    async clockOut(date, p, why) { changeMonth('demo-you', monthOf(date), (m) => ({ ...m, days: { ...m.days, [date.slice(8, 10)]: { ...m.days[date.slice(8, 10)], out: Date.now(), outP: p, ...(why?.trim() ? { leaveWhy: why.trim() } : {}) } } })) },
     async fixDay(uid, date, fix) {
       changeMonth(uid, monthOf(date), (m) => {
         const dd = date.slice(8, 10)
@@ -528,6 +566,7 @@ function localHr(): HrBackend {
         if (fix.excused !== undefined) d.excused = fix.excused
         if (fix.exLate !== undefined) d.exLate = fix.exLate
         if (fix.exEarly !== undefined) d.exEarly = fix.exEarly
+        if (fix.leaveNo !== undefined) d.leaveNo = fix.leaveNo
         if (fix.why !== undefined) d.why = fix.why
         if (fix.note !== undefined) d.note = fix.note
         return { ...m, days: { ...m.days, [dd]: d } }

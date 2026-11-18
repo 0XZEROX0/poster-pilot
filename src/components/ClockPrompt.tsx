@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { cairoNow } from '../data/logic'
-import { clockOf, hr, myUid, openDay, promptFor, shiftOn, type HrSettings, type Month, type Shifts } from '../data/hr'
+import { clock12, h12, hr, myUid, openDay, promptFor, shiftOn, type HrSettings, type Month, type Shifts } from '../data/hr'
 import { t, tn } from '../i18n'
-import { punchNow } from './HrView'
+import { LeaveWhy, punchNow, type PunchResult } from './HrView'
 import { Icon } from './ui'
 
 const KEY = 'posterpilot.clockPrompt'
@@ -19,7 +19,8 @@ export function ClockPrompt() {
   const [shifts, setShifts] = useState<Shifts | null>(null)
   const [mine, setMine] = useState<Month | undefined | null>(null)
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<{ bad: boolean; text: string } | null>(null)
+  const [msg, setMsg] = useState<PunchResult | null>(null)
+  const [why, setWhy] = useState('')
   const [gone, setGone] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(id) }, [])
@@ -43,7 +44,7 @@ export function ClockPrompt() {
 
   async function go() {
     setBusy(true)
-    const r = await punchNow(settings!, openDay(mine ?? undefined, today), today)
+    const r = await punchNow(settings!, openDay(mine ?? undefined, today), today, person, why)
     setMsg(r)
     setBusy(false)
     if (!r.bad) setTimeout(() => { setGone(true); setMsg(null) }, 2500)
@@ -56,11 +57,12 @@ export function ClockPrompt() {
         <span className={`clock-ask-icon${kind === 'out' ? ' out' : ''}`}><Icon name="clock" size={30} /></span>
         <h2>{kind === 'out' ? t('Leaving? Clock out first') : t('Good to see you. Clock in?')}</h2>
         <p className="muted" dir="auto">
-          {shift ? tn('Your shift today is %s.', { s: `${shift.s} – ${shift.e}` }) : null}
-          {kind === 'out' && day?.in ? ` ${tn('You clocked in at %t.', { t: clockOf(day.in) })}` : null}
+          {shift ? tn('Your shift today is %s.', { s: `${h12(shift.s)} – ${h12(shift.e)}` }) : null}
+          {kind === 'out' && day?.in ? ` ${tn('You clocked in at %t.', { t: clock12(day.in) })}` : null}
         </p>
         {msg && <p className={msg.bad ? 'banner banner-bad' : 'banner'}>{msg.text}</p>}
-        {(!msg || msg.bad) && (
+        {msg?.needWhy && <LeaveWhy why={why} setWhy={setWhy} busy={busy} onGo={go} />}
+        {(!msg || (msg.bad && !msg.needWhy)) && (
           <button className={`hr-punch${kind === 'out' ? ' out' : ''}`} onClick={go} disabled={busy}>
             <Icon name="clock" size={24} />{busy ? t('Checking your location…') : t(kind === 'out' ? 'Clock out' : 'Clock in')}
           </button>

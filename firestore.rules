@@ -674,7 +674,9 @@ service cloud.firestore {
     }
     function clockOutOk(month, dd, was, day) {
       return 'in' in was && !('out' in was)
-        && day.diff(was).affectedKeys().hasOnly(['out', 'outP'])
+        && day.diff(was).affectedKeys().hasOnly(['out', 'outP', 'leaveWhy'])
+        // Leaving early: the reason the person typed.
+        && (!('leaveWhy' in day) || (day.leaveWhy is string && day.leaveWhy.size() <= 500))
         && day.out == request.time
         // A night shift ends the next morning.
         && request.time < dayStart(month, dd) + duration.value(40, 'h')
