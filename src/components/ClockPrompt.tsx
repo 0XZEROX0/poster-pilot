@@ -44,7 +44,7 @@ export function ClockPrompt() {
 
   async function go() {
     setBusy(true)
-    const r = await punchNow(settings!, openDay(mine ?? undefined, today), today, person, why)
+    const r = await punchNow(settings!, openDay(mine ?? undefined, today, person), today, person, why)
     setMsg(r)
     setBusy(false)
     if (!r.bad) setTimeout(() => { setGone(true); setMsg(null) }, 2500)
