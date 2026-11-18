@@ -23,15 +23,16 @@ export const ACTIVITY_ACTS = {
   settings: ['templates.saved', 'engine.run'],
   tickets: ['ticket.opened', 'ticket.step', 'ticket.edited', 'ticket.deleted', 'ticket.step_removed'],
   orders: ['order.added', 'order.edited', 'order.step', 'order.step_removed', 'order.deleted'],
+  hr: ['hr.settings', 'hr.shifts', 'hr.fixed', 'hr.penalty', 'hr.penalty_removed'],
 } as const
 type AppWrites = typeof ACTIVITY_ACTS
 export type WriteApp = keyof AppWrites
 
 /** The apps the Activity page filters by. Engine and website lines carry their own app. */
-export const APPS = ['posters', 'prices', 'builder', 'orders', 'tickets', 'people', 'settings', 'website', 'engine'] as const
+export const APPS = ['posters', 'prices', 'builder', 'orders', 'tickets', 'hr', 'people', 'settings', 'website', 'engine'] as const
 export type ActivityApp = (typeof APPS)[number]
 export const APP_LABEL: Record<ActivityApp, string> = {
-  posters: 'Offers and posters', prices: 'Prices', builder: 'Builder', orders: 'Orders', tickets: 'Maintenance', people: 'People', settings: 'Settings', website: 'Website', engine: 'Engine',
+  posters: 'Offers and posters', prices: 'Prices', builder: 'Builder', orders: 'Orders', tickets: 'Maintenance', hr: 'HR', people: 'People', settings: 'Settings', website: 'Website', engine: 'Engine',
 }
 
 /** English text for each kind of line that is not a post's history line (those are in history.ts). */
@@ -62,6 +63,11 @@ export const ACTIVITY_TEXT: Record<string, string> = {
   'order.step_removed': 'Order step taken out',
   'order.deleted': 'Order removed from the app',
   'order.website': 'Website order changed',
+  'hr.settings': 'Shop location and HR settings changed',
+  'hr.shifts': 'Shifts changed',
+  'hr.fixed': 'Attendance fixed by hand',
+  'hr.penalty': 'Penalty given',
+  'hr.penalty_removed': 'Penalty taken back',
   'website.sent': 'Sent to the website',
   'website.error': 'Website refused a change',
   'price.edit': 'Price list changed',

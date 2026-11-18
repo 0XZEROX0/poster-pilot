@@ -19,6 +19,7 @@ const COLORS: Record<string, string> = {
   brainstorm: '#e7a21a',
   posted: '#1597c9',
   database: '#56657f',
+  hr: '#0d8a5f',
   activity: '#4f55d6',
   settings: '#6b7280',
 }
@@ -27,7 +28,7 @@ const COLORS: Record<string, string> = {
 export const APP_GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Shop', ids: ['prices', 'builder', 'orders', 'maintenance'] },
   { title: 'Posters', ids: ['dashboard', 'offers', 'review', 'fix', 'calendar', 'brainstorm', 'posted', 'database'] },
-  { title: 'Team', ids: ['activity'] },
+  { title: 'Team', ids: ['hr', 'activity'] },
 ]
 
 /** An app's icon: a coloured rounded square with the app's line icon in white. */

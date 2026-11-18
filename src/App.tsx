@@ -22,6 +22,7 @@ import { DatabaseView } from './components/DatabaseView'
 import { ActivityView } from './components/ActivityView'
 import { MaintenanceView } from './components/MaintenanceView'
 import { OrdersView } from './components/OrdersView'
+import { HrView } from './components/HrView'
 import { allowed, isOwner, myId, ownOffer, postWork, seesPage, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, tn, useLang } from './i18n'
@@ -46,6 +47,7 @@ const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'brainstorm', label: 'Brainstorm', icon: 'idea' },
   { id: 'posted', label: 'Posted', icon: 'posted' },
   { id: 'database', label: 'Database', icon: 'database' },
+  { id: 'hr', label: 'HR', icon: 'badge' },
   { id: 'activity', label: 'Activity', icon: 'clock' },
 ]
 
@@ -55,7 +57,7 @@ type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'setting
 const tabFromHash = (): Tab => ALL_TABS.find((x) => location.hash === `#/${x.id}` || location.hash.startsWith(`#/${x.id}/`))?.id ?? 'home'
 
 /** Sidebar headings: the shop tools, then everything about posters. */
-const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' || id === 'maintenance' || id === 'orders' ? 'Shop' : id === 'activity' ? 'Team' : 'Posters')
+const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' || id === 'maintenance' || id === 'orders' ? 'Shop' : id === 'activity' || id === 'hr' ? 'Team' : 'Posters')
 
 /** The engine is "quiet" when it has not written its sign of life for this long. */
 // The engine's timed run (which writes the heartbeat) is now hourly; the app's signals start everything else.
@@ -69,7 +71,7 @@ export default function App() {
   const [wanted, setTab] = useState<Tab>(tabFromHash)
   // The app grid (default) or the older sidebar layout, chosen in Settings.
   const solo = useLayout() === 'grid'
-  const TABS = ALL_TABS.filter((x) => (x.id === 'dashboard' ? solo : true)).filter((x) => x.id === 'home' || x.id === 'dashboard' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || x.id === 'orders' || seesPage(x.id)).filter((x) => (x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'orders' ? allowed('orders') || allowed('orders.edit') || allowed('orders.change') || allowed('orders.delete') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
+  const TABS = ALL_TABS.filter((x) => (x.id === 'dashboard' ? solo : true)).filter((x) => x.id === 'home' || x.id === 'dashboard' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || x.id === 'orders' || x.id === 'hr' || seesPage(x.id)).filter((x) => (x.id === 'hr' ? allowed('hr.clock') || allowed('hr') : x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'orders' ? allowed('orders') || allowed('orders.edit') || allowed('orders.change') || allowed('orders.delete') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -197,6 +199,8 @@ export default function App() {
     <MaintenanceView />
   ) : tab === 'orders' ? (
     <OrdersView />
+  ) : tab === 'hr' ? (
+    <HrView />
   ) : tab === 'brainstorm' ? (
     <BrainstormView data={data} onOpen={open} />
   ) : tab === 'database' ? (

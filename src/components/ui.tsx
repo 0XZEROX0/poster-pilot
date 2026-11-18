@@ -50,6 +50,7 @@ const paths: Record<string, string> = {
   text: 'M5 6h14M5 11h14M5 16h9',
   video: 'M3 6h12v12H3zM15 10.5l6-3.5v10l-6-3.5',
   play: 'M8 5.5v13l10.5-6.5z',
+  badge: 'M4 6h16v14H4zM9 6V3.5h6V6M9.5 13.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6.5 17.5a3 3 0 0 1 6 0M14.5 11h3.5M14.5 14.5h2.5',
 }
 
 export function Icon({ name, size = 22 }: { name: keyof typeof paths | string; size?: number }) {

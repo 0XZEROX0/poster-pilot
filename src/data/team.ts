@@ -12,7 +12,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
@@ -38,6 +38,8 @@ export const PERM_LABEL: Record<Perm, [string, string]> = {
   'orders.edit': ['Handle website orders', 'Confirm, complete and cancel orders (the website order changes too), set the pickup or delivery date and time, the agreed price and payments, and add steps to the log. Changing what an order holds needs Change order details, removing it needs Delete orders. Only the owner can take a step out.'],
   'orders.change': ['Change order details', 'Change what an order holds after it is placed: the items and quantities (for example when the customer adds more at pickup), pickup or delivery, the delivery fee, the name, phone and address. Each change is written in the order log. A website order changes in the app only; the order on the website stays as it was.'],
   'orders.delete': ['Delete orders', 'Remove an order from the app for good (a website order stays on the website). The owner can always do it.'],
+  'hr.clock': ['Clock in and out', "Open HR to clock in and out at the shop (only from inside the shop's location), and see their own shifts, late minutes and penalties."],
+  hr: ['Manage HR', "Set the shop location, everyone's shifts and days off, fix clock-in times, give penalties, and see everyone's attendance and the monthly report."],
   'quotes.edit': ['Edit live quotes', "Change someone's quote while they build it (from Live quotes): parts, quantities, build discount and extra discount. They see each change at once, with your name."],
 }
 /** 'owner', or the id of a role in `roles`. */
@@ -62,7 +64,7 @@ export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
   { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'social.delete' && p !== 'orders' && p !== 'orders.edit' && p !== 'orders.change' && p !== 'orders.delete'), pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'social.delete' && p !== 'orders' && p !== 'orders.edit' && p !== 'orders.change' && p !== 'orders.delete' && p !== 'hr'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }
@@ -87,8 +89,9 @@ export function newCode(): string {
 
 const out = (access: Access): Standing => ({ access, role: '', roleName: '', perms: [], pages: [] })
 /** Permissions that came after roles were first saved. A role saved before one existed (no `v`, or a lower one) keeps seeing it, so nothing disappears. */
-const ROLE_VERSION = 2
-const ADDED_IN: [number, Perm][] = [[2, 'prices.web']]
+const ROLE_VERSION = 3
+// Clocking in came later and is for everyone: roles saved before it keep being able to clock in (the rules do the same).
+const ADDED_IN: [number, Perm][] = [[2, 'prices.web'], [3, 'hr.clock']]
 const asRole = (id: string, data: { name?: string; perms?: string[]; pages?: string[]; v?: number } | undefined): RoleDef | null => {
   if (!data) return null
   const v = typeof data.v === 'number' ? data.v : 1
