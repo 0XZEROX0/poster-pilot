@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -31,7 +31,7 @@ service cloud.firestore {
       return role == 'owner' ? allPerms()
         : exists(rolePath(role)) ? get(rolePath(role)).data.perms
         : role == 'admin' ? allPerms()
-        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit', 'brainstorm', 'tickets']
+        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit', 'brainstorm', 'tickets', 'hr.clock']
         : [];
     }
     // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
@@ -146,7 +146,8 @@ service cloud.firestore {
 
     match /members/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow list: if isAdmin();
+      // Managing HR needs the list of people, to give them shifts.
+      allow list: if isAdmin() || can('hr');
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['email', 'name', 'role', 'joinedAt'])
         && request.resource.data.email is string
@@ -307,7 +308,8 @@ service cloud.firestore {
           || (d.app == 'tickets' && ((d.act == 'ticket.opened' && can('tickets')) || (d.act in ['ticket.step', 'ticket.edited'] && can('tickets.edit'))
               || (d.act in ['ticket.deleted', 'ticket.step_removed'] && isOwner())))
           || (d.app == 'orders' && ((d.act in ['order.step', 'order.added', 'order.edited'] && can('orders.edit')) || (d.act == 'order.edited' && can('orders.change'))
-              || (d.act == 'order.deleted' && (isOwner() || can('orders.delete'))) || (d.act == 'order.step_removed' && isOwner()))));
+              || (d.act == 'order.deleted' && (isOwner() || can('orders.delete'))) || (d.act == 'order.step_removed' && isOwner())))
+          || (d.app == 'hr' && d.act in ['hr.settings', 'hr.shifts', 'hr.fixed', 'hr.penalty', 'hr.penalty_removed'] && can('hr')));
     }
     match /activity/{id} {
       allow read: if can('activity.view');
@@ -612,6 +614,93 @@ service cloud.firestore {
               && request.resource.data.steps[request.resource.data.steps.size() - 1].by == request.auth.uid)
           || isOwner());
       allow delete: if isOwner() || can('orders.delete');
+    }
+    // HR. hr/settings is where the shop is (places with a radius), how accurate a phone's location must be
+    // (maxAcc, meters) and the grace minutes; hr/shifts holds everyone's shifts. Everyone who clocks in reads
+    // both; only 'Manage HR' changes them.
+    // Clocking in came after roles were first saved: a role saved before it (v < 3) may still clock in.
+    function canClock() {
+      let role = myRole();
+      return isMember() && ('hr.clock' in permsOf(role) || 'hr' in permsOf(role)
+        || (role != 'owner' && exists(rolePath(role)) && get(rolePath(role)).data.get('v', 1) < 3));
+    }
+    match /hr/{id} {
+      allow read: if canClock() || can('hr');
+      allow create, update: if can('hr') && (
+        (id == 'settings'
+          && request.resource.data.keys().hasOnly(['places', 'maxAcc', 'grace'])
+          && request.resource.data.places is list && request.resource.data.places.size() <= 10
+          && request.resource.data.maxAcc is number && request.resource.data.maxAcc >= 10 && request.resource.data.maxAcc <= 2000
+          && request.resource.data.grace is int && request.resource.data.grace >= 0 && request.resource.data.grace <= 180)
+        || (id == 'shifts' && request.resource.data.keys().hasOnly(['people']) && request.resource.data.people is map));
+      allow delete: if false;
+    }
+    // Attendance: attendance/{uid}_{YYYY-MM}, one document per person per month { uid, month, last, days: { DD: day }, pens }.
+    // A person clocks in and out for themselves only: the time must be the server's time, and the place must
+    // be inside one of the shop's places (the same distance the app works out), with the phone's location
+    // accurate enough. A clock-in is written once per day; a clock-out once, after it. The person cannot
+    // change anything else (late minutes are never stored; penalties are only added by 'Manage HR').
+    function hrSettings() {
+      return get(/databases/$(database)/documents/hr/settings).data;
+    }
+    function punchOk(p) {
+      let s = hrSettings();
+      let pl = s.places[p.place];
+      return p.keys().hasOnly(['lat', 'lng', 'acc', 'place', 'dev'])
+        && p.lat is number && p.lng is number && p.acc is number && p.place is int
+        && p.dev is string && p.dev.size() <= 40
+        && p.acc >= 0 && p.acc <= s.maxAcc
+        && math.pow((p.lat - pl.lat) * 111320, 2) + math.pow((p.lng - pl.lng) * pl.kx, 2) <= math.pow(pl.radius, 2);
+    }
+    // Midnight UTC of a day; Cairo's day runs from 2 or 3 hours before it to 21 or 22 hours after it.
+    function dayStart(month, dd) {
+      return timestamp.date(int(month[0:4]), int(month[5:7]), int(dd));
+    }
+    function clockInOk(month, dd, day) {
+      return day.keys().hasOnly(['in', 'inP'])
+        && day['in'] == request.time
+        && request.time >= dayStart(month, dd) - duration.value(3, 'h')
+        && request.time < dayStart(month, dd) + duration.value(22, 'h')
+        && punchOk(day.inP);
+    }
+    function clockOutOk(month, dd, was, day) {
+      return 'in' in was && !('out' in was)
+        && day.diff(was).affectedKeys().hasOnly(['out', 'outP'])
+        && day.out == request.time
+        // A night shift ends the next morning.
+        && request.time < dayStart(month, dd) + duration.value(40, 'h')
+        && punchOk(day.outP);
+    }
+    function ownPunch(id) {
+      let d = request.resource.data;
+      let dd = d.get('last', '');
+      return canClock()
+        && id == request.auth.uid + '_' + d.month
+        && d.uid == request.auth.uid
+        && d.month is string && d.month.matches('[0-9]{4}-[0-9]{2}')
+        && dd is string && dd.matches('[0-3][0-9]')
+        && dd in d.days
+        && (resource == null
+          ? d.keys().hasOnly(['uid', 'month', 'last', 'days']) && d.days.keys().hasOnly([dd]) && clockInOk(d.month, dd, d.days[dd])
+          : d.diff(resource.data).affectedKeys().hasOnly(['days', 'last'])
+            && d.days.diff(resource.data.days).affectedKeys().hasOnly([dd])
+            && (dd in resource.data.days
+              ? clockOutOk(d.month, dd, resource.data.days[dd], d.days[dd])
+              : clockInOk(d.month, dd, d.days[dd])));
+    }
+    function attendanceShapeOk(id) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['uid', 'month', 'last', 'days', 'pens'])
+        && d.uid is string && d.month is string && d.month.matches('[0-9]{4}-[0-9]{2}')
+        && id == d.uid + '_' + d.month
+        && d.days is map && d.days.size() <= 31
+        && (!('pens' in d) || (d.pens is list && d.pens.size() <= 100));
+    }
+    match /attendance/{id} {
+      allow read: if can('hr') || (canClock() && id.matches(request.auth.uid + '_[0-9]{4}-[0-9]{2}'));
+      allow create, update: if ownPunch(id) || (can('hr') && attendanceShapeOk(id)
+        && (resource == null || (request.resource.data.uid == resource.data.uid && request.resource.data.month == resource.data.month)));
+      allow delete: if isOwner();
     }
     match /counters/tickets {
       allow read: if can('tickets') || can('tickets.edit');

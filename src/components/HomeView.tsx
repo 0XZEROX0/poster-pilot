@@ -9,7 +9,7 @@ import { PostRow } from './PostRow'
 import { ReviewCard } from './ReviewView'
 import { Empty, Icon, dayLabel, timeLabel } from './ui'
 
-export type Tab = 'home' | 'dashboard' | 'prices' | 'builder' | 'offers' | 'review' | 'fix' | 'calendar' | 'brainstorm' | 'posted' | 'database' | 'activity' | 'maintenance' | 'orders'
+export type Tab = 'home' | 'dashboard' | 'prices' | 'builder' | 'offers' | 'review' | 'fix' | 'calendar' | 'brainstorm' | 'posted' | 'database' | 'activity' | 'maintenance' | 'orders' | 'hr'
 
 /** Sorts posts by the time they go out, soonest first. */
 export function byWhen(a: Post, b: Post) {
