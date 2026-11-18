@@ -438,7 +438,7 @@ function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { ui
         </div>
       )}
       <p className="hint">{t('Tap a person to change their week or one day. A dotted cell is a one-day change.')}</p>
-      {editing && <ShiftEditor uid={editing.uid} person={shifts[editing.uid] ?? { name: editing.name, plans: [], dates: {} }} onClose={() => setEditing(null)} onSaved={(p) => { onSaved({ [editing.uid]: p }); setEditing(null) }} />}
+      {editing && <ShiftEditor templates={templates ?? []} uid={editing.uid} person={shifts[editing.uid] ?? { name: editing.name, plans: [], dates: {} }} onClose={() => setEditing(null)} onSaved={(p) => { onSaved({ [editing.uid]: p }); setEditing(null) }} />}
       {offFor && <DaysOff everyone={everyone} shifts={shifts} first={offFor === 'pick' ? undefined : offFor.uid} onClose={() => setOffFor(null)} onSaved={onSaved} />}
       {tpEdit && templates && <TemplateEditor tp={tpEdit} list={templates} onClose={() => setTpEdit(null)} onSaved={(l) => { setTemplates(l); setTpEdit(null) }} />}
       {giving && templates?.find((x) => x.id === giving) && (
@@ -602,7 +602,35 @@ function GiveShift({ tp, shifts, everyone, onClose, onSaved }: { tp: Template; s
   )
 }
 
-function ShiftEditor({ uid, person, onClose, onSaved }: { uid: string; person: Person; onClose: () => void; onSaved: (p: Person) => void }) {
+/** The choice a shift is: a day off, one of the templates, or hours typed by hand. */
+function ShiftPick({ value, templates, custom, onChange, label }: { value: Shift; templates: Template[]; custom: boolean; onChange: (v: Shift, custom: boolean) => void; label: string }) {
+  const tp = value && !custom ? templates.find((x) => x.s === value.s && x.e === value.e) : undefined
+  const key = !value ? 'off' : tp ? tp.id : 'custom'
+  return (
+    <span className="hr-pick-shift">
+      <select value={key} aria-label={label} onChange={(e) => {
+        const v = e.target.value
+        if (v === 'off') return onChange(null, false)
+        if (v === 'custom') return onChange(value ?? { s: '11:00', e: '19:00' }, true)
+        const x = templates.find((o) => o.id === v)
+        if (x) onChange({ s: x.s, e: x.e }, false)
+      }}>
+        <option value="off">{t('Day off')}</option>
+        {templates.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.s} – {x.e}</option>)}
+        <option value="custom">{t('Other hours…')}</option>
+      </select>
+      {value && key === 'custom' && (
+        <span className="hr-times">
+          <input type="time" value={value.s} onChange={(e) => onChange({ ...value, s: e.target.value }, true)} aria-label={t('Starts')} />
+          <span>–</span>
+          <input type="time" value={value.e} onChange={(e) => onChange({ ...value, e: e.target.value }, true)} aria-label={t('Ends')} />
+        </span>
+      )}
+    </span>
+  )
+}
+
+function ShiftEditor({ uid, person, templates, onClose, onSaved }: { uid: string; person: Person; templates: Template[]; onClose: () => void; onSaved: (p: Person) => void }) {
   const today = cairoNow().date
   const current = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), shiftOn({ ...person, dates: {} }, addDays(today, (d - weekdayOf(today) + 7) % 7))]))
   const [days, setDays] = useState<Record<string, Shift>>(() => (person.plans.length ? current : Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), d === 5 ? null : { s: '11:00', e: '19:00' }]))))
@@ -612,8 +640,12 @@ function ShiftEditor({ uid, person, onClose, onSaved }: { uid: string; person: P
   const [one, setOne] = useState({ s: '11:00', e: '19:00' })
   const [p, setP] = useState(person)
   const [busy, setBusy] = useState(false)
-  const set = (d: number, s: Shift) => setDays({ ...days, [String(d)]: s })
-  const lastOn = WEEK.map((d) => days[String(d)]).find(Boolean) ?? { s: '11:00', e: '19:00' }
+  const [customDays, setCustomDays] = useState<number[]>([])
+  const [oneCustom, setOneCustom] = useState(false)
+  const set = (d: number, s: Shift, custom: boolean) => {
+    setDays({ ...days, [String(d)]: s })
+    setCustomDays(custom ? [...customDays.filter((x) => x !== d), d] : customDays.filter((x) => x !== d))
+  }
 
   async function save(next: Person, what: string) {
     setBusy(true)
@@ -629,21 +661,12 @@ function ShiftEditor({ uid, person, onClose, onSaved }: { uid: string; person: P
     <Sheet title={p.name} onClose={onClose}>
       <div className="form">
         <h3>{t('Weekly shifts')}</h3>
-        {WEEK.map((d) => {
-          const s = days[String(d)]
-          return (
-            <div key={d} className="hr-edit-day">
-              <label className="check-line"><input type="checkbox" checked={Boolean(s)} onChange={(e) => set(d, e.target.checked ? lastOn : null)} /><span>{t(DAY_NAMES[d])}</span></label>
-              {s ? (
-                <span className="hr-times">
-                  <input type="time" value={s.s} onChange={(e) => set(d, { ...s, s: e.target.value })} aria-label={t('Starts')} />
-                  <span>–</span>
-                  <input type="time" value={s.e} onChange={(e) => set(d, { ...s, e: e.target.value })} aria-label={t('Ends')} />
-                </span>
-              ) : <span className="muted">{t('Day off')}</span>}
-            </div>
-          )
-        })}
+        {WEEK.map((d) => (
+          <div key={d} className="hr-edit-day">
+            <b className="hr-edit-name">{t(DAY_NAMES[d])}</b>
+            <ShiftPick value={days[String(d)]} templates={templates} custom={customDays.includes(d)} label={t(DAY_NAMES[d])} onChange={(v, c) => set(d, v, c)} />
+          </div>
+        ))}
         <label><span>{t('These shifts start on')}</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value || today)} /></label>
         <p className="hint">{t('Days before this date keep the shifts they had, so past late minutes do not change. An end before the start means the shift ends the next morning.')}</p>
         <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await save(withPlan(p, { from, days }), `${t('Weekly shifts')} ${from}`)) onSaved(withPlan(p, { from, days })) }}>{t('Save weekly shifts')}</button>
@@ -652,11 +675,7 @@ function ShiftEditor({ uid, person, onClose, onSaved }: { uid: string; person: P
         <p className="hint">{t('A day off, a holiday, or different hours on one date. It wins over the weekly shifts.')}</p>
         <div className="hr-one">
           <input type="date" value={oneDate} onChange={(e) => setOneDate(e.target.value)} aria-label={t('Date')} />
-          <div className="seg">
-            <button className={oneOff ? 'on' : ''} onClick={() => setOneOff(true)}>{t('Day off')}</button>
-            <button className={!oneOff ? 'on' : ''} onClick={() => setOneOff(false)}>{t('Hours')}</button>
-          </div>
-          {!oneOff && <span className="hr-times"><input type="time" value={one.s} onChange={(e) => setOne({ ...one, s: e.target.value })} /><span>–</span><input type="time" value={one.e} onChange={(e) => setOne({ ...one, e: e.target.value })} /></span>}
+          <ShiftPick value={oneOff ? null : one} templates={templates} custom={oneCustom} label={t('One-day change')} onChange={(v, c) => { setOneOff(!v); if (v) setOne(v); setOneCustom(c) }} />
           <button className="btn" disabled={busy || !oneDate} onClick={() => save(withDate(p, oneDate, oneOff ? null : one), `${oneDate}: ${oneOff ? 'off' : `${one.s}-${one.e}`}`)}>{t('Add')}</button>
         </div>
         {changes.map(([d, s]) => (

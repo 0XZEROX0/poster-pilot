@@ -1420,4 +1420,5 @@ export const ar: Record<string, string> = {
   "Give the day off": "إعطاء الإجازة",
   "New · Friday off": "جديد · إجازة الجمعة",
   "Everyone keeps their own weekly days off. Days before the start date keep their old shifts.": "كل شخص يحتفظ بإجازته الأسبوعية. الأيام قبل تاريخ البداية تبقى على ورديّاتها القديمة.",
+  "Other hours…": "ساعات أخرى…",
 }
