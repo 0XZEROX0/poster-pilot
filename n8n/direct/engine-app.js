@@ -46,7 +46,8 @@ for (const d of docs) {
   const custom = kindOf(f);
   if ((f.appNew === true || 'items' in edits) && !custom) {
     const p = pricesFrom(g.items, products, g.variants === true);
-    if (products.length) { g.priceBefore = p.priceBefore; g.company = p.company; mask.add('priceBefore'); mask.add('company'); }
+    // A Price before the person typed in the same change (the offer editor) is kept; otherwise it follows the list.
+    if (products.length) { if (f.appNew === true || !('priceBefore' in edits)) { g.priceBefore = p.priceBefore; mask.add('priceBefore'); } g.company = p.company; mask.add('company'); }
   }
   // Stories: a place the person chose (again) waits for the Stories part, unless its story is out already; a failure
   // is cleared, so "Try the story again" works; a place taken off is emptied.

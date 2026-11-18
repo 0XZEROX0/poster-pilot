@@ -1214,4 +1214,11 @@ export const ar: Record<string, string> = {
   'Uploading needs the engine (n8n), which this copy of the app cannot reach.': 'الرفع يحتاج المحرك (n8n)، وهذه النسخة من التطبيق لا تصل إليه.',
   'MP4 or MOV, up to 300 MB. On Instagram it goes out as a Reel (3 seconds to 15 minutes; upright 9:16 looks best).': 'MP4 أو MOV حتى 300 ميجا. على إنستجرام يُنشر كـ Reel (من 3 ثوانٍ إلى 15 دقيقة، والطولي 9:16 أفضل).',
   'Up to 10 photos: more than one becomes an album on Facebook and a carousel on Instagram. Photos are sent as JPEG; for Instagram, very tall or very wide photos get white bars.': 'حتى 10 صور: أكثر من صورة تصبح ألبومًا على فيسبوك وكاروسيل على إنستجرام. تُرسل الصور بصيغة JPEG، وفي إنستجرام تُضاف حواف بيضاء للصور الطويلة جدًا أو العريضة جدًا.',
+  'Change product': 'تغيير المنتج',
+  'Keep this product': 'إبقاء هذا المنتج',
+  'Remove from the offer': 'إزالة من العرض',
+  'Add a product': 'إضافة منتج',
+  'Search the product to put in its place…': 'ابحث عن المنتج الذي يحل محله…',
+  'Saving makes a new poster. It comes back to Review, and its old version is taken off the Facebook schedule. Approve it again to keep its time.': 'الحفظ يصنع بوستر جديد. يرجع للمراجعة، وتُزال النسخة القديمة من جدول فيسبوك. وافق عليه مرة أخرى ليحتفظ بموعده.',
+  'Saving makes a new poster. It comes back to Review; its date and time stay.': 'الحفظ يصنع بوستر جديد. يرجع للمراجعة، ويبقى تاريخه ووقته.',
 }

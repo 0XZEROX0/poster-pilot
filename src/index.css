@@ -319,6 +319,12 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .hint { font-size: 0.8125rem; color: var(--muted); line-height: 1.5; }
 .item-box { border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; background: var(--surface); }
 .item-box legend { font-weight: 600; font-size: 0.875rem; padding: 0 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-tools { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.item-tools .link, .form-group .link { display: inline-flex; align-items: center; gap: 4px; }
+.form-group { display: flex; flex-direction: column; gap: 8px; }
+.form-group .results { margin-top: 0; }
+.item-box .results { margin-top: 0; }
+.add-item { align-self: flex-start; }
 .alert { background: var(--bad-soft); color: var(--bad); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 .alert b { display: flex; align-items: center; gap: 6px; }
 .alert p { color: var(--text); font-size: 0.875rem; line-height: 1.5; }

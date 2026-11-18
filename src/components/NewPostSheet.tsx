@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { buildCaption, commonTitle, duplicatesOf, formatPrice, maxItems, stageOf, toNumber, whenOf } from '../data/logic'
 import { allowed, backend } from '../data/store'
 import type { Data, NewPost, Post, PostItem, Product } from '../data/types'
 import { t } from '../i18n'
+import { ProductSearch } from './ProductSearch'
 import { Sheet } from './Sheet'
 import { STORIES_ON, storyByDefault } from './StoryBox'
 import { Icon, dayLabel, showToast } from './ui'
@@ -11,7 +12,6 @@ import { VersionPicker, type PickedVersion } from './VersionPicker'
 /** Start a post: pick 1 to 3 products (or up to 4 versions of one product) by searching the product list, then price, style and time. */
 // Text, photo and video posts are made in the Planner (NewCustomPostSheet), by the people who schedule.
 export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => void }) {
-  const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<Product[]>([])
   // Versions of one product (colours, switches...): one name and one price on the poster, up to 4 items.
   const [variants, setVariants] = useState(false)
@@ -29,12 +29,6 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
   const [story, setStory] = useState(() => allowed('schedule') && storyByDefault())
   const [error, setError] = useState('')
 
-  const matches = useMemo(() => {
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-    if (!words.length) return []
-    return data.products.filter((p) => words.every((w) => `${p.category} ${p.name} ${p.company}`.toLowerCase().includes(w)) && !picked.includes(p)).slice(0, 8)
-  }, [query, data.products, picked])
-
   /** The list price follows the picked products until the person types their own. */
   // Versions: the poster shows one price, the highest of them (same rule as the engine).
   const fromPhotos = variants && versions.length > 0 && picked.length > 0
@@ -43,7 +37,6 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
   function add(p: Product) {
     if (picked.length >= max) return
     setPicked([...picked, p])
-    setQuery('')
     setError('')
   }
   // From photos: every version keeps the price list name (so the price check finds it), its own photo and its version name.
@@ -90,24 +83,8 @@ export function NewPostSheet({ data, onClose }: { data: Data; onClose: () => voi
               ))}
             </div>
           )}
-          {picked.length < max && !fromPhotos && <input type="search" placeholder={t('Search products…')} value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />}
+          {picked.length < max && !fromPhotos && <ProductSearch products={data.products} skip={picked.map((p) => p.name)} onPick={add} autoFocus />}
         </label>
-        {query.trim() && picked.length < max && !fromPhotos && (
-          <div className="results">
-            {matches.map((p) => (
-              <button key={`${p.category}${p.name}`} onClick={() => add(p)}>
-                <span dir="auto">{p.name}</span>
-                <span className="muted small">{p.category} · {formatPrice(p.price)} EGP</span>
-              </button>
-            ))}
-            {!matches.length && (
-              <button onClick={() => add({ category: '', name: query.trim(), price: '', company: '' })}>
-                <span className="muted small">{t('No product matches. Add it as typed:')}</span>
-                <span dir="auto">{query.trim()}</span>
-              </button>
-            )}
-          </div>
-        )}
         <p className="hint">{error ? <b className="bad">{error}</b> : t(variants ? 'Pick the product, then tap its versions on the website photos. Or add up to 4 products from the list.' : 'Add up to 3 products.')}</p>
         <label className="check">
           <input type="checkbox" checked={variants} onChange={(e) => { setVariants(e.target.checked); setError('') }} />
