@@ -1443,4 +1443,6 @@ export const ar: Record<string, string> = {
   "Penalty (hours)": "الجزاء (ساعات)",
   "Waiting for HR": "بانتظار الموارد البشرية",
   "Early leave declined": "رُفض الانصراف المبكر",
+  "Auto clock-out %t": "انصراف تلقائي %t",
+  "auto": "تلقائي",
 }

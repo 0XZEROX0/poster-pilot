@@ -129,7 +129,7 @@ export const windowText = (from: string, to: string) => (from && to ? `${h12(fro
 export function promptFor(s: HrSettings, person: Person | undefined, m: Month | undefined, now = Date.now()): 'in' | 'out' | null {
   if (!person || !s.places.length) return null
   const { date, time } = cairoNow(new Date(now))
-  const open = openDay(m, date)
+  const open = openDay(m, date, person, now)
   if (open) return clockOpen(s, 'out', time) && (s.outFrom || s.outTo) ? 'out' : null
   if (m?.days[date.slice(8, 10)]?.in) return null
   if (!shiftOn(person, date)) return null
@@ -199,13 +199,17 @@ export function withDate(p: Person, date: string, shift: Shift | undefined): Per
 
 export type DayState = 'off' | 'upcoming' | 'notIn' | 'absent' | 'working' | 'noOut' | 'done' | 'extra'
 /** late / early count (0 when excused); rawLate / rawEarly are what happened, excused or not. missing = late + early that count, or the whole shift when absent. */
-export type DayResult = { date: string; shift: Shift; day?: Day; state: DayState; late: number; early: number; rawLate: number; rawEarly: number; missing: number; worked: number }
+/** auto: the person forgot to clock out and was clocked out by itself at 12 AM (or the end of a night shift). */
+export type DayResult = { date: string; shift: Shift; day?: Day; state: DayState; late: number; early: number; rawLate: number; rawEarly: number; missing: number; worked: number; auto?: boolean }
 
 /** How long after a shift's end a missing clock-out counts as forgotten. */
 const NO_OUT_AFTER = 4 * 3600_000
 
 /** One day of one person: what happened, and the late and early minutes (after the grace minutes). */
-export function judgeDay(date: string, shift: Shift, day: Day | undefined, grace: number, now = Date.now()): DayResult {
+export function judgeDay(date: string, shift: Shift, dayIn: Day | undefined, grace: number, now = Date.now()): DayResult {
+  const autoAt = dayIn?.in && !dayIn.out ? autoOutAt(date, shift) : 0
+  const auto = Boolean(autoAt && now >= autoAt)
+  const day = auto ? { ...dayIn, out: autoAt } : dayIn
   const base = { date, shift, day, late: 0, early: 0, rawLate: 0, rawEarly: 0, missing: 0, worked: 0 }
   const start = shift ? cairoMs(date, shift.s) : 0
   const end = shift ? start + shiftMinutes(shift) * 60_000 : 0
@@ -216,14 +220,14 @@ export function judgeDay(date: string, shift: Shift, day: Day | undefined, grace
     return day?.excused ? { ...base, state: 'off' } : { ...base, state: 'absent', missing: shiftMinutes(shift) }
   }
   const worked = day.out ? Math.max(0, Math.round((day.out - day.in) / 60_000)) : 0
-  if (!shift) return { ...base, state: day.out ? 'extra' : 'working', worked }
+  if (!shift) return { ...base, state: day.out ? 'extra' : 'working', worked, auto }
   const lateBy = Math.floor((day.in - start) / 60_000)
   const rawLate = lateBy <= grace ? 0 : lateBy
   const rawEarly = day.out ? Math.max(0, Math.ceil((end - day.out) / 60_000)) : 0
   const late = day.excused || day.exLate ? 0 : rawLate
   const early = day.excused || day.exEarly ? 0 : rawEarly
   const state: DayState = day.out ? 'done' : now > end + NO_OUT_AFTER ? 'noOut' : 'working'
-  return { ...base, state, late, early, rawLate, rawEarly, missing: late + early, worked }
+  return { ...base, state, late, early, rawLate, rawEarly, missing: late + early, worked, auto }
 }
 
 /** shiftMin: minutes of all shifts so far; missingMin: late + early that count, plus whole shifts missed; excusedMin: late + early that were excused. */
@@ -258,13 +262,24 @@ export function judgeMonth(month: string, person: Person | undefined, m: Month |
 export const devicesOf = (m: Month | undefined) => new Set(Object.values(m?.days ?? {}).flatMap((d) => [d.inP?.dev, d.outP?.dev]).filter((x): x is string => Boolean(x)))
 
 /** The day a clock-out belongs to: today's open day, or yesterday's for a night shift. */
-export function openDay(m: Month | undefined, today: string): string | null {
+export function openDay(m: Month | undefined, today: string, person?: Person, now = Date.now()): string | null {
   for (const date of [today, addDays(today, -1)]) {
     if (monthOf(date) !== m?.month) continue
     const d = m.days[date.slice(8, 10)]
-    if (d?.in && !d.out) return date
+    // Past 12 AM (or the end of a night shift) the day was clocked out by itself.
+    if (d?.in && !d.out && now < autoOutAt(date, shiftOn(person, date))) return date
   }
   return null
+}
+/**
+ * When someone who forgot to clock out is clocked out by itself: 12 AM after the day.
+ * A night shift that ends after midnight closes at its end instead.
+ */
+export function autoOutAt(date: string, shift: Shift): number {
+  const midnight = cairoMs(addDays(date, 1), '00:00')
+  if (!shift) return midnight
+  const end = cairoMs(date, shift.s) + shiftMinutes(shift) * 60_000
+  return Math.max(midnight, end)
 }
 
 /** This browser's own id, so the report can show when someone clocks in from a different phone. */

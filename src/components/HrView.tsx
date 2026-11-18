@@ -137,7 +137,7 @@ function MyAttendance({ settings, person, mine }: { settings: HrSettings; person
   const today = cairoNow(new Date(now)).date
   const dd = today.slice(8, 10)
   const day = mine?.days[dd]
-  const open = openDay(mine, today)
+  const open = openDay(mine, today, person, now)
   const shift = shiftOn(person, today)
   const r = judgeDay(today, shift, day, settings.grace, now)
   const [busy, setBusy] = useState(false)
@@ -233,7 +233,7 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
                 <th>{dayLabel(r.date)}</th>
                 <td className="muted" dir="ltr">{shiftText(r.shift)}</td>
                 <td dir="ltr">{r.day?.in ? clock12(r.day.in) : r.state === 'absent' ? <span className="chip chip-bad">{t('Absent')}</span> : '—'}</td>
-                <td dir="ltr">{r.day?.out ? clock12(r.day.out) : r.state === 'noOut' ? <span className="chip chip-warn">{t('No clock-out')}</span> : r.state === 'working' ? <span className="chip chip-info">{t('Working')}</span> : '—'}</td>
+                <td dir="ltr">{r.auto && r.day?.out ? <span className="chip chip-warn">{clock12(r.day.out)} · {t('auto')}</span> : r.day?.out ? clock12(r.day.out) : r.state === 'noOut' ? <span className="chip chip-warn">{t('No clock-out')}</span> : r.state === 'working' ? <span className="chip chip-info">{t('Working')}</span> : '—'}</td>
                 <td>{r.worked ? hm(r.worked) : '—'}</td>
                 <td><MinChip raw={r.rawLate} counted={r.late} label="%m" tone="chip-bad" />{!r.rawLate && '—'}</td>
                 <td><MinChip raw={r.rawEarly} counted={r.early} label="%m" tone="chip-warn" />{!r.rawEarly && '—'}</td>
@@ -266,6 +266,7 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
             {r.day?.excused && <span className="chip chip-good">{t('Excused day')}</span>}
             {leavePending(r.day) && <span className="chip chip-warn">{t('Waiting for HR')}</span>}
             {r.day?.leaveNo && <span className="chip chip-bad">{t('Early leave declined')}</span>}
+            {r.auto && r.day?.out && <span className="chip chip-warn">{tn('Auto clock-out %t', { t: clock12(r.day.out) })}</span>}
             {r.day?.fixBy && <span className="chip">{t('Fixed by hand')}</span>}
           </span>
           {reason(r) && <span className="hr-day-why" dir="auto">{reason(r)}</span>}

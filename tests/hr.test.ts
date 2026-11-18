@@ -100,8 +100,12 @@ group('HR counting', () => {
   })
   it('finds the open day for clocking out, yesterday for a night shift', () => {
     const m: Month = { id: 'a_2026-11', uid: 'a', month: '2026-11', pens: [], days: { 17: { in: 1 }, 18: { in: 2, out: 3 } } }
-    expect(openDay(m, '2026-11-18')).toBe('2026-11-17')
-    expect(openDay({ ...m, days: { 18: { in: 2 } } }, '2026-11-18')).toBe('2026-11-18')
+    const night: Person = { name: 'K', plans: [{ from: '2026-01-01', days: week('20:00', '02:00', []) }], dates: {} }
+    const day: Person = { name: 'D', plans: [{ from: '2026-01-01', days: week('11:00', '19:00', []) }], dates: {} }
+    expect(openDay(m, '2026-11-18', night, cairoMs('2026-11-18', '01:30'))).toBe('2026-11-17')
+    expect(openDay(m, '2026-11-18', night, cairoMs('2026-11-18', '02:30'))).toBeNull() // the night shift ended: closed by itself
+    expect(openDay(m, '2026-11-18', day, cairoMs('2026-11-18', '00:30'))).toBeNull() // past 12 AM: closed by itself
+    expect(openDay({ ...m, days: { 18: { in: 2 } } }, '2026-11-18', day, cairoMs('2026-11-18', '23:50'))).toBe('2026-11-18')
     expect(openDay(undefined, '2026-11-18')).toBeNull()
   })
   it('notices clocking in from more than one phone', () => {
@@ -189,5 +193,19 @@ group('HR 12-hour clock and leaving early', () => {
     expect(leavePending({ ...day, exEarly: true })).toBe(false)
     expect(leavePending({ ...day, leaveNo: true })).toBe(false)
     expect(judgeDay('2026-11-18', { s: '11:00', e: '19:00' }, { ...day, exEarly: true }, 10).early).toBe(0)
+  })
+})
+
+group('HR auto clock-out at 12 AM', () => {
+  const d = '2026-11-18'
+  it('clocks out a forgotten day at 12 AM and counts the hours up to then', () => {
+    const r = judgeDay(d, { s: '14:00', e: '22:00' }, { in: cairoMs(d, '14:00') }, 10, cairoMs('2026-11-19', '09:00'))
+    expect(r).toMatchObject({ auto: true, state: 'done', worked: 600, early: 0 })
+    expect(clockOf(r.day!.out!)).toBe('00:00')
+    expect(judgeDay(d, { s: '14:00', e: '22:00' }, { in: cairoMs(d, '14:00') }, 10, cairoMs(d, '23:30')).auto).toBe(false)
+  })
+  it('lets a night shift run to its end', () => {
+    const r = judgeDay(d, { s: '20:00', e: '02:00' }, { in: cairoMs(d, '20:00') }, 10, cairoMs('2026-11-19', '09:00'))
+    expect(r).toMatchObject({ auto: true, worked: 360, early: 0 })
   })
 })
