@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
-import { buildCaption, cairoNow, itemName, nextFreeSlot, placesOf, stageOf, titleOf, whenOf } from '../data/logic'
+import { buildCaption, cairoNow, itemName, listPriceOf, maxItems, nextFreeSlot, placesOf, stageOf, titleOf, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
-import type { Data, Post, PostPlaces } from '../data/types'
+import type { Data, Post, PostItem, PostPlaces, Product } from '../data/types'
 import { t } from '../i18n'
 import { customProblem, MediaPicker, PlacesPicker } from './CustomPost'
 import { problemText } from './FixView'
@@ -9,6 +9,7 @@ import { PostHistory } from './History'
 import { ResultsBox } from './Results'
 import { PhotoPicker } from './PhotoPicker'
 import { Poster } from './Poster'
+import { ProductSearch } from './ProductSearch'
 import { StageChip } from './PostRow'
 import { STORIES_ON, StoryBox } from './StoryBox'
 import { Sheet } from './Sheet'
@@ -26,6 +27,11 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [designing, setDesigning] = useState(false)
+  // The offer editor: which item is being swapped for another product (-1: none), and whether a product is being added.
+  const [swapping, setSwapping] = useState(-1)
+  const [adding, setAdding] = useState(false)
+  // Price before follows the products until the person types their own.
+  const [ownBefore, setOwnBefore] = useState(false)
   const stage = stageOf(post)
   // A text, photo or video post: no poster, no prices; its caption, files and places are edited here.
   const custom = post.kind
@@ -36,6 +42,23 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const locked = !posted && (/^scheduled/i.test(post.fbStatus) || post.fbPostId !== '')
   const set = (patch: Partial<Post>) => setDraft((d) => ({ ...d, ...patch }))
   const setItem = (i: number, patch: Partial<Post['items'][number]>) => set({ items: draft.items.map((it, k) => (k === i ? { ...it, ...patch } : it)) })
+  /**
+   * A new list of products for the offer. Each item gets its place again (1, 2, 3...), so the poster shows them in this
+   * order, and Price before is worked out from the price list the same way the engine does (unless the person typed one).
+   */
+  function setItems(items: PostItem[]) {
+    const next = items.map((it, i) => ({ ...it, slot: i + 1 }))
+    const same = JSON.stringify(next.map(({ category, name }) => [category, name])) === JSON.stringify(post.items.map(({ category, name }) => [category, name]))
+    const auto = same ? post.priceBefore : listPriceOf(next, data.products, post.variants).priceBefore
+    setDraft((d) => ({ ...d, items: same ? post.items : next, ...(ownBefore ? {} : { priceBefore: auto }) }))
+    setSwapping(-1)
+    setAdding(false)
+  }
+  // A product from the list in place of item i: its photo choices start again; a version name is kept only for the same product.
+  const fresh = (p: Product, old?: PostItem): PostItem => ({ category: p.category, name: p.name, manualPhoto: '', nextPhoto: false, ...(old?.label !== undefined && old.name === p.name ? { label: old.label } : {}) })
+  const swapItem = (i: number, p: Product) => setItems(draft.items.map((it, k) => (k === i ? fresh(p, it) : it)))
+  const removeItem = (i: number) => setItems(draft.items.filter((_, k) => k !== i))
+  const addItem = (p: Product) => setItems([...draft.items, fresh(p)])
 
   /** Only the fields the person changed, so nothing else is touched. */
   function changes(): Partial<Post> {
@@ -128,6 +151,11 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const mayPlan = allowed('schedule')
   const mayEdit = allowed('offers.create') || allowed('fix') || mayReview || (!!custom && mayPlan)
   const dirty = Object.keys(changes()).length > 0
+  // Changing which products are in the offer: the maker (or anyone who may make offers) while it waits for approval;
+  // after approval only someone who may approve offers or posters, so an approved offer is not changed behind their back.
+  const mayChangeItems = !posted && !custom && (stage === 'offer' ? mayEdit : allowed('offers.approve') || mayReview)
+  const itemsChanged = JSON.stringify(draft.items.map((it) => [it.category, it.name])) !== JSON.stringify(post.items.map((it) => [it.category, it.name]))
+  const priceChanged = draft.priceBefore !== post.priceBefore || draft.priceAfter !== post.priceAfter
   // Post now: an approved post with its poster, not on Facebook yet, no unsaved changes, not already asked for.
   const mayPostNow = mayPlan && stage === 'scheduled' && post.feedback === 'Done' && !onFacebook && post.postNow !== 'yes' && (custom ? !/^posting/i.test(post.igStatus) : !!post.posterUrl) && !dirty
   const where = custom ? placesOf(draft).map((w) => (w === 'fb' ? 'Facebook' : 'Instagram')).join(t(' and ')) : t('Facebook and Instagram')
@@ -217,6 +245,13 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
           {!posted && draft.items.map((it, i) => (
             <fieldset key={i} className={`item-box${it.photoMissing && problem ? ' item-missing' : ''}`}>
               <legend dir="auto">{itemName(it)}</legend>
+              {mayChangeItems && (
+                <div className="item-tools">
+                  <button type="button" className="link" onClick={() => { setSwapping(swapping === i ? -1 : i); setAdding(false) }}><Icon name="redo" size={16} />{t(swapping === i ? 'Keep this product' : 'Change product')}</button>
+                  {draft.items.length > 1 && <button type="button" className="link link-danger" onClick={() => removeItem(i)}><Icon name="close" size={16} />{t('Remove from the offer')}</button>}
+                </div>
+              )}
+              {swapping === i && <ProductSearch products={data.products} skip={draft.items.filter((_, k) => k !== i).map((x) => x.name)} onPick={(p) => swapItem(i, p)} autoFocus placeholder={t('Search the product to put in its place…')} />}
               {post.variants && it.label !== undefined && (
                 <label><span>{t('Version name')}</span><input dir="auto" value={it.label} placeholder={t('Colour or name, e.g. Jungle Panda')} onChange={(e) => setItem(i, { label: e.target.value })} /></label>
               )}
@@ -229,9 +264,23 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
                 <input type="checkbox" checked={it.nextPhoto} onChange={(e) => setItem(i, { nextPhoto: e.target.checked })} />
                 <span>{t('Try the next photo')}</span>
               </label>
-              {mayEdit && <PhotoPicker post={post} index={i} current={photoInUse(post, i)} busy={busy} onPick={(src) => choosePhoto(i, src)} />}
+              {/* The website photos are looked up for the saved product, so a product just swapped in waits for Save. */}
+              {mayEdit && post.items[i]?.name === it.name && post.items[i]?.category === it.category && <PhotoPicker post={post} index={i} current={photoInUse(post, i)} busy={busy} onPick={(src) => choosePhoto(i, src)} />}
             </fieldset>
           ))}
+          {mayChangeItems && draft.items.length < maxItems(post.variants) && (
+            adding ? (
+              <div className="form-group">
+                <ProductSearch products={data.products} skip={draft.items.map((x) => x.name)} onPick={addItem} autoFocus />
+                <button type="button" className="link" onClick={() => setAdding(false)}>{t('Cancel')}</button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-ghost add-item" onClick={() => { setAdding(true); setSwapping(-1) }}><Icon name="plus" size={18} />{t('Add a product')}</button>
+            )
+          )}
+          {mayChangeItems && stage !== 'offer' && (itemsChanged || priceChanged) && (
+            <p className="hint">{t(onFacebook ? 'Saving makes a new poster. It comes back to Review, and its old version is taken off the Facebook schedule. Approve it again to keep its time.' : 'Saving makes a new poster. It comes back to Review; its date and time stay.')}</p>
+          )}
           {!posted && custom && (
             <>
               {custom !== 'text' && <MediaPicker kind={custom} toInstagram={placesOf(draft).includes('ig')} value={draft.media ?? []} disabled={!mayEdit} onChange={(media) => set({ media })} />}
@@ -243,7 +292,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             <>
               {!custom && <>
               <div className="two">
-                <label><span>{t('Price before')}</span><input inputMode="numeric" dir="ltr" value={draft.priceBefore} onChange={(e) => set({ priceBefore: e.target.value })} /></label>
+                <label><span>{t('Price before')}</span><input inputMode="numeric" dir="ltr" value={draft.priceBefore} onChange={(e) => { setOwnBefore(true); set({ priceBefore: e.target.value }) }} /></label>
                 <label><span>{t('Price after')}</span><input inputMode="numeric" dir="ltr" value={draft.priceAfter} onChange={(e) => set({ priceAfter: e.target.value })} /></label>
               </div>
               <div className="two">

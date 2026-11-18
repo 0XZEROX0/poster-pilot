@@ -1,4 +1,4 @@
-import type { CaptionTemplate, PhotoChoiceItem, Post, PostItem, PostKind } from './types'
+import type { CaptionTemplate, PhotoChoiceItem, Post, PostItem, PostKind, Product } from './types'
 
 // ---------- text, photo and video posts (post.kind) ----------
 /** Where a text, photo or video post goes: a text post goes to Facebook only (Instagram needs a picture). */
@@ -366,4 +366,27 @@ export function choicesFor(post: Post, index: number, now = Date.now()): PhotoCh
   if (!c || !it || it.name.trim().toLowerCase() !== name.trim().toLowerCase()) return null
   if (now - c.checkedAt > PHOTOS_FRESH) return null
   return it
+}
+
+/**
+ * Price before and Company for a post's items, from the price list: the same rule as the engine's pricesFrom, so the
+ * value the app shows is the one the engine writes. Same category, any case and spacing. Versions of one product show
+ * the highest price, other posts the sum. An item that is not in the list (or has no number) gives 'Check item'.
+ */
+export function listPriceOf(items: Pick<PostItem, 'category' | 'name'>[], products: Product[], variants?: boolean): { priceBefore: string; company: string } {
+  const list = items.filter((it) => it.name.trim())
+  if (!list.length) return { priceBefore: '', company: '' }
+  const same = (a: string, b: string) => a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase()
+  const isNum = (s: string) => /^-?[\d,]+(\.\d+)?$/.test(s.trim()) && /\d/.test(s)
+  let sum = 0, top = 0, bad = false
+  const companies: string[] = []
+  for (const it of list) {
+    const p = products.find((x) => x.category === it.category.trim() && same(x.name, it.name))
+    if (!p || (p.price.trim() !== '' && !isNum(p.price))) { bad = true; continue }
+    const one = p.price.trim() === '' ? 0 : Number(p.price.replace(/,/g, ''))
+    sum += one
+    top = Math.max(top, one)
+    if (p.company.trim() && !companies.includes(p.company.trim())) companies.push(p.company.trim())
+  }
+  return { priceBefore: bad ? 'Check item' : (variants ? top : sum).toLocaleString('en-US'), company: companies.join(' + ') }
 }

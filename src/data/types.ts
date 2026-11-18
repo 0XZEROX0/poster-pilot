@@ -16,6 +16,8 @@ export type PostItem = {
    * `name` stays the price list name, so the price check still finds it; the poster and caption show both.
    */
   label?: string
+  /** The sheet column the item was in (1 to 4), set by the engine. The offer editor numbers them again in their order. */
+  slot?: number
 }
 
 /**
