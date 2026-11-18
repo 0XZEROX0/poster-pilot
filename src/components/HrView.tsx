@@ -43,8 +43,10 @@ const locateError = (e: unknown) => ((e as { code?: number }).code === 1
 export function HrView() {
   const manager = allowed('hr')
   const clocks = allowed('hr.clock') || manager
-  const sections: Section[] = [...(clocks ? ['me' as const] : []), ...(manager ? ['today', 'leave', 'shifts', 'report', 'files', 'setup'] as const : clocks ? ['leave' as const] : [])]
-  const [section, setSection] = useState<Section>(manager ? 'today' : 'me')
+  // 'Fix clock-ins and clock-outs' without Manage HR: Today and Report, to add or correct someone's times.
+  const canFix = manager || allowed('hr.fix')
+  const sections: Section[] = [...(clocks ? ['me' as const] : []), ...(manager ? ['today', 'leave', 'shifts', 'report', 'files', 'setup'] as const : [...(canFix ? ['today', 'report'] as const : []), ...(clocks ? ['leave' as const] : [])])]
+  const [section, setSection] = useState<Section>(canFix ? 'today' : 'me')
   const [settings, setSettings] = useState<HrSettings | null>(null)
   const [shifts, setShifts] = useState<Shifts | null>(null)
   const [people, setPeople] = useState<{ uid: string; name: string }[]>([])
@@ -59,10 +61,10 @@ export function HrView() {
     hr.loadShifts().then(setShifts, (e) => { setShifts({}); setError(String(e)) })
   }
   useEffect(reload, [])
-  useEffect(() => { if (manager) hr.loadPeople().then(setPeople, () => setPeople([])) }, [manager])
+  useEffect(() => { if (canFix) hr.loadPeople().then(setPeople, () => setPeople([])) }, [canFix])
   // My own month: one document. Everyone's month only for a manager, and only on the pages that show it.
   useEffect(() => hr.watchMine(thisMonth, setMine, (e) => setError(String(e))), [thisMonth])
-  const wantAll = manager && (section === 'today' || section === 'report')
+  const wantAll = canFix && (section === 'today' || section === 'report')
   const watchMonth = section === 'today' ? thisMonth : month
   useEffect(() => {
     if (!wantAll) return
@@ -84,11 +86,11 @@ export function HrView() {
       )}
       {(error || leaves.error) && <p className="banner banner-bad hr-banner" dir="ltr">{/permission/i.test(error || leaves.error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error || leaves.error}</p>}
       {section === 'me' && <MyAttendance settings={settings} person={shifts[myUid()]} mine={mine} />}
-      {section === 'today' && <TodayBoard settings={settings} shifts={shifts} months={all} />}
+      {section === 'today' && <TodayBoard settings={settings} shifts={shifts} months={all} people={people} manager={manager} />}
       {section === 'shifts' && <ShiftsBoard shifts={shifts} people={people} onSaved={(changed) => setShifts({ ...shifts, ...changed })} />}
-      {section === 'report' && <Report settings={settings} shifts={shifts} months={all} month={month} setMonth={setMonth} people={people} />}
+      {section === 'report' && <Report settings={settings} shifts={shifts} months={all} month={month} setMonth={setMonth} people={people} manager={manager} />}
       {section === 'leave' && <LeaveBoard manager={manager} canAsk={clocks} all={leaves.all} mine={leaves.mine} shifts={shifts} onShiftsSaved={(changed) => setShifts({ ...shifts, ...changed })} />}
-      {section === 'files' && <StaffFiles people={peopleOf(shifts, null, people)} all={leaves.all} />}
+      {section === 'files' && <StaffFiles people={peopleOf(shifts, null, people)} all={leaves.all} shifts={shifts} grace={settings.grace} />}
       {section === 'setup' && <Setup settings={settings} onSaved={setSettings} />}
     </div>
   )
@@ -352,9 +354,10 @@ function peopleOf(shifts: Shifts, months: Month[] | null, extra: { uid: string; 
   return [...names.entries()].map(([uid, name]) => ({ uid, name })).sort((a, b) => a.name.localeCompare(b.name))
 }
 
-function TodayBoard({ settings, shifts, months }: { settings: HrSettings; shifts: Shifts; months: Month[] | null }) {
+function TodayBoard({ settings, shifts, months, people, manager }: { settings: HrSettings; shifts: Shifts; months: Month[] | null; people: { uid: string; name: string }[]; manager: boolean }) {
   const today = cairoNow().date
   const dd = today.slice(8, 10)
+  const [fixing, setFixing] = useState<{ uid?: string } | null>(null)
   if (!months) return <p className="muted">{t('Loading…')}</p>
   const rows = peopleOf(shifts, months).map((p) => {
     const m = months.find((x) => x.uid === p.uid)
@@ -366,7 +369,9 @@ function TodayBoard({ settings, shifts, months }: { settings: HrSettings; shifts
   if (!rows.length) return <Empty icon="users" text={t('Nobody has shifts yet. Open Shifts to add your team.')} />
   return (
     <>
-      <LeaveRequests list={leaveRequests(months, shifts, settings.grace)} />
+      {manager && <LeaveRequests list={leaveRequests(months, shifts, settings.grace)} />}
+      <div className="hr-week-nav"><button className="btn btn-small hr-add-punch" onClick={() => setFixing({})}><Icon name="edit" size={16} />{t('Add or fix a clock-in')}</button></div>
+      {fixing && <AddPunch people={peopleOf(shifts, months, people)} shifts={shifts} first={fixing.uid} onClose={() => setFixing(null)} />}
       <div className="hr-tiles">
         <div className="tile tile-good"><b>{count((s) => s === 'working')}</b><span>{t('In the shop now')}</span></div>
         <div className={`tile ${rows.some((x) => x.r.late) ? 'tile-bad' : 'tile-zero'}`}><b>{rows.filter((x) => x.r.late).length}</b><span>{t('Came late today')}</span></div>
@@ -395,6 +400,7 @@ function TodayBoard({ settings, shifts, months }: { settings: HrSettings; shifts
                 {r.early > 0 && <span className="chip chip-warn">{tn('%m early', { m: hm(r.early) })}</span>}
                 {p && <a className="chip chip-info" href={mapLink(p.lat, p.lng)} target="_blank" rel="noreferrer" title={t('Where they clocked in')}>{settings.places[p.place]?.name ?? '?'} ±{p.acc} m</a>}
                 {devices > 1 && <span className="chip chip-warn" title={t('Clocked in from more than one phone this month. Worth a look.')}>{tn('%n phones', { n: devices })}</span>}
+                {(r.state === 'notIn' || r.state === 'absent' || r.state === 'noOut' || r.state === 'working' || r.state === 'done' || r.state === 'extra') && <button className="btn btn-small btn-ghost" onClick={() => setFixing({ uid })}><Icon name="edit" size={16} />{t('Fix')}</button>}
               </div>
             </div>
           )
@@ -793,7 +799,7 @@ function ShiftEditor({ uid, person, templates, onClose, onSaved }: { uid: string
 
 // ---------- Report ----------
 
-function Report({ settings, shifts, months, month, setMonth, people }: { settings: HrSettings; shifts: Shifts; months: Month[] | null; month: string; setMonth: (m: string) => void; people: { uid: string; name: string }[] }) {
+function Report({ settings, shifts, months, month, setMonth, people, manager }: { settings: HrSettings; shifts: Shifts; months: Month[] | null; month: string; setMonth: (m: string) => void; people: { uid: string; name: string }[]; manager: boolean }) {
   const desktop = useDesktop()
   const [open, setOpen] = useState<string | null>(null)
   const rows = useMemo(() => (months ? peopleOf(shifts, months, people).map((p) => {
@@ -856,7 +862,7 @@ function Report({ settings, shifts, months, month, setMonth, people }: { setting
           ))}
         </div>
       )}
-      {current && <PersonMonth key={current.uid} uid={current.uid} name={current.name} month={month} m={current.m} days={current.days} totals={current.totals} onClose={() => setOpen(null)} />}
+      {current && <PersonMonth key={current.uid} uid={current.uid} name={current.name} month={month} m={current.m} days={current.days} totals={current.totals} manager={manager} onClose={() => setOpen(null)} />}
     </>
   )
 }
@@ -911,7 +917,7 @@ function printSheet(name: string, done: () => void) {
   setTimeout(restore, 60_000)
 }
 
-function PersonMonth({ uid, name, month, m, days, totals, onClose }: { uid: string; name: string; month: string; m?: Month; days: DayResult[]; totals: Totals; onClose: () => void }) {
+function PersonMonth({ uid, name, month, m, days, totals, manager, onClose }: { uid: string; name: string; month: string; m?: Month; days: DayResult[]; totals: Totals; manager: boolean; onClose: () => void }) {
   const [fixing, setFixing] = useState<DayResult | null>(null)
   const [excusing, setExcusing] = useState<DayResult | null>(null)
   const today = cairoNow().date
@@ -939,9 +945,9 @@ function PersonMonth({ uid, name, month, m, days, totals, onClose }: { uid: stri
     <Sheet wide title={`${name} · ${monthLabel(month)}`} onClose={onClose}>
       <div className="hr-me">
         <TotalsTiles totals={totals} />
-        <MonthDays days={days} onFix={setFixing} onExcuse={setExcusing} />
-        <Penalties list={m?.pens ?? []} onRemove={removePen} />
-        <div className="form hr-pen-form">
+        <MonthDays days={days} onFix={setFixing} onExcuse={manager ? setExcusing : undefined} />
+        <Penalties list={m?.pens ?? []} onRemove={manager ? removePen : undefined} />
+        {manager && <div className="form hr-pen-form">
           <h3>{t('Give a penalty')}</h3>
           <div className="hr-one">
             <input type="number" min="0" step="0.25" inputMode="decimal" placeholder={t('Amount')} value={pen.amount} onChange={(e) => setPen({ ...pen, amount: e.target.value })} />
@@ -950,7 +956,7 @@ function PersonMonth({ uid, name, month, m, days, totals, onClose }: { uid: stri
           </div>
           <input placeholder={t('Reason (they see it)')} value={pen.reason} onChange={(e) => setPen({ ...pen, reason: e.target.value })} maxLength={500} />
           <button className="btn btn-primary" disabled={busy} onClick={addPen}>{t('Give penalty')}</button>
-        </div>
+        </div>}
       </div>
       {fixing && <FixDay uid={uid} name={name} r={fixing} onClose={() => setFixing(null)} />}
       {excusing && <ExcuseDay uid={uid} name={name} r={excusing} onClose={() => setExcusing(null)} />}
@@ -958,9 +964,68 @@ function PersonMonth({ uid, name, month, m, days, totals, onClose }: { uid: stri
   )
 }
 
+/** Add or correct someone's clock-in and clock-out on any day (they forgot, or their phone could not find the shop). */
+function AddPunch({ people, shifts, first, onClose }: { people: { uid: string; name: string }[]; shifts: Shifts; first?: string; onClose: () => void }) {
+  const today = cairoNow().date
+  const [uid, setUid] = useState(first ?? people[0]?.uid ?? '')
+  const [date, setDate] = useState(today)
+  const [day, setDay] = useState<Month['days'][string] | undefined | null>(null)
+  const [inT, setIn] = useState('')
+  const [outT, setOut] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const name = people.find((p) => p.uid === uid)?.name ?? shifts[uid]?.name ?? ''
+  useEffect(() => {
+    if (!uid || !date) return
+    let live = true
+    setDay(null)
+    hr.loadMonth(uid, monthOf(date)).then((m) => {
+      if (!live) return
+      const d = m?.days[date.slice(8, 10)]
+      setDay(d)
+      setIn(d?.in ? clockOf(d.in) : '')
+      setOut(d?.out ? clockOf(d.out) : '')
+      setNote(d?.note ?? '')
+    }, (e) => { refused(e); setDay(undefined) })
+    return () => { live = false }
+  }, [uid, date])
+  async function save() {
+    setBusy(true)
+    const inMs = inT ? cairoMs(date, inT) : null
+    let outMs = outT ? cairoMs(date, outT) : null
+    if (inMs && outMs && outMs <= inMs) outMs += 86400_000
+    try {
+      await hr.fixDay(uid, date, { in: inMs, out: outMs, note })
+      track('hr', 'hr.fixed', { what: name, note: `${date}: ${inT ? h12(inT) : '—'} → ${outT ? h12(outT) : '—'}${note.trim() ? ` · ${note.trim()}` : ''}`, ref: uid })
+      showToast(t('Saved.'))
+      onClose()
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
+  const shift = shiftOn(shifts[uid], date)
+  return (
+    <Sheet title={t('Add or fix a clock-in')} onClose={onClose} footer={<button className="btn btn-primary" disabled={busy || !uid || day === null || (!inT && Boolean(outT))} onClick={save}>{t('Save')}</button>}>
+      <div className="form">
+        <div className="hr-one">
+          <label><span>{t('Person')}</span><select value={uid} onChange={(e) => setUid(e.target.value)}>{people.map((p) => <option key={p.uid} value={p.uid}>{p.name}</option>)}</select></label>
+          <label><span>{t('Day')}</span><input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} /></label>
+        </div>
+        <p className="hint" dir="auto">{t('Shift')}: <span dir="ltr">{shiftText(shift)}</span>{day === null ? ` · ${t('Loading…')}` : day?.in ? ` · ${tn('Now: %a → %b', { a: clock12(day.in), b: day.out ? clock12(day.out) : '—' })}` : ` · ${t('No clock-in yet')}`}</p>
+        <div className="hr-one">
+          <label><span>{t('Clock in')}</span><input type="time" value={inT} onChange={(e) => setIn(e.target.value)} /></label>
+          <label><span>{t('Clock out')}</span><input type="time" value={outT} onChange={(e) => setOut(e.target.value)} /></label>
+        </div>
+        <label><span>{t('Note')}</span><input value={note} dir="auto" placeholder={t('For example: forgot to clock out')} onChange={(e) => setNote(e.target.value)} maxLength={500} /></label>
+        <p className="hint">{t('Leave Clock out empty if they are still at work. A clock-out before the clock-in counts as the next morning. The day shows "Fixed by hand" with your name.')}</p>
+      </div>
+    </Sheet>
+  )
+}
+
 function FixDay({ uid, name, r, onClose }: { uid: string; name: string; r: DayResult; onClose: () => void }) {
-  const [inT, setIn] = useState(r.day?.in ? clock12(r.day.in) : '')
-  const [outT, setOut] = useState(r.day?.out ? clock12(r.day.out) : '')
+  // <input type=time> takes 24-hour 'HH:MM' (it shows it in the phone's own format).
+  const [inT, setIn] = useState(r.day?.in ? clockOf(r.day.in) : '')
+  const [outT, setOut] = useState(r.day?.out ? clockOf(r.day.out) : '')
   const [excused, setExcused] = useState(Boolean(r.day?.excused))
   const [note, setNote] = useState(r.day?.note ?? '')
   const [busy, setBusy] = useState(false)

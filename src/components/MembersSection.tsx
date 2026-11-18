@@ -111,7 +111,7 @@ const GROUPS: { title: string; hint: string; pages: Page[]; perms: Perm[]; permP
   { title: 'Shop', hint: 'Prices, the PC builder, website orders and maintenance tickets.', pages: ['prices', 'builder'], perms: ['prices.edit', 'prices.web', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'tickets', 'tickets.edit'], permPages: [{ perm: 'orders', label: 'Orders' }, { perm: 'tickets', label: 'Maintenance' }] },
   { title: 'Posters', hint: 'Offers, posters, the schedule and Facebook.', pages: ['offers', 'review', 'fix', 'calendar', 'posted', 'database'], perms: ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'brainstorm', 'delete', 'templates.edit'], permPages: [{ perm: 'brainstorm', label: 'Brainstorm' }] },
   { title: 'People', hint: 'Who is in the system, and what everyone did.', pages: [], perms: ['people', 'activity.view'] },
-  { title: 'HR', hint: 'Clocking in at the shop, shifts, late minutes and penalties.', pages: [], perms: ['hr.clock', 'hr'], permPages: [{ perm: 'hr.clock', label: 'HR' }] },
+  { title: 'HR', hint: 'Clocking in at the shop, shifts, late minutes and penalties.', pages: [], perms: ['hr.clock', 'hr.fix', 'hr'], permPages: [{ perm: 'hr.clock', label: 'HR' }] },
 ]
 
 /** The roles the owner makes: what each may do and which pages it sees. Owner only. */

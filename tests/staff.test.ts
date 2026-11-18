@@ -33,3 +33,24 @@ describe('HR records', () => {
     expect(toStaff('Mona', { salary: 'x', notes: [{ kind: 'bad', text: 'hi', at: 5 }] })).toMatchObject({ salary: 0, notes: [{ kind: 'note', text: 'hi', at: 5 }] })
   })
 })
+
+import { overallOf, prevQuarter, quarterMonths, quarterOf, withReview, type Review } from '../src/data/staff'
+describe('Quarterly reviews', () => {
+  it('works out quarters', () => {
+    expect(quarterOf('2026-11-19')).toBe('2026-Q4')
+    expect(quarterOf('2026-03-31')).toBe('2026-Q1')
+    expect(quarterMonths('2026-Q2')).toEqual(['2026-04', '2026-05', '2026-06'])
+    expect(prevQuarter('2026-Q1')).toBe('2025-Q4')
+    expect(prevQuarter('2026-Q3')).toBe('2026-Q2')
+  })
+  it('averages only the scores given', () => {
+    expect(overallOf({ attendance: 4, work: 5 })).toBe(4.5)
+    expect(overallOf({ attendance: 4, work: 5, team: 4 })).toBe(4.3)
+    expect(overallOf({ attendance: 9 })).toBe(0)
+    expect(overallOf({})).toBe(0)
+  })
+  it('keeps one review per quarter, newest first', () => {
+    const R = (q: string, overall: number): Review => ({ q, overall, at: 1, by: '', byName: '', scores: {}, good: '', improve: '', goals: '' })
+    expect(withReview([R('2026-Q2', 3), R('2026-Q3', 3)], R('2026-Q3', 5)).map((r) => [r.q, r.overall])).toEqual([['2026-Q3', 5], ['2026-Q2', 3]])
+  })
+})
