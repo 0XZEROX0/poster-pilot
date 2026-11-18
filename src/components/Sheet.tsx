@@ -3,7 +3,7 @@ import { t } from '../i18n'
 import { Icon } from './ui'
 
 /** A panel over the app: full screen on a phone, a centred dialog on a wide screen. */
-export function Sheet({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+export function Sheet({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
@@ -15,7 +15,7 @@ export function Sheet({ title, onClose, children, footer }: { title: string; onC
   }, [onClose])
   return (
     <div className="sheet-back" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`sheet${wide ? ' sheet-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <header className="sheet-head">
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label={t('Close')}><Icon name="close" /></button>

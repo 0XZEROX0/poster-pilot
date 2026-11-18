@@ -1,5 +1,5 @@
 import { describe as group, expect, it } from 'vitest'
-import { inWindow, promptFor, addMonths, cairoMs, checkSpot, clockOf, daysIn, devicesOf, distance, judgeDay, judgeMonth, metersPerLng, openDay, shiftMinutes, shiftOn, withDate, withPlan, type Month, type Person } from '../src/data/hr'
+import { inWindow, promptFor, addMonths, cairoMs, checkSpot, clockOf, daysIn, devicesOf, distance, judgeDay, judgeMonth, metersPerLng, openDay, shiftMinutes, shiftOn, templateDays, templateOf, withDate, withPlan, type Month, type Person } from '../src/data/hr'
 
 const week = (s: string, e: string, off: number[] = [5]) => Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), off.includes(d) ? null : { s, e }]))
 const shop = { name: 'Shop', lat: 30.0626, lng: 31.3363, radius: 100, kx: metersPerLng(30.0626) }
@@ -62,6 +62,16 @@ group('HR counting', () => {
     expect(judgeDay(d, sh, { in: at(d, '11:00'), out: at(d, '18:20') }, 10).early).toBe(40)
     expect(judgeDay(d, sh, { in: at(d, '12:00'), out: at(d, '18:00'), excused: true }, 10)).toMatchObject({ late: 0, early: 0 })
   })
+  it('excuses only the late arrival or only the early leave, and keeps what happened', () => {
+    const day = { in: at(d, '11:30'), out: at(d, '18:00') }
+    expect(judgeDay(d, sh, day, 10)).toMatchObject({ late: 30, early: 60, missing: 90, rawLate: 30, rawEarly: 60 })
+    expect(judgeDay(d, sh, { ...day, exEarly: true, why: 'emergency' }, 10)).toMatchObject({ late: 30, early: 0, missing: 30, rawEarly: 60 })
+    expect(judgeDay(d, sh, { ...day, exLate: true }, 10)).toMatchObject({ late: 0, early: 60, missing: 60, rawLate: 30 })
+  })
+  it('counts a missed day as the whole shift missing, unless excused', () => {
+    expect(judgeDay(d, sh, undefined, 10, at(d, '20:00'))).toMatchObject({ state: 'absent', missing: 480 })
+    expect(judgeDay(d, sh, { excused: true }, 10, at(d, '20:00'))).toMatchObject({ state: 'off', missing: 0 })
+  })
   it('tells absent, not in yet, working and a forgotten clock-out apart', () => {
     expect(judgeDay(d, sh, undefined, 10, at(d, '10:00')).state).toBe('upcoming')
     expect(judgeDay(d, sh, undefined, 10, at(d, '12:00')).state).toBe('notIn')
@@ -84,6 +94,9 @@ group('HR counting', () => {
     const { totals, days } = judgeMonth('2026-11', p, m, 10, at('2026-11-04', '22:00'))
     expect(days).toHaveLength(4)
     expect(totals).toMatchObject({ scheduled: 4, present: 2, absent: 2, lateDays: 1, lateMin: 30, earlyDays: 1, earlyMin: 60, pens: { EGP: 100, hours: 0, days: 0 } })
+    expect(totals).toMatchObject({ workedMin: 450 + 420, shiftMin: 4 * 480, missingMin: 30 + 60 + 2 * 480, excusedMin: 0 })
+    const excused = judgeMonth('2026-11', p, { ...m, days: { ...m.days, '02': { ...m.days['02'], exEarly: true, why: 'doctor' } } }, 10, at('2026-11-04', '22:00')).totals
+    expect(excused).toMatchObject({ earlyDays: 0, missingMin: 30 + 2 * 480, excusedMin: 60 })
   })
   it('finds the open day for clocking out, yesterday for a night shift', () => {
     const m: Month = { id: 'a_2026-11', uid: 'a', month: '2026-11', pens: [], days: { 17: { in: 1 }, 18: { in: 2, out: 3 } } }
@@ -121,5 +134,23 @@ group('HR clock hours and the ask on opening', () => {
     expect(promptFor(s, p, m, at('12:00'))).toBeNull()
     expect(promptFor(s, p, m, at('19:00'))).toBe('out')
     expect(promptFor({ ...s, inFrom: '', inTo: '' }, p, undefined, at('10:30'))).toBeNull()
+  })
+})
+
+group('HR shift templates', () => {
+  const morning = { id: 'm', name: 'Morning', s: '12:00', e: '20:00', off: [5] }
+  const evening = { id: 'e', name: 'Evening', s: '14:00', e: '22:00', off: [5] }
+  it('turns a template into a week with its days off', () => {
+    const days = templateDays(morning)
+    expect(days['5']).toBeNull()
+    expect(days['3']).toEqual({ s: '12:00', e: '20:00' })
+  })
+  it('knows which template a person is on, and when they switch', () => {
+    const p = withPlan(withPlan({ name: 'A', plans: [], dates: {} }, { from: '2026-11-01', days: templateDays(morning) }), { from: '2026-11-20', days: templateDays(evening) })
+    expect(templateOf(p, [morning, evening], '2026-11-18')?.name).toBe('Morning')
+    expect(templateOf(p, [morning, evening], '2026-11-21')?.name).toBe('Evening')
+    expect(shiftOn(p, '2026-11-22')).toEqual({ s: '14:00', e: '22:00' })
+    expect(templateOf(p, [morning], '2026-11-21')).toBeUndefined()
+    expect(templateOf(undefined, [morning], '2026-11-21')).toBeUndefined()
   })
 })

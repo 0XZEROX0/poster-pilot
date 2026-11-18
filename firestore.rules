@@ -31,7 +31,7 @@ service cloud.firestore {
       return role == 'owner' ? allPerms()
         : exists(rolePath(role)) ? get(rolePath(role)).data.perms
         : role == 'admin' ? allPerms()
-        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit', 'brainstorm', 'tickets', 'hr.clock']
+        : role == 'member' ? ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'prices.edit', 'templates.edit', 'brainstorm', 'tickets']
         : [];
     }
     // Pages a role is shown. A role only reads the posts that belong to its pages: every post carries
@@ -618,11 +618,10 @@ service cloud.firestore {
     // HR. hr/settings is where the shop is (places with a radius), how accurate a phone's location must be
     // (maxAcc, meters) and the grace minutes; hr/shifts holds everyone's shifts. Everyone who clocks in reads
     // both; only 'Manage HR' changes them.
-    // Clocking in came after roles were first saved: a role saved before it (v < 3) may still clock in.
+    // Only roles the owner ticked 'Clock in and out' (or 'Manage HR') for. HR is off for everyone else.
     function canClock() {
       let role = myRole();
-      return isMember() && ('hr.clock' in permsOf(role) || 'hr' in permsOf(role)
-        || (role != 'owner' && exists(rolePath(role)) && get(rolePath(role)).data.get('v', 1) < 3));
+      return isMember() && ('hr.clock' in permsOf(role) || 'hr' in permsOf(role));
     }
     // Clock-in and clock-out hours: 'HH:MM' or '' (any time). The app keeps to them and asks people to clock in when they open it.
     function hoursOk(d) {
@@ -638,7 +637,9 @@ service cloud.firestore {
           && request.resource.data.places is list && request.resource.data.places.size() <= 10
           && request.resource.data.maxAcc is number && request.resource.data.maxAcc >= 10 && request.resource.data.maxAcc <= 2000
           && request.resource.data.grace is int && request.resource.data.grace >= 0 && request.resource.data.grace <= 180)
-        || (id == 'shifts' && request.resource.data.keys().hasOnly(['people']) && request.resource.data.people is map));
+        || (id == 'shifts' && request.resource.data.keys().hasOnly(['people']) && request.resource.data.people is map)
+        // Ready-made shifts (name, hours, days off) HR gives to several people at once.
+        || (id == 'templates' && request.resource.data.keys().hasOnly(['list']) && request.resource.data.list is list && request.resource.data.list.size() <= 20));
       allow delete: if false;
     }
     // Attendance: attendance/{uid}_{YYYY-MM}, one document per person per month { uid, month, last, days: { DD: day }, pens }.

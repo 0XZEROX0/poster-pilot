@@ -64,7 +64,7 @@ export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
   { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'social.delete' && p !== 'orders' && p !== 'orders.edit' && p !== 'orders.change' && p !== 'orders.delete' && p !== 'hr'), pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'social.delete' && p !== 'orders' && p !== 'orders.edit' && p !== 'orders.change' && p !== 'orders.delete' && p !== 'hr.clock' && p !== 'hr'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }
@@ -90,8 +90,8 @@ export function newCode(): string {
 const out = (access: Access): Standing => ({ access, role: '', roleName: '', perms: [], pages: [] })
 /** Permissions that came after roles were first saved. A role saved before one existed (no `v`, or a lower one) keeps seeing it, so nothing disappears. */
 const ROLE_VERSION = 3
-// Clocking in came later and is for everyone: roles saved before it keep being able to clock in (the rules do the same).
-const ADDED_IN: [number, Perm][] = [[2, 'prices.web'], [3, 'hr.clock']]
+// HR is off unless the owner ticks it for a role (they test it with some people first), so 'hr.clock' is not given to older roles.
+const ADDED_IN: [number, Perm][] = [[2, 'prices.web']]
 const asRole = (id: string, data: { name?: string; perms?: string[]; pages?: string[]; v?: number } | undefined): RoleDef | null => {
   if (!data) return null
   const v = typeof data.v === 'number' ? data.v : 1

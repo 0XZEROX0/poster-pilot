@@ -4,8 +4,8 @@ import { track } from '../data/activity'
 import { addDays, cairoNow } from '../data/logic'
 import { allowed } from '../data/store'
 import {
-  addMonths, cairoMs, checkSpot, clockOf, clockOpen, windowText, DAY_NAMES, DEFAULT_SETTINGS, deviceId, devicesOf, hm, hr, judgeDay, judgeMonth, metersPerLng, monthOf, myUid, openDay, shiftOn, UNITS, WEEK, weekdayOf, withDate, withPlan,
-  type DayResult, type DayState, type HrSettings, type Month, type Person, type Place, type Shift, type Shifts, type Totals, type Unit,
+  addMonths, cairoMs, checkSpot, clockOf, clockOpen, windowText, DAY_NAMES, DEFAULT_SETTINGS, deviceId, devicesOf, hm, hr, judgeDay, judgeMonth, metersPerLng, monthOf, myUid, openDay, shiftOn, templateDays, templateOf, UNITS, WEEK, weekdayOf, withDate, withPlan,
+  type DayResult, type DayState, type HrSettings, type Month, type Person, type Place, type Shift, type Shifts, type Template, type Totals, type Unit,
 } from '../data/hr'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -79,7 +79,7 @@ export function HrView() {
       {error && <p className="banner banner-bad hr-banner" dir="ltr">{/permission/i.test(error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error}</p>}
       {section === 'me' && <MyAttendance settings={settings} person={shifts[myUid()]} mine={mine} />}
       {section === 'today' && <TodayBoard settings={settings} shifts={shifts} months={all} />}
-      {section === 'shifts' && <ShiftsBoard shifts={shifts} people={people} onSaved={(uid, p) => setShifts({ ...shifts, [uid]: p })} />}
+      {section === 'shifts' && <ShiftsBoard shifts={shifts} people={people} onSaved={(changed) => setShifts({ ...shifts, ...changed })} />}
       {section === 'report' && <Report settings={settings} shifts={shifts} months={all} month={month} setMonth={setMonth} people={people} />}
       {section === 'setup' && <Setup settings={settings} onSaved={setSettings} />}
     </div>
@@ -178,35 +178,114 @@ function MyAttendance({ settings, person, mine }: { settings: HrSettings; person
 function TotalsTiles({ totals }: { totals: Totals }) {
   return (
     <div className="hr-tiles">
+      <div className="tile tile-good"><b>{hm(totals.workedMin)}</b><span>{tn('Worked · of %s in shifts', { s: hm(totals.shiftMin) })}</span></div>
+      <div className={`tile ${totals.missingMin ? 'tile-bad' : 'tile-zero'}`}><b>{hm(totals.missingMin)}</b><span>{totals.excusedMin ? tn('Missing (late, early, absent) · %e excused', { e: hm(totals.excusedMin) }) : t('Missing (late, early, absent)')}</span></div>
       <div className={`tile ${totals.lateDays ? 'tile-bad' : 'tile-zero'}`}><b>{totals.lateDays}</b><span>{tn('Late days · %m', { m: hm(totals.lateMin) })}</span></div>
-      <div className={`tile ${totals.earlyDays ? 'tile-warn' : 'tile-zero'}`}><b>{totals.earlyDays}</b><span>{tn('Left early · %m', { m: hm(totals.earlyMin) })}</span></div>
-      <div className={`tile ${totals.absent ? 'tile-bad' : 'tile-zero'}`}><b>{totals.absent}</b><span>{t('Absent days')}</span></div>
-      <div className="tile tile-good"><b>{Math.round(totals.workedMin / 60)}</b><span>{tn('Hours worked · %n days', { n: totals.present })}</span></div>
+      <div className={`tile ${totals.earlyDays || totals.absent ? 'tile-warn' : 'tile-zero'}`}><b>{totals.earlyDays}</b><span>{tn('Left early · %a absent', { a: totals.absent })}</span></div>
     </div>
   )
 }
 
-function MonthDays({ days, onFix }: { days: DayResult[]; onFix?: (r: DayResult) => void }) {
+/** A late or early chip: red when it counts, crossed out and green when it was excused. */
+function MinChip({ raw, counted, label, tone }: { raw: number; counted: number; label: string; tone: string }) {
+  if (!raw) return null
+  return counted ? <span className={`chip ${tone}`}>{tn(label, { m: hm(raw) })}</span> : <span className="chip chip-good"><s>{tn(label, { m: hm(raw) })}</s> · {t('excused')}</span>
+}
+
+function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: DayResult) => void; onExcuse?: (r: DayResult) => void }) {
+  const desktop = useDesktop()
   const list = [...days].reverse().filter((r) => r.state !== 'off' || r.day)
   if (!list.length) return <Empty icon="calendar" text={t('Nothing this month yet.')} />
+  const canExcuse = (r: DayResult) => Boolean(onExcuse && (r.rawLate || r.rawEarly))
+  const reason = (r: DayResult) => [r.day?.why, r.day?.note].filter(Boolean).join(' · ')
+  if (desktop) {
+    return (
+      <div className="hr-week-wrap">
+        <table className="hr-report hr-att">
+          <thead><tr><th>{t('Day')}</th><th>{t('Shift')}</th><th>{t('In')}</th><th>{t('Out')}</th><th>{t('Worked')}</th><th>{t('Late')}</th><th>{t('Left early')}</th><th>{t('Missing')}</th><th>{t('Reason / note')}</th>{(onFix || onExcuse) && <th />}</tr></thead>
+          <tbody>
+            {list.map((r) => (
+              <tr key={r.date} className={r.state === 'absent' ? 'absent' : ''}>
+                <th>{dayLabel(r.date)}</th>
+                <td className="muted" dir="ltr">{shiftText(r.shift)}</td>
+                <td dir="ltr">{r.day?.in ? clockOf(r.day.in) : r.state === 'absent' ? <span className="chip chip-bad">{t('Absent')}</span> : '—'}</td>
+                <td dir="ltr">{r.day?.out ? clockOf(r.day.out) : r.state === 'noOut' ? <span className="chip chip-warn">{t('No clock-out')}</span> : r.state === 'working' ? <span className="chip chip-info">{t('Working')}</span> : '—'}</td>
+                <td>{r.worked ? hm(r.worked) : '—'}</td>
+                <td><MinChip raw={r.rawLate} counted={r.late} label="%m" tone="chip-bad" />{!r.rawLate && '—'}</td>
+                <td><MinChip raw={r.rawEarly} counted={r.early} label="%m" tone="chip-warn" />{!r.rawEarly && '—'}</td>
+                <td className={r.missing ? 'bad' : ''}>{r.missing ? hm(r.missing) : '—'}</td>
+                <td className="hr-why" dir="auto">{r.day?.excused && <span className="chip chip-good">{t('Excused day')}</span>} {reason(r)}{r.day?.fixBy && <small className="muted"> · {tn('fixed by %n', { n: r.day.fixBy })}</small>}</td>
+                {(onFix || onExcuse) && (
+                  <td><div className="hr-acts">
+                    {canExcuse(r) && <button className="btn btn-small" onClick={() => onExcuse!(r)}>{t('Excuse')}</button>}
+                    {onFix && <button className="btn btn-small btn-ghost" onClick={() => onFix(r)}><Icon name="edit" size={16} />{t('Fix')}</button>}
+                  </div></td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
   return (
     <div className="hr-days">
       {list.map((r) => (
         <div key={r.date} className="hr-day">
           <span className="hr-day-date">{dayLabel(r.date)}</span>
           <span className="hr-day-shift muted" dir="ltr">{shiftText(r.shift)}</span>
-          <span className="hr-day-times" dir="ltr">{r.day?.in ? clockOf(r.day.in) : '—'} → {r.day?.out ? clockOf(r.day.out) : '—'}</span>
+          <span className="hr-day-times" dir="ltr">{r.day?.in ? clockOf(r.day.in) : '—'} → {r.day?.out ? clockOf(r.day.out) : '—'}{r.worked ? <small className="muted"> · {hm(r.worked)}</small> : null}</span>
           <span className="hr-day-chips">
             {r.state !== 'done' && <span className={`chip ${STATE_TONE[r.state]}`}>{t(STATE_LABEL[r.state])}</span>}
-            {r.late > 0 && <span className="chip chip-bad">{tn('%m late', { m: hm(r.late) })}</span>}
-            {r.early > 0 && <span className="chip chip-warn">{tn('%m early', { m: hm(r.early) })}</span>}
-            {r.day?.excused && <span className="chip chip-good">{t('Excused')}</span>}
-            {r.day?.fixBy && <span className="chip" title={r.day.note}>{t('Fixed by hand')}</span>}
+            <MinChip raw={r.rawLate} counted={r.late} label="%m late" tone="chip-bad" />
+            <MinChip raw={r.rawEarly} counted={r.early} label="%m early" tone="chip-warn" />
+            {r.day?.excused && <span className="chip chip-good">{t('Excused day')}</span>}
+            {r.day?.fixBy && <span className="chip">{t('Fixed by hand')}</span>}
           </span>
-          {onFix && <button className="btn btn-small btn-ghost" onClick={() => onFix(r)}><Icon name="edit" size={16} />{t('Fix')}</button>}
+          {reason(r) && <span className="hr-day-why" dir="auto">{reason(r)}</span>}
+          {(onFix || onExcuse) && (
+            <span className="hr-day-acts">
+              {canExcuse(r) && <button className="btn btn-small" onClick={() => onExcuse!(r)}>{t('Excuse')}</button>}
+              {onFix && <button className="btn btn-small btn-ghost" onClick={() => onFix(r)}><Icon name="edit" size={16} />{t('Fix')}</button>}
+            </span>
+          )}
         </div>
       ))}
     </div>
+  )
+}
+
+/** Excuse a late arrival or an early leave, with the reason. It then stops counting, and the reason stays in the table. */
+function ExcuseDay({ uid, name, r, onClose }: { uid: string; name: string; r: DayResult; onClose: () => void }) {
+  const [late, setLate] = useState(r.rawLate > 0)
+  const [early, setEarly] = useState(r.rawEarly > 0)
+  const [why, setWhy] = useState(r.day?.why ?? '')
+  const [busy, setBusy] = useState(false)
+  async function save(excuse: boolean) {
+    if (excuse && !why.trim()) return showToast(t('Type the reason.'))
+    setBusy(true)
+    try {
+      const fix = excuse ? { exLate: late && r.rawLate > 0, exEarly: early && r.rawEarly > 0, why } : { exLate: false, exEarly: false, why: '' }
+      await hr.fixDay(uid, r.date, fix)
+      track('hr', 'hr.fixed', { what: name, note: `${r.date}: ${excuse ? `excused ${[fix.exLate && `${hm(r.rawLate)} late`, fix.exEarly && `${hm(r.rawEarly)} early`].filter(Boolean).join(' + ')} · ${why.trim()}` : 'excuse taken back'}`, ref: uid })
+      onClose()
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
+  const had = Boolean(r.day?.exLate || r.day?.exEarly)
+  return (
+    <Sheet title={`${t('Excuse')} · ${name} · ${dayLabel(r.date)}`} onClose={onClose} footer={<>
+      {had && <button className="btn btn-ghost" disabled={busy} onClick={() => save(false)}>{t('Take the excuse back')}</button>}
+      <button className="btn btn-primary" disabled={busy} onClick={() => save(true)}>{t('Excuse')}</button>
+    </>}>
+      <div className="form">
+        <p className="hint" dir="ltr">{t('Shift')}: {shiftText(r.shift)} · {r.day?.in ? clockOf(r.day.in) : '—'} → {r.day?.out ? clockOf(r.day.out) : '—'}</p>
+        {r.rawLate > 0 && <label className="check"><input type="checkbox" checked={late} onChange={(e) => setLate(e.target.checked)} /><span>{tn('Excuse coming %m late', { m: hm(r.rawLate) })}</span></label>}
+        {r.rawEarly > 0 && <label className="check"><input type="checkbox" checked={early} onChange={(e) => setEarly(e.target.checked)} /><span>{tn('Excuse leaving %m early', { m: hm(r.rawEarly) })}</span></label>}
+        <label><span>{t('Reason (they see it)')}</span><input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={500} placeholder={t('For example: family emergency, asked by the manager')} autoFocus /></label>
+        <p className="hint">{t('Excused minutes stop counting as late, early or missing. The reason stays next to the day.')}</p>
+      </div>
+    </Sheet>
   )
 }
 
@@ -288,17 +367,41 @@ function TodayBoard({ settings, shifts, months }: { settings: HrSettings; shifts
 
 // ---------- Shifts ----------
 
-function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { uid: string; name: string }[]; onSaved: (uid: string, p: Person) => void }) {
+const offText = (off: number[]) => (off.length ? tn('%d off', { d: off.map((d) => t(DAY_NAMES[d])).join(', ') }) : t('No day off'))
+
+function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { uid: string; name: string }[]; onSaved: (all: Shifts) => void }) {
   const today = cairoNow().date
   // The week starts on Saturday.
   const [start, setStart] = useState(() => addDays(today, -((weekdayOf(today) + 1) % 7)))
   const dates = Array.from({ length: 7 }, (_, i) => addDays(start, i))
   const [editing, setEditing] = useState<{ uid: string; name: string } | null>(null)
   const [adding, setAdding] = useState('')
+  const [templates, setTemplates] = useState<Template[] | null>(null)
+  const [tpEdit, setTpEdit] = useState<Template | null>(null)
+  const [giving, setGiving] = useState<string | null>(null)
+  useEffect(() => { hr.loadTemplates().then(setTemplates, () => setTemplates([])) }, [])
   const list = Object.entries(shifts).map(([uid, p]) => ({ uid, name: p.name, p })).sort((a, b) => a.name.localeCompare(b.name))
   const others = people.filter((x) => !shifts[x.uid])
+  const everyone = [...list.map(({ uid, name }) => ({ uid, name })), ...others].sort((a, b) => a.name.localeCompare(b.name))
   return (
     <>
+      <div className="hr-templates">
+        <h3>{t('Shift templates')}</h3>
+        <div className="hr-tp-list">
+          {templates === null ? <span className="muted">{t('Loading…')}</span> : templates.map((tp) => (
+            <div key={tp.id} className="hr-tp">
+              <button className="hr-tp-main" onClick={() => setGiving(tp.id)}>
+                <b dir="auto">{tp.name}</b>
+                <span dir="ltr">{tp.s} – {tp.e}</span>
+                <small className="muted">{offText(tp.off)}</small>
+              </button>
+              <button className="icon-btn" onClick={() => setTpEdit(tp)} aria-label={t('Edit')}><Icon name="edit" size={16} /></button>
+            </div>
+          ))}
+          {templates && templates.length < 20 && <button className="btn btn-small" onClick={() => setTpEdit({ id: '', name: '', s: '12:00', e: '20:00', off: [5] })}><Icon name="plus" size={16} />{t('New template')}</button>}
+        </div>
+        {templates && templates.length > 0 && <p className="hint">{t('Tap a template to give it to people.')}</p>}
+      </div>
       <div className="hr-week-nav">
         <button className="icon-btn" onClick={() => setStart(addDays(start, -7))} aria-label={t('Previous week')}><Icon name="left" /></button>
         <b>{dayLabel(dates[0])} – {dayLabel(dates[6])}</b>
@@ -310,29 +413,127 @@ function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { ui
           </select>
         )}
       </div>
-      {list.length === 0 ? <Empty icon="calendar" text={t('Nobody has shifts yet. Add a person to set their week.')} /> : (
+      {list.length === 0 ? <Empty icon="calendar" text={t('Nobody has shifts yet. Make a template and give it to people, or add a person.')} /> : (
         <div className="hr-week-wrap">
           <table className="hr-week">
             <thead>
               <tr><th />{dates.map((d) => <th key={d} className={d === today ? 'today' : ''}>{dayLabel(d)}</th>)}</tr>
             </thead>
             <tbody>
-              {list.map(({ uid, name, p }) => (
-                <tr key={uid} onClick={() => setEditing({ uid, name })}>
-                  <th><span className="hr-who"><Avatar uid={uid} name={name} size={28} /><span dir="auto">{name}</span></span></th>
-                  {dates.map((d) => {
-                    const s = shiftOn(p, d)
-                    return <td key={d} className={`${s ? '' : 'off'}${d in p.dates ? ' changed' : ''}${d === today ? ' today' : ''}`} dir="ltr">{s ? <>{s.s}<br />{s.e}</> : t('Off')}</td>
-                  })}
-                </tr>
-              ))}
+              {list.map(({ uid, name, p }) => {
+                const tp = templates ? templateOf(p, templates, dates[0] < today ? today : dates[0]) : undefined
+                return (
+                  <tr key={uid} onClick={() => setEditing({ uid, name })}>
+                    <th><span className="hr-who"><Avatar uid={uid} name={name} size={28} /><span><span dir="auto">{name}</span>{tp && <small className="hr-tp-tag" dir="auto">{tp.name}</small>}</span></span></th>
+                    {dates.map((d) => {
+                      const s = shiftOn(p, d)
+                      return <td key={d} className={`${s ? '' : 'off'}${d in p.dates ? ' changed' : ''}${d === today ? ' today' : ''}`} dir="ltr">{s ? <>{s.s}<br />{s.e}</> : t('Off')}</td>
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       )}
       <p className="hint">{t('Tap a person to change their week or one day. A dotted cell is a one-day change.')}</p>
-      {editing && <ShiftEditor uid={editing.uid} person={shifts[editing.uid] ?? { name: editing.name, plans: [], dates: {} }} onClose={() => setEditing(null)} onSaved={(p) => { onSaved(editing.uid, p); setEditing(null) }} />}
+      {editing && <ShiftEditor uid={editing.uid} person={shifts[editing.uid] ?? { name: editing.name, plans: [], dates: {} }} onClose={() => setEditing(null)} onSaved={(p) => { onSaved({ [editing.uid]: p }); setEditing(null) }} />}
+      {tpEdit && templates && <TemplateEditor tp={tpEdit} list={templates} onClose={() => setTpEdit(null)} onSaved={(l) => { setTemplates(l); setTpEdit(null) }} />}
+      {giving && templates?.find((x) => x.id === giving) && (
+        <GiveShift tp={templates.find((x) => x.id === giving)!} shifts={shifts} everyone={everyone} onClose={() => setGiving(null)} onSaved={(changed) => { onSaved(changed); setGiving(null) }} />
+      )}
     </>
+  )
+}
+
+function TemplateEditor({ tp, list, onClose, onSaved }: { tp: Template; list: Template[]; onClose: () => void; onSaved: (l: Template[]) => void }) {
+  const [x, setX] = useState(tp)
+  const [busy, setBusy] = useState(false)
+  async function save(next: Template[], note: string) {
+    setBusy(true)
+    try {
+      await hr.saveTemplates(next)
+      track('hr', 'hr.shifts', { what: t('Shift templates'), note })
+      onSaved(next)
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
+  function ok() {
+    if (!x.name.trim()) return showToast(t('Type a name.'))
+    if (!x.s || !x.e || x.s === x.e) return showToast(t('Set the start and the end.'))
+    const item = { ...x, name: x.name.trim(), id: x.id || Math.random().toString(36).slice(2, 10) }
+    save(x.id ? list.map((o) => (o.id === x.id ? item : o)) : [...list, item], `${item.name} ${item.s}–${item.e}`)
+  }
+  return (
+    <Sheet title={x.id ? t('Edit template') : t('New template')} onClose={onClose} footer={<>
+      {x.id && <button className="btn btn-ghost" disabled={busy} onClick={() => confirm(t('Delete this template? People keep the shifts they already have.')) && save(list.filter((o) => o.id !== x.id), `deleted ${x.name}`)}>{t('Delete')}</button>}
+      <button className="btn btn-primary" disabled={busy} onClick={ok}>{t('Save')}</button>
+    </>}>
+      <div className="form">
+        <label><span>{t('Name')}</span><input value={x.name} maxLength={60} onChange={(e) => setX({ ...x, name: e.target.value })} placeholder={t('For example: Morning')} autoFocus /></label>
+        <div className="hr-one">
+          <label><span>{t('Starts')}</span><input type="time" value={x.s} onChange={(e) => setX({ ...x, s: e.target.value })} /></label>
+          <label><span>{t('Ends')}</span><input type="time" value={x.e} onChange={(e) => setX({ ...x, e: e.target.value })} /></label>
+        </div>
+        <div>
+          <span className="label">{t('Days off')}</span>
+          <div className="hr-off-days">
+            {WEEK.map((d) => (
+              <label key={d} className={`hr-off-day${x.off.includes(d) ? ' on' : ''}`}>
+                <input type="checkbox" checked={x.off.includes(d)} onChange={(e) => setX({ ...x, off: e.target.checked ? [...x.off, d].sort() : x.off.filter((o) => o !== d) })} />
+                {t(DAY_NAMES[d])}
+              </label>
+            ))}
+          </div>
+        </div>
+        <p className="hint">{t('An end before the start ends the next day (a night shift).')}</p>
+      </div>
+    </Sheet>
+  )
+}
+
+/** Gives one template to several people from a date on. Their weeks before that date stay as they were. */
+function GiveShift({ tp, shifts, everyone, onClose, onSaved }: { tp: Template; shifts: Shifts; everyone: { uid: string; name: string }[]; onClose: () => void; onSaved: (changed: Shifts) => void }) {
+  const today = cairoNow().date
+  const [from, setFrom] = useState(today)
+  const [picked, setPicked] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  async function save() {
+    if (!picked.length) return showToast(t('Pick at least one person.'))
+    setBusy(true)
+    try {
+      const changed: Shifts = Object.fromEntries(picked.map((uid) => {
+        const p = shifts[uid] ?? { name: everyone.find((x) => x.uid === uid)?.name ?? '', plans: [], dates: {} }
+        return [uid, withPlan(p, { from, days: templateDays(tp) })]
+      }))
+      await hr.savePeople(changed)
+      track('hr', 'hr.shifts', { what: tp.name, note: `${tp.s}–${tp.e} from ${from}: ${picked.map((uid) => changed[uid].name).join(', ')}` })
+      onSaved(changed)
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
+  return (
+    <Sheet title={tn('Give %n', { n: tp.name })} onClose={onClose} footer={<button className="btn btn-primary" disabled={busy || !picked.length} onClick={save}>{tn('Give to %n people', { n: picked.length })}</button>}>
+      <div className="form">
+        <p className="hint" dir="auto">{tp.s} – {tp.e} · {offText(tp.off)}</p>
+        <label><span>{t('Starting from')}</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+        <div className="hr-pick-head">
+          <span className="label">{t('People')}</span>
+          <button className="btn btn-small btn-ghost" onClick={() => setPicked(picked.length === everyone.length ? [] : everyone.map((x) => x.uid))}>{picked.length === everyone.length ? t('Clear') : t('Pick everyone')}</button>
+        </div>
+        <div className="hr-pick">
+          {everyone.map((x) => (
+            <label key={x.uid} className="hr-pick-row">
+              <input type="checkbox" checked={picked.includes(x.uid)} onChange={(e) => setPicked(e.target.checked ? [...picked, x.uid] : picked.filter((u) => u !== x.uid))} />
+              <Avatar uid={x.uid} name={x.name} size={28} />
+              <span dir="auto">{x.name}</span>
+              {shifts[x.uid] && <small className="muted" dir="ltr">{shiftText(shiftOn(shifts[x.uid], from) ?? null)}</small>}
+            </label>
+          ))}
+        </div>
+        <p className="hint">{t('Days before the start date keep their old shifts. One-day changes stay.')}</p>
+      </div>
+    </Sheet>
   )
 }
 
@@ -367,7 +568,7 @@ function ShiftEditor({ uid, person, onClose, onSaved }: { uid: string; person: P
           const s = days[String(d)]
           return (
             <div key={d} className="hr-edit-day">
-              <label className="check"><input type="checkbox" checked={Boolean(s)} onChange={(e) => set(d, e.target.checked ? lastOn : null)} /><span>{t(DAY_NAMES[d])}</span></label>
+              <label className="check-line"><input type="checkbox" checked={Boolean(s)} onChange={(e) => set(d, e.target.checked ? lastOn : null)} /><span>{t(DAY_NAMES[d])}</span></label>
               {s ? (
                 <span className="hr-times">
                   <input type="time" value={s.s} onChange={(e) => set(d, { ...s, s: e.target.value })} aria-label={t('Starts')} />
@@ -415,8 +616,8 @@ function Report({ settings, shifts, months, month, setMonth, people }: { setting
   }) : []), [months, shifts, month, settings.grace, people])
   const pens = (x: Totals) => UNITS.filter((u) => x.pens[u]).map((u) => `${x.pens[u]} ${t(UNIT_LABEL[u])}`).join(' + ') || '—'
   function csv() {
-    const head = ['Name', 'Shift days', 'Present', 'Absent', 'Late days', 'Late minutes', 'Left early days', 'Early minutes', 'No clock-out', 'Hours worked', 'Penalty EGP', 'Penalty hours', 'Penalty days']
-    const lines = rows.map((r) => [r.name, r.totals.scheduled, r.totals.present, r.totals.absent, r.totals.lateDays, r.totals.lateMin, r.totals.earlyDays, r.totals.earlyMin, r.totals.noOut, (r.totals.workedMin / 60).toFixed(1), r.totals.pens.EGP, r.totals.pens.hours, r.totals.pens.days])
+    const head = ['Name', 'Shift days', 'Present', 'Absent', 'Late days', 'Late minutes', 'Left early days', 'Early minutes', 'No clock-out', 'Hours worked', 'Hours missing', 'Hours excused', 'Penalty EGP', 'Penalty hours', 'Penalty days']
+    const lines = rows.map((r) => [r.name, r.totals.scheduled, r.totals.present, r.totals.absent, r.totals.lateDays, r.totals.lateMin, r.totals.earlyDays, r.totals.earlyMin, r.totals.noOut, (r.totals.workedMin / 60).toFixed(1), (r.totals.missingMin / 60).toFixed(1), (r.totals.excusedMin / 60).toFixed(1), r.totals.pens.EGP, r.totals.pens.hours, r.totals.pens.days])
     const text = [head, ...lines].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }))
@@ -477,7 +678,7 @@ type ReportRow = { uid: string; name: string; totals: Totals }
 function ReportTable({ rows, pens, onOpen }: { rows: ReportRow[]; pens: (x: Totals) => string; onOpen?: (uid: string) => void }) {
   return (
     <table className="hr-report">
-      <thead><tr><th>{t('Name')}</th><th>{t('Present')}</th><th>{t('Absent')}</th><th>{t('Late')}</th><th>{t('Left early')}</th><th>{t('No clock-out')}</th><th>{t('Hours')}</th><th>{t('Penalties')}</th></tr></thead>
+      <thead><tr><th>{t('Name')}</th><th>{t('Present')}</th><th>{t('Absent')}</th><th>{t('Late')}</th><th>{t('Left early')}</th><th>{t('No clock-out')}</th><th>{t('Worked')}</th><th>{t('Missing')}</th><th>{t('Excused')}</th><th>{t('Penalties')}</th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.uid} onClick={onOpen && (() => onOpen(r.uid))}>
@@ -487,7 +688,9 @@ function ReportTable({ rows, pens, onOpen }: { rows: ReportRow[]; pens: (x: Tota
             <td className={r.totals.lateDays ? 'bad' : ''}>{r.totals.lateDays} · {hm(r.totals.lateMin)}</td>
             <td className={r.totals.earlyDays ? 'warn' : ''}>{r.totals.earlyDays} · {hm(r.totals.earlyMin)}</td>
             <td>{r.totals.noOut}</td>
-            <td>{(r.totals.workedMin / 60).toFixed(1)}</td>
+            <td>{hm(r.totals.workedMin)}</td>
+            <td className={r.totals.missingMin ? 'bad' : ''}>{r.totals.missingMin ? hm(r.totals.missingMin) : '—'}</td>
+            <td>{r.totals.excusedMin ? hm(r.totals.excusedMin) : '—'}</td>
             <td>{pens(r.totals)}</td>
           </tr>
         ))}
@@ -522,6 +725,7 @@ function printSheet(name: string, done: () => void) {
 
 function PersonMonth({ uid, name, month, m, days, totals, onClose }: { uid: string; name: string; month: string; m?: Month; days: DayResult[]; totals: Totals; onClose: () => void }) {
   const [fixing, setFixing] = useState<DayResult | null>(null)
+  const [excusing, setExcusing] = useState<DayResult | null>(null)
   const today = cairoNow().date
   const [pen, setPen] = useState({ amount: '', unit: 'EGP' as Unit, date: monthOf(today) === month ? today : `${month}-01`, reason: '' })
   const [busy, setBusy] = useState(false)
@@ -544,10 +748,10 @@ function PersonMonth({ uid, name, month, m, days, totals, onClose }: { uid: stri
     } catch (e) { refused(e) }
   }
   return (
-    <Sheet title={`${name} · ${monthLabel(month)}`} onClose={onClose}>
+    <Sheet wide title={`${name} · ${monthLabel(month)}`} onClose={onClose}>
       <div className="hr-me">
         <TotalsTiles totals={totals} />
-        <MonthDays days={days} onFix={setFixing} />
+        <MonthDays days={days} onFix={setFixing} onExcuse={setExcusing} />
         <Penalties list={m?.pens ?? []} onRemove={removePen} />
         <div className="form hr-pen-form">
           <h3>{t('Give a penalty')}</h3>
@@ -561,6 +765,7 @@ function PersonMonth({ uid, name, month, m, days, totals, onClose }: { uid: stri
         </div>
       </div>
       {fixing && <FixDay uid={uid} name={name} r={fixing} onClose={() => setFixing(null)} />}
+      {excusing && <ExcuseDay uid={uid} name={name} r={excusing} onClose={() => setExcusing(null)} />}
     </Sheet>
   )
 }
@@ -589,7 +794,7 @@ function FixDay({ uid, name, r, onClose }: { uid: string; name: string; r: DayRe
         <p className="hint" dir="ltr">{t('Shift')}: {shiftText(r.shift)}</p>
         <label><span>{t('Clock in')}</span><input type="time" value={inT} onChange={(e) => setIn(e.target.value)} /></label>
         <label><span>{t('Clock out')}</span><input type="time" value={outT} onChange={(e) => setOut(e.target.value)} /></label>
-        <label className="check"><input type="checkbox" checked={excused} onChange={(e) => setExcused(e.target.checked)} /><span>{t('Excused: do not count late, early or absent for this day')}</span></label>
+        <label className="check-line"><input type="checkbox" checked={excused} onChange={(e) => setExcused(e.target.checked)} /><span>{t('Excused: do not count late, early or absent for this day')}</span></label>
         <label><span>{t('Note')}</span><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} /></label>
         <p className="hint">{t('Use this when someone forgot to clock out, or their phone could not find the shop. The day shows "Fixed by hand" with your name.')}</p>
       </div>

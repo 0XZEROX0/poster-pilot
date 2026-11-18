@@ -26,7 +26,19 @@ export type Plan = { from: string; days: Record<string, Shift> }
 export type Person = { name: string; plans: Plan[]; dates: Record<string, Shift> }
 export type Shifts = Record<string, Person>
 export type Punch = { lat: number; lng: number; acc: number; place: number; dev: string }
-export type Day = { in?: number; out?: number; inP?: Punch; outP?: Punch; excused?: boolean; note?: string; fixBy?: string }
+/** excused: the whole day counts nothing. exLate / exEarly: that late arrival or early leave is excused, with the reason in `why`. */
+export type Day = { in?: number; out?: number; inP?: Punch; outP?: Punch; excused?: boolean; exLate?: boolean; exEarly?: boolean; why?: string; note?: string; fixBy?: string }
+/** A ready-made shift HR gives to several people at once: hours, and the weekdays off (0 = Sunday … 6 = Saturday). */
+export type Template = { id: string; name: string; s: string; e: string; off: number[] }
+/** The weekly days of a template. */
+export const templateDays = (tp: Template): Record<string, Shift> => Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), tp.off.includes(d) ? null : { s: tp.s, e: tp.e }]))
+/** The template a person's current week matches, if any. */
+export function templateOf(p: Person | undefined, templates: Template[], date: string): Template | undefined {
+  if (!p) return undefined
+  const plan = [...p.plans].filter((x) => x.from <= date).sort((a, b) => (a.from < b.from ? 1 : -1))[0]
+  if (!plan) return undefined
+  return templates.find((tp) => JSON.stringify(templateDays(tp)) === JSON.stringify(Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), plan.days[String(d)] ?? null]))))
+}
 export const UNITS = ['EGP', 'hours', 'days'] as const
 export type Unit = (typeof UNITS)[number]
 export type Penalty = { at: number; by: string; byName: string; date: string; amount: number; unit: Unit; reason: string }
@@ -149,44 +161,50 @@ export function withDate(p: Person, date: string, shift: Shift | undefined): Per
 // ---------- Counting ----------
 
 export type DayState = 'off' | 'upcoming' | 'notIn' | 'absent' | 'working' | 'noOut' | 'done' | 'extra'
-export type DayResult = { date: string; shift: Shift; day?: Day; state: DayState; late: number; early: number; worked: number }
+/** late / early count (0 when excused); rawLate / rawEarly are what happened, excused or not. missing = late + early that count, or the whole shift when absent. */
+export type DayResult = { date: string; shift: Shift; day?: Day; state: DayState; late: number; early: number; rawLate: number; rawEarly: number; missing: number; worked: number }
 
 /** How long after a shift's end a missing clock-out counts as forgotten. */
 const NO_OUT_AFTER = 4 * 3600_000
 
 /** One day of one person: what happened, and the late and early minutes (after the grace minutes). */
 export function judgeDay(date: string, shift: Shift, day: Day | undefined, grace: number, now = Date.now()): DayResult {
-  const base = { date, shift, day, late: 0, early: 0, worked: 0 }
+  const base = { date, shift, day, late: 0, early: 0, rawLate: 0, rawEarly: 0, missing: 0, worked: 0 }
   const start = shift ? cairoMs(date, shift.s) : 0
   const end = shift ? start + shiftMinutes(shift) * 60_000 : 0
   if (!day?.in) {
     if (!shift) return { ...base, state: 'off' }
     if (now < start) return { ...base, state: 'upcoming' }
     if (now < end) return { ...base, state: 'notIn' }
-    return { ...base, state: day?.excused ? 'off' : 'absent' }
+    return day?.excused ? { ...base, state: 'off' } : { ...base, state: 'absent', missing: shiftMinutes(shift) }
   }
   const worked = day.out ? Math.max(0, Math.round((day.out - day.in) / 60_000)) : 0
   if (!shift) return { ...base, state: day.out ? 'extra' : 'working', worked }
-  const rawLate = Math.floor((day.in - start) / 60_000)
-  const late = day.excused || rawLate <= grace ? 0 : rawLate
-  const early = day.out && !day.excused ? Math.max(0, Math.ceil((end - day.out) / 60_000)) : 0
+  const lateBy = Math.floor((day.in - start) / 60_000)
+  const rawLate = lateBy <= grace ? 0 : lateBy
+  const rawEarly = day.out ? Math.max(0, Math.ceil((end - day.out) / 60_000)) : 0
+  const late = day.excused || day.exLate ? 0 : rawLate
+  const early = day.excused || day.exEarly ? 0 : rawEarly
   const state: DayState = day.out ? 'done' : now > end + NO_OUT_AFTER ? 'noOut' : 'working'
-  return { ...base, state, late, early, worked }
+  return { ...base, state, late, early, rawLate, rawEarly, missing: late + early, worked }
 }
 
-export type Totals = { scheduled: number; present: number; absent: number; lateDays: number; lateMin: number; earlyDays: number; earlyMin: number; noOut: number; workedMin: number; extra: number; pens: Record<Unit, number> }
+/** shiftMin: minutes of all shifts so far; missingMin: late + early that count, plus whole shifts missed; excusedMin: late + early that were excused. */
+export type Totals = { scheduled: number; present: number; absent: number; lateDays: number; lateMin: number; earlyDays: number; earlyMin: number; noOut: number; workedMin: number; shiftMin: number; missingMin: number; excusedMin: number; extra: number; pens: Record<Unit, number> }
 
 /** Every day of a month for one person, up to today, with the totals. */
 export function judgeMonth(month: string, person: Person | undefined, m: Month | undefined, grace: number, now = Date.now()): { days: DayResult[]; totals: Totals } {
   const today = dateOf(now)
   const days: DayResult[] = []
-  const totals: Totals = { scheduled: 0, present: 0, absent: 0, lateDays: 0, lateMin: 0, earlyDays: 0, earlyMin: 0, noOut: 0, workedMin: 0, extra: 0, pens: { EGP: 0, hours: 0, days: 0 } }
+  const totals: Totals = { scheduled: 0, present: 0, absent: 0, lateDays: 0, lateMin: 0, earlyDays: 0, earlyMin: 0, noOut: 0, workedMin: 0, shiftMin: 0, missingMin: 0, excusedMin: 0, extra: 0, pens: { EGP: 0, hours: 0, days: 0 } }
   for (let d = 1; d <= daysIn(month); d++) {
     const date = `${month}-${String(d).padStart(2, '0')}`
     if (date > today) break
     const r = judgeDay(date, shiftOn(person, date), m?.days[String(d).padStart(2, '0')], grace, now)
     days.push(r)
-    if (r.shift) totals.scheduled++
+    if (r.shift) { totals.scheduled++; totals.shiftMin += shiftMinutes(r.shift) }
+    totals.missingMin += r.missing
+    totals.excusedMin += r.rawLate - r.late + r.rawEarly - r.early
     if (r.day?.in) totals.present++
     if (r.state === 'absent') totals.absent++
     if (r.state === 'noOut') totals.noOut++
@@ -256,10 +274,14 @@ export function toShifts(d: DocumentData | undefined): Shifts {
   }
   return out
 }
+export function toTemplates(d: DocumentData | undefined): Template[] {
+  if (!Array.isArray(d?.list)) return []
+  return d.list.map((x: Record<string, unknown>) => ({ id: str(x.id, 40), name: str(x.name, 60), s: str(x.s, 5), e: str(x.e, 5), off: Array.isArray(x.off) ? x.off.filter((n): n is number => typeof n === 'number') : [] })).filter((x: Template) => x.s && x.e)
+}
 export function toMonth(id: string, d: DocumentData): Month {
   const days: Record<string, Day> = {}
   for (const [k, v] of Object.entries((d.days ?? {}) as Record<string, Record<string, unknown>>)) {
-    days[k] = { in: ms(v.in), out: ms(v.out), inP: asPunch(v.inP), outP: asPunch(v.outP), excused: v.excused === true, note: str(v.note, 500) || undefined, fixBy: str(v.fixBy, 200) || undefined }
+    days[k] = { in: ms(v.in), out: ms(v.out), inP: asPunch(v.inP), outP: asPunch(v.outP), excused: v.excused === true, exLate: v.exLate === true, exEarly: v.exEarly === true, why: str(v.why, 500) || undefined, note: str(v.note, 500) || undefined, fixBy: str(v.fixBy, 200) || undefined }
   }
   const pens = Array.isArray(d.pens) ? d.pens.map((p: Record<string, unknown>) => ({ at: num(p.at), by: str(p.by, 128), byName: str(p.byName, 200), date: str(p.date, 10), amount: num(p.amount), unit: (UNITS as readonly string[]).includes(str(p.unit)) ? (p.unit as Unit) : 'EGP', reason: str(p.reason, 500) })) : []
   return { id, uid: str(d.uid, 128), month: str(d.month, 7), days, pens }
@@ -275,13 +297,17 @@ function me(): Me {
 }
 export const myUid = () => me().uid
 
-export type DayFix = { in?: number | null; out?: number | null; excused?: boolean; note?: string }
+export type DayFix = { in?: number | null; out?: number | null; excused?: boolean; exLate?: boolean; exEarly?: boolean; why?: string; note?: string }
 
 export interface HrBackend {
   loadSettings(): Promise<HrSettings>
   saveSettings(s: HrSettings): Promise<void>
   loadShifts(): Promise<Shifts>
   savePerson(uid: string, p: Person): Promise<void>
+  /** Several people at once, in one write (giving a template to a group). */
+  savePeople(people: Shifts): Promise<void>
+  loadTemplates(): Promise<Template[]>
+  saveTemplates(list: Template[]): Promise<void>
   watchMine(month: string, on: (m: Month | undefined) => void, onError: (e: Error) => void): () => void
   watchAll(month: string, on: (list: Month[]) => void, onError: (e: Error) => void): () => void
   /** The people a manager can give shifts to. */
@@ -308,6 +334,13 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
     async loadSettings() { return toSettings((await getDoc(settingsRef)).data()) },
     async saveSettings(s) { await setDoc(settingsRef, { places: s.places, maxAcc: s.maxAcc, grace: Math.round(s.grace), inFrom: s.inFrom, inTo: s.inTo, outFrom: s.outFrom, outTo: s.outTo }) },
     async loadShifts() { return toShifts((await getDoc(shiftsRef)).data()) },
+    async savePeople(people) {
+      const clean = Object.fromEntries(Object.entries(people).map(([uid, p]) => [uid, { name: p.name.slice(0, 200), plans: p.plans, dates: p.dates }]))
+      if ((await getDoc(shiftsRef)).exists()) await updateDoc(shiftsRef, Object.fromEntries(Object.entries(clean).map(([uid, p]) => [`people.${uid}`, p])))
+      else await setDoc(shiftsRef, { people: clean })
+    },
+    async loadTemplates() { return toTemplates((await getDoc(doc(fs, 'hr', 'templates'))).data()) },
+    async saveTemplates(list) { await setDoc(doc(fs, 'hr', 'templates'), { list: list.slice(0, 20).map((x) => ({ id: x.id, name: x.name.trim().slice(0, 60), s: x.s, e: x.e, off: x.off })) }) },
     async savePerson(uid, p) {
       // The whole person is replaced (a merge would keep one-day changes that were taken out).
       const clean: Person = { name: p.name.slice(0, 200), plans: p.plans, dates: p.dates }
@@ -334,6 +367,9 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
       if (fix.in !== undefined) patch[`days.${dd}.in`] = at(fix.in)
       if (fix.out !== undefined) patch[`days.${dd}.out`] = at(fix.out)
       if (fix.excused !== undefined) patch[`days.${dd}.excused`] = fix.excused
+      if (fix.exLate !== undefined) patch[`days.${dd}.exLate`] = fix.exLate
+      if (fix.exEarly !== undefined) patch[`days.${dd}.exEarly`] = fix.exEarly
+      if (fix.why !== undefined) patch[`days.${dd}.why`] = fix.why.trim().slice(0, 500)
       if (fix.note !== undefined) patch[`days.${dd}.note`] = fix.note.trim().slice(0, 500)
       const ref = doc(col, monthId(uid, month))
       if (!(await getDoc(ref)).exists()) await setDoc(ref, { uid, month, days: {} })
@@ -356,8 +392,8 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
 
 // ---------- Demo mode: kept in this browser ----------
 
-const LOCAL_KEY = 'posterpilot.demo.hr.v1'
-type Local = { settings: HrSettings; shifts: Shifts; months: Month[] }
+const LOCAL_KEY = 'posterpilot.demo.hr.v2'
+type Local = { settings: HrSettings; shifts: Shifts; months: Month[]; templates?: Template[] }
 const listeners = new Set<() => void>()
 
 const SHOP: Place = { name: 'Static shop', lat: 30.0626, lng: 31.3363, radius: 120, kx: metersPerLng(30.0626) }
@@ -404,10 +440,14 @@ function demoData(): Local {
   }
   const cur = months.get(`yousef_${monthOf(today)}`)
   if (cur) cur.pens.push({ at: now - 86400_000 * 3, by: 'demo-you', byName: 'You', date: addDays(today, -3), amount: 0.5, unit: 'days', reason: 'Came 50 minutes late without telling anyone.' })
+  // One early leave already excused, with its reason.
+  const mona = months.get(`mona_${monthOf(today)}`)
+  const left = mona && Object.entries(mona.days).find(([dd, d]) => { const sh = shiftOn(shifts.mona, `${monthOf(today)}-${dd}`); return sh && d.out && d.out < cairoMs(`${monthOf(today)}-${dd}`, sh.e) - 10 * 60_000 })
+  if (left) Object.assign(left[1], { exEarly: true, why: 'Family emergency, called before leaving.', fixBy: 'You' })
   // Today: you have not clocked in yet, so the button can be tried.
   const mine = months.get(`demo-you_${monthOf(today)}`)
   if (mine) delete mine.days[today.slice(8, 10)]
-  return { settings: { places: [SHOP], maxAcc: 100, grace: 10, inFrom: '10:00', inTo: '15:00', outFrom: '18:00', outTo: '02:30' }, shifts, months: [...months.values()] }
+  return { settings: { places: [SHOP], maxAcc: 100, grace: 10, inFrom: '10:00', inTo: '15:00', outFrom: '18:00', outTo: '02:30' }, shifts, months: [...months.values()], templates: [{ id: 'a', name: 'Morning', s: '12:00', e: '20:00', off: [5] }, { id: 'b', name: 'Evening', s: '14:00', e: '22:00', off: [5] }] }
 }
 
 let mem: Local | null = null
@@ -443,6 +483,9 @@ function localHr(): HrBackend {
     async saveSettings(s) { save({ ...load(), settings: s }) },
     async loadShifts() { return load().shifts },
     async savePerson(uid, p) { save({ ...load(), shifts: { ...load().shifts, [uid]: p } }) },
+    async savePeople(people) { save({ ...load(), shifts: { ...load().shifts, ...people } }) },
+    async loadTemplates() { return load().templates ?? [] },
+    async saveTemplates(list) { save({ ...load(), templates: list }) },
     watchMine: (month, on) => watch(() => load().months.find((x) => x.id === monthId('demo-you', month)), on),
     watchAll: (month, on) => watch(() => load().months.filter((x) => x.month === month), on),
     async loadPeople() { return Object.entries(load().shifts).map(([uid, p]) => ({ uid, name: p.name })).concat([{ uid: 'sara', name: 'Sara Nabil' }]) },
@@ -455,6 +498,9 @@ function localHr(): HrBackend {
         if (fix.in !== undefined) { if (fix.in === null) delete d.in; else d.in = fix.in }
         if (fix.out !== undefined) { if (fix.out === null) delete d.out; else d.out = fix.out }
         if (fix.excused !== undefined) d.excused = fix.excused
+        if (fix.exLate !== undefined) d.exLate = fix.exLate
+        if (fix.exEarly !== undefined) d.exEarly = fix.exEarly
+        if (fix.why !== undefined) d.why = fix.why
         if (fix.note !== undefined) d.note = fix.note
         return { ...m, days: { ...m.days, [dd]: d } }
       })
