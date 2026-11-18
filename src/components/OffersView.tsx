@@ -2,11 +2,12 @@ import { BulkBar, BulkToggle, Pick, useBulk, type BulkAction } from './Bulk'
 import { nameOf, useProfiles } from '../data/profiles'
 import { CardSize } from './CardSize'
 import { useState } from 'react'
-import { formatPrice, hasOffer, marketOf, matchesOffer, offerOf, priceOf, priceQuery, stageOf, titleOf, toNumber } from '../data/logic'
+import { formatPrice, hasOffer, marketOf, matchesOffer, offerOf, priceIssues, priceOf, priceQuery, stageOf, titleOf, toNumber } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, MarketHit, Post } from '../data/types'
 import { t } from '../i18n'
-import { Empty, Icon, SearchBox, showToast } from './ui'
+import { MissingPrices } from './PriceCheck'
+import { Chip, Empty, Icon, SearchBox, showToast } from './ui'
 
 const egp = (n: number) => `${n.toLocaleString('en-US')} EGP`
 const stockOf = (h: MarketHit) => (h.inStock === false ? t('out of stock') : h.inStock === null ? t('stock unknown') : '')
@@ -58,7 +59,7 @@ function MarketBox({ post: p }: { post: Post }) {
 }
 
 /** One offer before any poster exists: what is in it, who made it, and the decision buttons. */
-function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => void }) {
+function OfferCard({ post: p, onOpen, noBefore }: { post: Post; onOpen: (id: string) => void; noBefore: boolean }) {
   useProfiles()
   const [note, setNote] = useState<string | null>(null)
   const mine = ownOffer(p)
@@ -76,6 +77,7 @@ function OfferCard({ post: p, onOpen }: { post: Post; onOpen: (id: string) => vo
         <p className="price offer-price">
           <span dir="ltr"><b>{formatPrice(priceOf(p))} EGP</b>{hasOffer(p) && <> <s>{formatPrice(p.priceBefore)}</s></>}</span> <span className="muted">· {p.style}</span>
         </p>
+        {noBefore && <p><Chip tone="bad">{t('No Price before')}</Chip></p>}
         {p.details && <p className="muted small" dir="auto">{p.details}</p>}
         {!rejected && <MarketBox post={p} />}
         <p className="muted small">{p.createdByName ? `${t('Made by')} ${nameOf(p.createdBy, p.createdByName)}` : t('Added in the sheet')}</p>
@@ -169,7 +171,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
     { label: 'Check prices again', icon: 'redo', run: (id: string) => { const p = post(id); return p && offerOf(p) === 'waiting' ? backend.updatePost(id, { marketAsk: Date.now() }) : false } },
     ...(allowed('delete') ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => backend.removePost(id) }] : []),
   ]
-  const cards = (list: Post[]) => <div className="cards">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><OfferCard post={p} onOpen={onOpen} /></Pick>)}</div>
+  const cards = (list: Post[]) => <div className="cards">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><OfferCard post={p} onOpen={onOpen} noBefore={priceIssues(p, data.products).missing} /></Pick>)}</div>
   return (
     <div className="view">
       <div className="review-bar tools">
@@ -180,6 +182,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
         {actions.length > 0 && <BulkToggle bulk={bulk} />}
         <CardSize />
       </div>
+      <MissingPrices data={{ ...data, posts: all }} onOpen={onOpen} open />
       {waiting.length > 0 && (
         <section>
           <h2 className="group">{t('Waiting for approval')} <span className="group-count">{waiting.length}</span></h2>

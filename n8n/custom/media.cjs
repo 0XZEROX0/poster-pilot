@@ -17,6 +17,8 @@ console.log(`import { workflow, node, trigger, ifElse, expr } from '@n8n/workflo
 const hook = trigger({ type: 'n8n-nodes-base.webhook', version: 2, config: { name: 'Upload from the app', notes: 'The app asks { token, op: start, name, type, size } for a Drive upload link, then { token, op: finish, id } after the browser sent the file. A signed-in member only.', parameters: { httpMethod: 'POST', path: 'static-os-media', responseMode: 'responseNode', options: { allowedOrigins: '${ORIGIN}', onlyRunIf: "={{ typeof $json.body?.token === 'string' && $json.body.token.length > 200 && $json.body.token.length < 5000 }}" } } } });
 const who = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Who is asking', onError: 'continueRegularOutput', parameters: { method: 'POST', url: 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${KEY}', sendHeaders: true, headerParameters: { parameters: [ { name: 'Referer', value: '${ORIGIN}/' } ] }, sendBody: true, contentType: 'json', specifyBody: 'json', jsonBody: expr("{{ { idToken: $('Upload from the app').first().json.body.token } }}"), options: { timeout: 20000 } } } });
 const member = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Member', onError: 'continueRegularOutput', credentials: ${FS}, parameters: { method: 'GET', url: expr("https://firestore.googleapis.com/v1/projects/poster-pilot-8d35e/databases/(default)/documents/members/{{ (($json.users || [])[0] || {}).localId || 'nobody' }}"), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', options: { timeout: 20000 } } } });
+// A token Google does not know is refused at once, before the Firestore member read: junk calls cost no database reads.
+${iff('signedIn', 'Signed in?', '!!((($json.users || [])[0] || {}).localId)')}
 ${code('check', 'Check request', rd('media-check.js'))}
 ${iff('ok', 'Request OK?', '$json.ok === true')}
 ${answer('refuse', 'Refuse', '{ ok: false, error: $json.error || "Not allowed" }', 403)}
@@ -36,7 +38,8 @@ ${drive('share', 'Share file', 'POST', "expr('https://www.googleapis.com/drive/v
 ${answer('done', 'Answer file', "Object.assign({}, $('Check file').first().json)")}
 ${answer('refuseFile', 'Refuse file', '{ ok: false, error: $json.error || "Not allowed" }', 403)}
 export default workflow('static-os-media', 'Static OS - Upload post media')
-  .add(hook).to(who).to(member).to(check).to(ok
+  .add(hook).to(who).to(signedIn.onTrue(member).onFalse(refuse))
+  .add(member).to(check).to(ok
     .onTrue(findFolder.to(missing.onTrue(makeFolder.to(plan)).onFalse(plan)))
     .onFalse(refuse))
   .add(plan).to(isStart.onTrue(start.to(link)).onFalse(look.to(checkFile.to(fileOk.onTrue(share.to(done)).onFalse(refuseFile)))));

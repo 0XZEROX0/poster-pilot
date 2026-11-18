@@ -3,6 +3,7 @@ import { seesPage } from '../data/store'
 import type { Data, Post } from '../data/types'
 import { t } from '../i18n'
 import { problemText } from './FixView'
+import { MissingPrices } from './PriceCheck'
 import { Poster } from './Poster'
 import { PostRow } from './PostRow'
 import { ReviewCard } from './ReviewView'
@@ -64,6 +65,7 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
     return (
       <div className="view">
         {tileRow}
+        <MissingPrices data={data} onOpen={onOpen} />
         {buildingBlock}
         {upNext(6)}
       </div>
@@ -76,6 +78,7 @@ export function HomeView({ data, go, onOpen, desktop = false }: Props) {
   return (
     <div className="view">
       {tileRow}
+      <MissingPrices data={data} onOpen={onOpen} />
       {seesPage('calendar') && <section>
         <h2>{t('Next 7 days')}</h2>
         <div className="week">

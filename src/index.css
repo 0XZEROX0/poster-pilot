@@ -457,6 +457,11 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .search:focus-within { outline: 2px solid var(--accent); }
 .search button { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; }
 .tray .search { background: var(--surface-2); box-shadow: none; max-width: none; }
+.price-check-toggle { margin-inline-start: auto; }
+.price-check .list { margin-top: 6px; color: var(--text); }
+.price-fixes { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.price-fixes li { display: grid; gap: 4px; color: var(--text); font-size: 0.875rem; }
+.price-fixes .btn { justify-self: start; height: auto; min-height: 36px; text-align: start; white-space: normal; }
 .alert-info { background: var(--warn-soft); color: var(--warn); }
 .dup-list { margin: 0; padding-inline-start: 18px; color: var(--text); font-size: 0.875rem; line-height: 1.5; }
 
