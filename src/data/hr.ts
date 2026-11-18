@@ -200,7 +200,7 @@ export function withDate(p: Person, date: string, shift: Shift | undefined): Per
 export type DayState = 'off' | 'upcoming' | 'notIn' | 'absent' | 'working' | 'noOut' | 'done' | 'extra'
 /** late / early count (0 when excused); rawLate / rawEarly are what happened, excused or not. missing = late + early that count, or the whole shift when absent. */
 /** auto: the person forgot to clock out and was clocked out by itself at 12 AM (or the end of a night shift). */
-export type DayResult = { date: string; shift: Shift; day?: Day; state: DayState; late: number; early: number; rawLate: number; rawEarly: number; missing: number; worked: number; auto?: boolean }
+export type DayResult = { date: string; shift: Shift; day?: Day; state: DayState; late: number; early: number; rawLate: number; rawEarly: number; missing: number; worked: number; overtime: number; auto?: boolean }
 
 /** How long after a shift's end a missing clock-out counts as forgotten. */
 const NO_OUT_AFTER = 4 * 3600_000
@@ -210,7 +210,7 @@ export function judgeDay(date: string, shift: Shift, dayIn: Day | undefined, gra
   const autoAt = dayIn?.in && !dayIn.out ? autoOutAt(date, shift) : 0
   const auto = Boolean(autoAt && now >= autoAt)
   const day = auto ? { ...dayIn, out: autoAt } : dayIn
-  const base = { date, shift, day, late: 0, early: 0, rawLate: 0, rawEarly: 0, missing: 0, worked: 0 }
+  const base = { date, shift, day, late: 0, early: 0, rawLate: 0, rawEarly: 0, missing: 0, worked: 0, overtime: 0 }
   const start = shift ? cairoMs(date, shift.s) : 0
   const end = shift ? start + shiftMinutes(shift) * 60_000 : 0
   if (!day?.in) {
@@ -220,24 +220,28 @@ export function judgeDay(date: string, shift: Shift, dayIn: Day | undefined, gra
     return day?.excused ? { ...base, state: 'off' } : { ...base, state: 'absent', missing: shiftMinutes(shift) }
   }
   const worked = day.out ? Math.max(0, Math.round((day.out - day.in) / 60_000)) : 0
-  if (!shift) return { ...base, state: day.out ? 'extra' : 'working', worked, auto }
+  // Work on a day off is all overtime (not when the day was closed by itself: they forgot to clock out).
+  if (!shift) return { ...base, state: day.out ? 'extra' : 'working', worked, overtime: day.out && !auto ? worked : 0, auto }
   const lateBy = Math.floor((day.in - start) / 60_000)
   const rawLate = lateBy <= grace ? 0 : lateBy
   const rawEarly = day.out ? Math.max(0, Math.ceil((end - day.out) / 60_000)) : 0
   const late = day.excused || day.exLate ? 0 : rawLate
   const early = day.excused || day.exEarly ? 0 : rawEarly
   const state: DayState = day.out ? 'done' : now > end + NO_OUT_AFTER ? 'noOut' : 'working'
-  return { ...base, state, late, early, rawLate, rawEarly, missing: late + early, worked, auto }
+  // Overtime: staying after the shift's end, past the grace minutes. A forgotten clock-out is not overtime.
+  const after = day.out && !auto ? Math.floor((day.out - end) / 60_000) : 0
+  const overtime = after > grace ? after : 0
+  return { ...base, state, late, early, rawLate, rawEarly, missing: late + early, worked, overtime, auto }
 }
 
 /** shiftMin: minutes of all shifts so far; missingMin: late + early that count, plus whole shifts missed; excusedMin: late + early that were excused. */
-export type Totals = { scheduled: number; present: number; absent: number; lateDays: number; lateMin: number; earlyDays: number; earlyMin: number; noOut: number; workedMin: number; shiftMin: number; missingMin: number; excusedMin: number; extra: number; pens: Record<Unit, number> }
+export type Totals = { scheduled: number; present: number; absent: number; lateDays: number; lateMin: number; earlyDays: number; earlyMin: number; noOut: number; workedMin: number; shiftMin: number; missingMin: number; excusedMin: number; overtimeMin: number; otDays: number; extra: number; pens: Record<Unit, number> }
 
 /** Every day of a month for one person, up to today, with the totals. */
 export function judgeMonth(month: string, person: Person | undefined, m: Month | undefined, grace: number, now = Date.now()): { days: DayResult[]; totals: Totals } {
   const today = dateOf(now)
   const days: DayResult[] = []
-  const totals: Totals = { scheduled: 0, present: 0, absent: 0, lateDays: 0, lateMin: 0, earlyDays: 0, earlyMin: 0, noOut: 0, workedMin: 0, shiftMin: 0, missingMin: 0, excusedMin: 0, extra: 0, pens: { EGP: 0, hours: 0, days: 0 } }
+  const totals: Totals = { scheduled: 0, present: 0, absent: 0, lateDays: 0, lateMin: 0, earlyDays: 0, earlyMin: 0, noOut: 0, workedMin: 0, shiftMin: 0, missingMin: 0, excusedMin: 0, overtimeMin: 0, otDays: 0, extra: 0, pens: { EGP: 0, hours: 0, days: 0 } }
   for (let d = 1; d <= daysIn(month); d++) {
     const date = `${month}-${String(d).padStart(2, '0')}`
     if (date > today) break
@@ -253,6 +257,7 @@ export function judgeMonth(month: string, person: Person | undefined, m: Month |
     if (r.late) { totals.lateDays++; totals.lateMin += r.late }
     if (r.early) { totals.earlyDays++; totals.earlyMin += r.early }
     totals.workedMin += r.worked
+    if (r.overtime) { totals.otDays++; totals.overtimeMin += r.overtime }
   }
   for (const p of m?.pens ?? []) totals.pens[p.unit] += p.amount
   return { days, totals }
@@ -371,6 +376,7 @@ function me(): Me {
   return { uid: u?.uid ?? '', name: myNameFor(u) }
 }
 export const myUid = () => me().uid
+export const myself = () => me()
 
 export type DayFix = { in?: number | null; out?: number | null; excused?: boolean; exLate?: boolean; exEarly?: boolean; leaveNo?: boolean; why?: string; note?: string }
 

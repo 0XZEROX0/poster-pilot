@@ -209,3 +209,29 @@ group('HR auto clock-out at 12 AM', () => {
     expect(r).toMatchObject({ auto: true, worked: 360, early: 0 })
   })
 })
+
+group('HR overtime', () => {
+  const d = '2026-11-18'
+  const at = (date: string, time: string) => cairoMs(date, time)
+  const sh = { s: '11:00', e: '19:00' }
+  it('counts minutes after the shift end beyond the grace, all of them', () => {
+    expect(judgeDay(d, sh, { in: at(d, '11:00'), out: at(d, '19:08') }, 10).overtime).toBe(0)
+    expect(judgeDay(d, sh, { in: at(d, '11:00'), out: at(d, '20:30') }, 10).overtime).toBe(90)
+  })
+  it('counts a whole worked day off as overtime', () => {
+    expect(judgeDay(d, null, { in: at(d, '11:00'), out: at(d, '15:00') }, 10).overtime).toBe(240)
+  })
+  it('never counts a forgotten clock-out closed at 12 AM', () => {
+    expect(judgeDay(d, { s: '14:00', e: '22:00' }, { in: at(d, '14:00') }, 10, at('2026-11-19', '09:00')).overtime).toBe(0)
+    expect(judgeDay(d, null, { in: at(d, '14:00') }, 10, at('2026-11-19', '09:00')).overtime).toBe(0)
+  })
+  it('adds overtime up in the month', () => {
+    const p: Person = { name: 'A', plans: [{ from: '2026-01-01', days: week('11:00', '19:00', []) }], dates: {} }
+    const m: Month = { id: 'a_2026-11', uid: 'a', month: '2026-11', pens: [], days: {
+      '01': { in: at('2026-11-01', '11:00'), out: at('2026-11-01', '21:00') },
+      '02': { in: at('2026-11-02', '11:00'), out: at('2026-11-02', '19:00') },
+      '03': { in: at('2026-11-03', '11:00'), out: at('2026-11-03', '19:45') },
+    } }
+    expect(judgeMonth('2026-11', p, m, 10, at('2026-11-03', '22:00')).totals).toMatchObject({ overtimeMin: 165, otDays: 2 })
+  })
+})

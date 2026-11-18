@@ -1445,4 +1445,7 @@ export const ar: Record<string, string> = {
   "Early leave declined": "رُفض الانصراف المبكر",
   "Auto clock-out %t": "انصراف تلقائي %t",
   "auto": "تلقائي",
+  "Overtime": "ساعات إضافية",
+  "Overtime · %n days": "ساعات إضافية · %n يوم",
+  "+%m overtime": "+%m إضافي",
 }

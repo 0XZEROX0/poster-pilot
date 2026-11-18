@@ -1728,3 +1728,5 @@ button.hr-person:hover { background: var(--surface-2); }
 .hr-request + .hr-request { border-top: 1px solid var(--border); }
 .hr-request .hr-day-acts { grid-column: 1 / -1; }
 @media (min-width: 760px) { .hr-request { grid-template-columns: auto 1fr auto; } .hr-request .hr-day-acts { grid-column: auto; } }
+@media (min-width: 760px) { .hr-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.hr-report td.good { color: var(--good); font-weight: 600; }
