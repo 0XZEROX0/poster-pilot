@@ -708,5 +708,25 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('social media cannot approve a product poster', updateDoc(doc(soc, 'posts/new1'), { feedback: 'Done', 'appEdits.feedback': 'Done' }))
   await no('an offer maker cannot make a text post', setDoc(doc(pm, 'posts/s3'), { ...base, createdBy: 'u-pm', kind: 'text', places: 'fb' }))
 }
+// Security check 2026-11-18: only the fields the app is meant to write.
+{
+  const full = { order: -1, items: [{ category: 'PSU', name: 'X', manualPhoto: '', nextPhoto: false }], company: 'C', priceBefore: '2', priceAfter: '1', style: 'Static', details: '', posterUrl: '', photoStatus: '',
+    feedback: '', postDate: '', postTime: '', scheduledFor: '', caption: '', captionStyle: '', fbStatus: '', igStatus: '', fbPostId: '', createdAt: 1, zone: 'offer', createdBy: 'u-pm', createdByName: 'P',
+    appNew: true, appDirty: true, appEditedAt: serverTimestamp() }
+  await ok('a new offer exactly as the app sends it', setDoc(doc(pm, 'posts/sec1'), full))
+  await no('a new offer without the name of who made it', setDoc(doc(pm, 'posts/sec2'), { items: [], zone: 'offer' }))
+  await no('a new offer with workflow queues', setDoc(doc(pm, 'posts/sec3'), { ...full, q: ['queue'] }))
+  await no('a new offer with workflow notes', setDoc(doc(pm, 'posts/sec4'), { ...full, ex: { fbPhotoId: '1' } }))
+  await no('a new offer that asks to be posted now', setDoc(doc(pm, 'posts/sec5'), { ...full, postNow: 'yes' }))
+  await no('a new offer that asks for a Facebook delete', setDoc(doc(pm, 'posts/sec6'), { ...full, takeDown: 'asked' }))
+  await no('a new offer with a finished photo status', setDoc(doc(pm, 'posts/sec7'), { ...full, photoStatus: 'OK' }))
+  await no('member changes the workflow queues of a post', updateDoc(doc(pm, 'posts/sec1'), { q: ['queue'] }))
+  await no('member changes the workflow notes of a post', updateDoc(doc(pm, 'posts/sec1'), { 'ex.fbPhotoId': '99' }))
+  await no('member adds a field nobody knows', updateDoc(doc(pm, 'posts/sec1'), { anything: 1 }))
+  await no('member hides an unknown field in the engine copy', updateDoc(doc(pm, 'posts/sec1'), { 'appEdits.q': ['queue'], appDirty: true }))
+  await ok('member edits the offer the way the app does', updateDoc(doc(pm, 'posts/sec1'), { priceAfter: '3', 'appEdits.priceAfter': '3', appDirty: true, appEditedAt: serverTimestamp() }))
+  await ok('member asks for a redo the way the app does', updateDoc(doc(pm, 'posts/sec1'), { feedback: 'Redo', 'appEdits.feedback': 'Redo', retriedAt: 5, appDirty: true, appEditedAt: serverTimestamp() }))
+  await ok('member asks for competitor prices again', updateDoc(doc(pm, 'posts/sec1'), { marketAsk: 5 }))
+}
 console.log(`${n} checks, ${bad} wrong`)
 await env.cleanup(); process.exit(bad ? 1 : 0)

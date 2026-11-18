@@ -113,8 +113,12 @@ service cloud.firestore {
           // The maker may send an offer that was sent back in again, and nothing else.
           || (can('offers.create') && was.get('createdBy', '') == request.auth.uid && was.get('offer', '') == 'Rejected'
             && now.get('offer', '') == '' && edits.get('offer', '') == '' && !keys.hasAny(['offerNote', 'offerBy'])))
-        // Competitor prices, where a post stands, and what Facebook and the poster maker report are written by the engine only.
-        && !keys.hasAny(['kind', 'createdBy', 'createdByName', 'market', 'photoChoices', 'zone', 'order', 'createdAt', 'posterUrl', 'photoStatus', 'scheduledFor', 'fbStatus', 'igStatus', 'fbPostId', 'appNew', 'storyImage', 'storyFbStatus', 'storyIgStatus', 'storyDesignedAt', 'storyVideo', 'takeDownNote', 'takeDownTry']);
+        // Only the fields the app is meant to change. Everything else is written by the engine only: competitor prices,
+        // where a post stands (zone, order, the workflow queues `q`), what Facebook and the poster maker report, and
+        // the workflows' own notes (`ex`: Facebook photo ids, story ids...), so nobody can point a workflow at another post.
+        && keys.hasOnly(['postDate', 'postTime', 'postNow', 'story', 'storyDelay', 'storyDesign', 'feedback', 'appDeleted', 'takeDown', 'takeDownAt', 'takeDownBy',
+          'ignoredProblem', 'photoAsk', 'marketAsk', 'retriedAt', 'items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details',
+          'caption', 'captionStyle', 'media', 'places', 'offer', 'offerNote', 'offerBy', 'appEdits', 'appDirty', 'appEditedAt']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may
     // walk in once without a request. Admins can only shorten it.
@@ -246,13 +250,19 @@ service cloud.firestore {
       // A new post always starts as an offer waiting for approval: nothing approved, scheduled or posted.
       // Text, photo and video posts (`kind`) are made in the Planner, only by the people who schedule.
       allow create: if (request.resource.data.get('kind', '') != '' ? can('schedule') : can('offers.create'))
-        && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid
+        // Always in the maker's own name (so "approved by someone else" cannot be dodged by leaving the name out), and
+        // only with the fields the app sends for a new post: nothing the engine or a later step writes.
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly(['kind', 'media', 'places', 'order', 'items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details',
+          'posterUrl', 'photoStatus', 'feedback', 'postDate', 'postTime', 'scheduledFor', 'caption', 'captionStyle', 'fbStatus', 'igStatus', 'fbPostId', 'createdAt',
+          'story', 'zone', 'createdBy', 'createdByName', 'appNew', 'appDirty', 'appEditedAt'])
+        && request.resource.data.get('photoStatus', '') == ''
+        && (!('story' in request.resource.data) || can('schedule'))
         && request.resource.data.get('zone', 'offer') == 'offer'
         && request.resource.data.get('feedback', '') == ''
         && request.resource.data.get('postDate', '') == '' && request.resource.data.get('postTime', '') == ''
         && request.resource.data.get('fbStatus', '') == '' && request.resource.data.get('igStatus', '') == '' && request.resource.data.get('fbPostId', '') == ''
         && request.resource.data.get('scheduledFor', '') == '' && request.resource.data.get('posterUrl', '') == ''
-        && !request.resource.data.keys().hasAny(['offer', 'offerNote', 'offerBy', 'market', 'photoChoices', 'appDeleted', 'ignoredProblem'])
         && customOk(request.resource.data);
       allow update: if canAct() && postChangeOk();
     }
