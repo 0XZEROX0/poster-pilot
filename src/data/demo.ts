@@ -36,6 +36,7 @@ export const demoProducts: Product[] = [
   P('VGA', 'ASUS PRIME RTX 5070 Ti 16GB', '78000', 'Asus'),
   P('VGA', 'MSI RTX 5050 8G Shadow 2X', '22000', 'MSI'),
   P('Monitor', 'Lenovo Legion 25-1P 25″ FHD IPS 320Hz 0.5ms', '7500', 'Lenovo'),
+  P('Monitor', 'ASUS TUF Gaming VG27AQL5A 27" QHD Fast IPS 210Hz 0.3ms', '11900', 'Asus'),
   P('Monitor', 'MSI PRO MP276E18 27″ FHD IPS 180Hz 1ms', '6000', 'MSI'),
   P('Monitor', 'MSI MAG 276QE27 27" WQHD IPS 275Hz 0.5MS', '11500', 'MSI'),
   P('Monitor', 'ASUS TUF Gaming VG249QM5A 24″ FHD Fast IPS 240Hz 0.3ms', '6900', 'Asus'),
