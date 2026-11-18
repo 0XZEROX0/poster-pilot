@@ -758,6 +758,44 @@ service cloud.firestore {
           && request.resource.data.get('answer', '') is string && request.resource.data.get('answer', '').size() <= 500);
       allow delete: if isOwner();
     }
+    // Employee files: staff/{uid} { name, title, phone, nationalId, address, startDate, salary, emergency, annualDays, notes }.
+    // Salary and ID numbers are private: only 'Manage HR' reads or writes them, not even the employee.
+    match /staff/{uid} {
+      allow read: if can('hr');
+      allow create, update: if can('hr')
+        && request.resource.data.keys().hasOnly(['name', 'title', 'phone', 'nationalId', 'address', 'startDate', 'salary', 'emergency', 'annualDays', 'notes'])
+        && request.resource.data.get('salary', 0) is number && request.resource.data.get('salary', 0) >= 0
+        && request.resource.data.get('annualDays', 0) is int && request.resource.data.get('annualDays', 0) >= 0 && request.resource.data.get('annualDays', 0) <= 60
+        && request.resource.data.get('notes', []) is list && request.resource.data.get('notes', []).size() <= 200;
+      allow delete: if isOwner();
+    }
+    // Leave requests: leaves/{id} { uid, name, from, to, kind, why, state, at, byName, decidedAt, answer }.
+    // A person who clocks in asks for days off for themselves (pending) and can cancel while it waits.
+    // 'Manage HR' sees everyone's and accepts or declines (or cancels an accepted one). Nobody sets it back to waiting.
+    function dateOk(v) {
+      return v is string && v.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}');
+    }
+    match /leaves/{id} {
+      allow read: if can('hr') || (canClock() && resource.data.uid == request.auth.uid);
+      allow create: if canClock()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'from', 'to', 'kind', 'why', 'state', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.state == 'pending'
+        && request.resource.data.name is string && request.resource.data.name.size() <= 200
+        && dateOk(request.resource.data.from) && dateOk(request.resource.data.to)
+        && request.resource.data.from <= request.resource.data.to
+        && request.resource.data.kind in ['annual', 'sick', 'unpaid', 'other']
+        && request.resource.data.why is string && request.resource.data.why.size() <= 500
+        && request.resource.data.at is number;
+      allow update: if (canClock() && resource.data.uid == request.auth.uid && resource.data.state == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state'])
+          && request.resource.data.state == 'cancelled')
+        || (can('hr')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'byName', 'decidedAt', 'answer'])
+          && request.resource.data.state in ['ok', 'no', 'cancelled']
+          && request.resource.data.get('answer', '') is string && request.resource.data.get('answer', '').size() <= 500);
+      allow delete: if isOwner();
+    }
     match /counters/tickets {
       allow read: if can('tickets') || can('tickets.edit');
       allow create, update: if (can('tickets') || can('tickets.edit'))
