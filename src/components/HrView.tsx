@@ -10,10 +10,11 @@ import {
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
 import { useDesktop } from './useDesktop'
+import { LeaveBoard, StaffFiles, useLeaves } from './HrRecords'
 import { Avatar, Empty, Icon, showToast } from './ui'
 
-type Section = 'me' | 'today' | 'shifts' | 'report' | 'setup'
-const SECTION_LABEL: Record<Section, string> = { me: 'My attendance', today: 'Today', shifts: 'Shifts', report: 'Report', setup: 'Shop location' }
+type Section = 'me' | 'leave' | 'today' | 'shifts' | 'report' | 'files' | 'setup'
+const SECTION_LABEL: Record<Section, string> = { me: 'My attendance', leave: 'Days off', today: 'Today', shifts: 'Shifts', report: 'Report', files: 'Employee files', setup: 'Shop location' }
 
 const STATE_LABEL: Record<DayState, string> = { off: 'Day off', upcoming: 'Shift later', notIn: 'Not in yet', absent: 'Absent', working: 'Working', noOut: 'No clock-out', done: 'Done', extra: 'Extra day' }
 const STATE_TONE: Record<DayState, string> = { off: '', upcoming: '', notIn: 'chip-warn', absent: 'chip-bad', working: 'chip-info', noOut: 'chip-warn', done: 'chip-good', extra: 'chip-info' }
@@ -41,7 +42,8 @@ const locateError = (e: unknown) => ((e as { code?: number }).code === 1
 
 export function HrView() {
   const manager = allowed('hr')
-  const sections: Section[] = [...(allowed('hr.clock') || manager ? ['me' as const] : []), ...(manager ? ['today', 'shifts', 'report', 'setup'] as const : [])]
+  const clocks = allowed('hr.clock') || manager
+  const sections: Section[] = [...(clocks ? ['me' as const] : []), ...(manager ? ['today', 'leave', 'shifts', 'report', 'files', 'setup'] as const : clocks ? ['leave' as const] : [])]
   const [section, setSection] = useState<Section>(manager ? 'today' : 'me')
   const [settings, setSettings] = useState<HrSettings | null>(null)
   const [shifts, setShifts] = useState<Shifts | null>(null)
@@ -69,19 +71,24 @@ export function HrView() {
   }, [wantAll, watchMonth])
 
   const pending = all && settings && shifts && watchMonth === thisMonth ? leaveRequests(all, shifts, settings.grace).length : 0
+  // Days-off requests: HR watches this year's (a handful of documents, for the badge); others only their own, on the Days off page.
+  const leaves = useLeaves(manager, section === 'leave')
+  const waitingLeaves = (leaves.all ?? []).filter((l) => l.state === 'pending').length
   if (!settings || !shifts) return <div className="hr"><p className="muted">{t('Loading…')}</p></div>
   return (
     <div className="hr">
       {sections.length > 1 && (
         <div className="filters">
-          {sections.map((s) => <button key={s} className={`filter${section === s ? ' on' : ''}`} onClick={() => setSection(s)}>{t(SECTION_LABEL[s])}{s === 'today' && pending > 0 && <span className="hr-badge">{pending}</span>}</button>)}
+          {sections.map((s) => <button key={s} className={`filter${section === s ? ' on' : ''}`} onClick={() => setSection(s)}>{t(SECTION_LABEL[s])}{s === 'today' && pending > 0 && <span className="hr-badge">{pending}</span>}{s === 'leave' && waitingLeaves > 0 && <span className="hr-badge">{waitingLeaves}</span>}</button>)}
         </div>
       )}
-      {error && <p className="banner banner-bad hr-banner" dir="ltr">{/permission/i.test(error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error}</p>}
+      {(error || leaves.error) && <p className="banner banner-bad hr-banner" dir="ltr">{/permission/i.test(error || leaves.error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error || leaves.error}</p>}
       {section === 'me' && <MyAttendance settings={settings} person={shifts[myUid()]} mine={mine} />}
       {section === 'today' && <TodayBoard settings={settings} shifts={shifts} months={all} />}
       {section === 'shifts' && <ShiftsBoard shifts={shifts} people={people} onSaved={(changed) => setShifts({ ...shifts, ...changed })} />}
       {section === 'report' && <Report settings={settings} shifts={shifts} months={all} month={month} setMonth={setMonth} people={people} />}
+      {section === 'leave' && <LeaveBoard manager={manager} canAsk={clocks} all={leaves.all} mine={leaves.mine} shifts={shifts} onShiftsSaved={(changed) => setShifts({ ...shifts, ...changed })} />}
+      {section === 'files' && <StaffFiles people={peopleOf(shifts, null, people)} all={leaves.all} />}
       {section === 'setup' && <Setup settings={settings} onSaved={setSettings} />}
     </div>
   )
@@ -206,6 +213,7 @@ function TotalsTiles({ totals }: { totals: Totals }) {
       <div className={`tile ${totals.missingMin ? 'tile-bad' : 'tile-zero'}`}><b>{hm(totals.missingMin)}</b><span>{totals.excusedMin ? tn('Missing (late, early, absent) · %e excused', { e: hm(totals.excusedMin) }) : t('Missing (late, early, absent)')}</span></div>
       <div className={`tile ${totals.lateDays ? 'tile-bad' : 'tile-zero'}`}><b>{totals.lateDays}</b><span>{tn('Late days · %m', { m: hm(totals.lateMin) })}</span></div>
       <div className={`tile ${totals.earlyDays || totals.absent ? 'tile-warn' : 'tile-zero'}`}><b>{totals.earlyDays}</b><span>{tn('Left early · %a absent', { a: totals.absent })}</span></div>
+      <div className={`tile ${totals.overtimeMin ? 'tile-good' : 'tile-zero'}`}><b>{hm(totals.overtimeMin)}</b><span>{tn('Overtime · %n days', { n: totals.otDays })}</span></div>
     </div>
   )
 }
@@ -226,7 +234,7 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
     return (
       <div className="hr-week-wrap">
         <table className="hr-report hr-att">
-          <thead><tr><th>{t('Day')}</th><th>{t('Shift')}</th><th>{t('In')}</th><th>{t('Out')}</th><th>{t('Worked')}</th><th>{t('Late')}</th><th>{t('Left early')}</th><th>{t('Missing')}</th><th>{t('Reason / note')}</th>{(onFix || onExcuse) && <th />}</tr></thead>
+          <thead><tr><th>{t('Day')}</th><th>{t('Shift')}</th><th>{t('In')}</th><th>{t('Out')}</th><th>{t('Worked')}</th><th>{t('Late')}</th><th>{t('Left early')}</th><th>{t('Missing')}</th><th>{t('Overtime')}</th><th>{t('Reason / note')}</th>{(onFix || onExcuse) && <th />}</tr></thead>
           <tbody>
             {list.map((r) => (
               <tr key={r.date} className={r.state === 'absent' ? 'absent' : ''}>
@@ -238,6 +246,7 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
                 <td><MinChip raw={r.rawLate} counted={r.late} label="%m" tone="chip-bad" />{!r.rawLate && '—'}</td>
                 <td><MinChip raw={r.rawEarly} counted={r.early} label="%m" tone="chip-warn" />{!r.rawEarly && '—'}</td>
                 <td className={r.missing ? 'bad' : ''}>{r.missing ? hm(r.missing) : '—'}</td>
+                <td className={r.overtime ? 'good' : ''}>{r.overtime ? `+${hm(r.overtime)}` : '—'}</td>
                 <td className="hr-why" dir="auto">{r.day?.excused && <span className="chip chip-good">{t('Excused day')}</span>}{leavePending(r.day) && <span className="chip chip-warn">{t('Waiting for HR')}</span>}{r.day?.leaveNo && <span className="chip chip-bad">{t('Early leave declined')}</span>} {reason(r)}{r.day?.fixBy && <small className="muted"> · {tn('fixed by %n', { n: r.day.fixBy })}</small>}</td>
                 {(onFix || onExcuse) && (
                   <td><div className="hr-acts">
@@ -263,6 +272,7 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
             {r.state !== 'done' && <span className={`chip ${STATE_TONE[r.state]}`}>{t(STATE_LABEL[r.state])}</span>}
             <MinChip raw={r.rawLate} counted={r.late} label="%m late" tone="chip-bad" />
             <MinChip raw={r.rawEarly} counted={r.early} label="%m early" tone="chip-warn" />
+            {r.overtime > 0 && <span className="chip chip-good">{tn('+%m overtime', { m: hm(r.overtime) })}</span>}
             {r.day?.excused && <span className="chip chip-good">{t('Excused day')}</span>}
             {leavePending(r.day) && <span className="chip chip-warn">{t('Waiting for HR')}</span>}
             {r.day?.leaveNo && <span className="chip chip-bad">{t('Early leave declined')}</span>}
@@ -792,8 +802,8 @@ function Report({ settings, shifts, months, month, setMonth, people }: { setting
   }) : []), [months, shifts, month, settings.grace, people])
   const pens = (x: Totals) => UNITS.filter((u) => x.pens[u]).map((u) => `${x.pens[u]} ${t(UNIT_LABEL[u])}`).join(' + ') || '—'
   function csv() {
-    const head = ['Name', 'Shift days', 'Present', 'Absent', 'Late days', 'Late minutes', 'Left early days', 'Early minutes', 'No clock-out', 'Hours worked', 'Hours missing', 'Hours excused', 'Penalty EGP', 'Penalty hours', 'Penalty days']
-    const lines = rows.map((r) => [r.name, r.totals.scheduled, r.totals.present, r.totals.absent, r.totals.lateDays, r.totals.lateMin, r.totals.earlyDays, r.totals.earlyMin, r.totals.noOut, (r.totals.workedMin / 60).toFixed(1), (r.totals.missingMin / 60).toFixed(1), (r.totals.excusedMin / 60).toFixed(1), r.totals.pens.EGP, r.totals.pens.hours, r.totals.pens.days])
+    const head = ['Name', 'Shift days', 'Present', 'Absent', 'Late days', 'Late minutes', 'Left early days', 'Early minutes', 'No clock-out', 'Hours worked', 'Hours missing', 'Hours excused', 'Overtime hours', 'Overtime days', 'Penalty EGP', 'Penalty hours', 'Penalty days']
+    const lines = rows.map((r) => [r.name, r.totals.scheduled, r.totals.present, r.totals.absent, r.totals.lateDays, r.totals.lateMin, r.totals.earlyDays, r.totals.earlyMin, r.totals.noOut, (r.totals.workedMin / 60).toFixed(1), (r.totals.missingMin / 60).toFixed(1), (r.totals.excusedMin / 60).toFixed(1), (r.totals.overtimeMin / 60).toFixed(1), r.totals.otDays, r.totals.pens.EGP, r.totals.pens.hours, r.totals.pens.days])
     const text = [head, ...lines].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }))
@@ -837,6 +847,7 @@ function Report({ settings, shifts, months, month, setMonth, people }: { setting
               </div>
               <div className="hr-day-chips">
                 {r.totals.lateDays > 0 && <span className="chip chip-bad">{tn('Late %n× · %m', { n: r.totals.lateDays, m: hm(r.totals.lateMin) })}</span>}
+                {r.totals.overtimeMin > 0 && <span className="chip chip-good">{tn('+%m overtime', { m: hm(r.totals.overtimeMin) })}</span>}
                 {r.totals.earlyDays > 0 && <span className="chip chip-warn">{tn('Early %n×', { n: r.totals.earlyDays })}</span>}
                 {r.totals.absent > 0 && <span className="chip chip-bad">{tn('Absent %n', { n: r.totals.absent })}</span>}
                 {pens(r.totals) !== '—' && <span className="chip">{pens(r.totals)}</span>}
@@ -854,7 +865,7 @@ type ReportRow = { uid: string; name: string; totals: Totals }
 function ReportTable({ rows, pens, onOpen }: { rows: ReportRow[]; pens: (x: Totals) => string; onOpen?: (uid: string) => void }) {
   return (
     <table className="hr-report">
-      <thead><tr><th>{t('Name')}</th><th>{t('Present')}</th><th>{t('Absent')}</th><th>{t('Late')}</th><th>{t('Left early')}</th><th>{t('No clock-out')}</th><th>{t('Worked')}</th><th>{t('Missing')}</th><th>{t('Excused')}</th><th>{t('Penalties')}</th></tr></thead>
+      <thead><tr><th>{t('Name')}</th><th>{t('Present')}</th><th>{t('Absent')}</th><th>{t('Late')}</th><th>{t('Left early')}</th><th>{t('No clock-out')}</th><th>{t('Worked')}</th><th>{t('Missing')}</th><th>{t('Excused')}</th><th>{t('Overtime')}</th><th>{t('Penalties')}</th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.uid} onClick={onOpen && (() => onOpen(r.uid))}>
@@ -867,6 +878,7 @@ function ReportTable({ rows, pens, onOpen }: { rows: ReportRow[]; pens: (x: Tota
             <td>{hm(r.totals.workedMin)}</td>
             <td className={r.totals.missingMin ? 'bad' : ''}>{r.totals.missingMin ? hm(r.totals.missingMin) : '—'}</td>
             <td>{r.totals.excusedMin ? hm(r.totals.excusedMin) : '—'}</td>
+            <td className={r.totals.overtimeMin ? 'good' : ''}>{r.totals.overtimeMin ? `${hm(r.totals.overtimeMin)} · ${r.totals.otDays}d` : '—'}</td>
             <td>{pens(r.totals)}</td>
           </tr>
         ))}

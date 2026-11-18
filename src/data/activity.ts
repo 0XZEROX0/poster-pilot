@@ -23,7 +23,7 @@ export const ACTIVITY_ACTS = {
   settings: ['templates.saved', 'engine.run'],
   tickets: ['ticket.opened', 'ticket.step', 'ticket.edited', 'ticket.deleted', 'ticket.step_removed'],
   orders: ['order.added', 'order.edited', 'order.step', 'order.step_removed', 'order.deleted'],
-  hr: ['hr.settings', 'hr.shifts', 'hr.fixed', 'hr.penalty', 'hr.penalty_removed'],
+  hr: ['hr.settings', 'hr.shifts', 'hr.fixed', 'hr.penalty', 'hr.penalty_removed', 'hr.file', 'hr.note', 'hr.leave_ok', 'hr.leave_no'],
 } as const
 type AppWrites = typeof ACTIVITY_ACTS
 export type WriteApp = keyof AppWrites
@@ -68,6 +68,10 @@ export const ACTIVITY_TEXT: Record<string, string> = {
   'hr.fixed': 'Attendance fixed by hand',
   'hr.penalty': 'Penalty given',
   'hr.penalty_removed': 'Penalty taken back',
+  'hr.file': 'Employee file changed',
+  'hr.note': 'Note added to an employee file',
+  'hr.leave_ok': 'Days off accepted',
+  'hr.leave_no': 'Days off declined',
   'website.sent': 'Sent to the website',
   'website.error': 'Website refused a change',
   'health.problem': 'Needs a person (self-heal)',
