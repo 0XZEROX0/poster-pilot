@@ -10,10 +10,11 @@ import {
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
 import { useDesktop } from './useDesktop'
+import { LeaveBoard, StaffFiles, useLeaves } from './HrRecords'
 import { Avatar, Empty, Icon, showToast } from './ui'
 
-type Section = 'me' | 'today' | 'shifts' | 'report' | 'setup'
-const SECTION_LABEL: Record<Section, string> = { me: 'My attendance', today: 'Today', shifts: 'Shifts', report: 'Report', setup: 'Shop location' }
+type Section = 'me' | 'leave' | 'today' | 'shifts' | 'report' | 'files' | 'setup'
+const SECTION_LABEL: Record<Section, string> = { me: 'My attendance', leave: 'Days off', today: 'Today', shifts: 'Shifts', report: 'Report', files: 'Employee files', setup: 'Shop location' }
 
 const STATE_LABEL: Record<DayState, string> = { off: 'Day off', upcoming: 'Shift later', notIn: 'Not in yet', absent: 'Absent', working: 'Working', noOut: 'No clock-out', done: 'Done', extra: 'Extra day' }
 const STATE_TONE: Record<DayState, string> = { off: '', upcoming: '', notIn: 'chip-warn', absent: 'chip-bad', working: 'chip-info', noOut: 'chip-warn', done: 'chip-good', extra: 'chip-info' }
@@ -41,7 +42,8 @@ const locateError = (e: unknown) => ((e as { code?: number }).code === 1
 
 export function HrView() {
   const manager = allowed('hr')
-  const sections: Section[] = [...(allowed('hr.clock') || manager ? ['me' as const] : []), ...(manager ? ['today', 'shifts', 'report', 'setup'] as const : [])]
+  const clocks = allowed('hr.clock') || manager
+  const sections: Section[] = [...(clocks ? ['me' as const] : []), ...(manager ? ['today', 'leave', 'shifts', 'report', 'files', 'setup'] as const : clocks ? ['leave' as const] : [])]
   const [section, setSection] = useState<Section>(manager ? 'today' : 'me')
   const [settings, setSettings] = useState<HrSettings | null>(null)
   const [shifts, setShifts] = useState<Shifts | null>(null)
@@ -69,19 +71,24 @@ export function HrView() {
   }, [wantAll, watchMonth])
 
   const pending = all && settings && shifts && watchMonth === thisMonth ? leaveRequests(all, shifts, settings.grace).length : 0
+  // Days-off requests: HR watches this year's (a handful of documents, for the badge); others only their own, on the Days off page.
+  const leaves = useLeaves(manager, section === 'leave')
+  const waitingLeaves = (leaves.all ?? []).filter((l) => l.state === 'pending').length
   if (!settings || !shifts) return <div className="hr"><p className="muted">{t('Loading…')}</p></div>
   return (
     <div className="hr">
       {sections.length > 1 && (
         <div className="filters">
-          {sections.map((s) => <button key={s} className={`filter${section === s ? ' on' : ''}`} onClick={() => setSection(s)}>{t(SECTION_LABEL[s])}{s === 'today' && pending > 0 && <span className="hr-badge">{pending}</span>}</button>)}
+          {sections.map((s) => <button key={s} className={`filter${section === s ? ' on' : ''}`} onClick={() => setSection(s)}>{t(SECTION_LABEL[s])}{s === 'today' && pending > 0 && <span className="hr-badge">{pending}</span>}{s === 'leave' && waitingLeaves > 0 && <span className="hr-badge">{waitingLeaves}</span>}</button>)}
         </div>
       )}
-      {error && <p className="banner banner-bad hr-banner" dir="ltr">{/permission/i.test(error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error}</p>}
+      {(error || leaves.error) && <p className="banner banner-bad hr-banner" dir="ltr">{/permission/i.test(error || leaves.error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error || leaves.error}</p>}
       {section === 'me' && <MyAttendance settings={settings} person={shifts[myUid()]} mine={mine} />}
       {section === 'today' && <TodayBoard settings={settings} shifts={shifts} months={all} />}
       {section === 'shifts' && <ShiftsBoard shifts={shifts} people={people} onSaved={(changed) => setShifts({ ...shifts, ...changed })} />}
       {section === 'report' && <Report settings={settings} shifts={shifts} months={all} month={month} setMonth={setMonth} people={people} />}
+      {section === 'leave' && <LeaveBoard manager={manager} canAsk={clocks} all={leaves.all} mine={leaves.mine} shifts={shifts} onShiftsSaved={(changed) => setShifts({ ...shifts, ...changed })} />}
+      {section === 'files' && <StaffFiles people={peopleOf(shifts, null, people)} all={leaves.all} />}
       {section === 'setup' && <Setup settings={settings} onSaved={setSettings} />}
     </div>
   )

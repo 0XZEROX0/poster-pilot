@@ -68,7 +68,8 @@ export type StaffBackend = {
   watchLeaves(fromDate: string, on: (l: Leave[]) => void, onError: (e: unknown) => void): () => void
   askLeave(l: Pick<Leave, 'from' | 'to' | 'kind' | 'why'>): Promise<void>
   cancelLeave(id: string): Promise<void>
-  decideLeave(id: string, ok: boolean, answer: string): Promise<void>
+  /** HR: accept, decline, or cancel an accepted request. */
+  decideLeave(id: string, state: 'ok' | 'no' | 'cancelled', answer: string): Promise<void>
 }
 
 const sortLeaves = (l: Leave[]) => l.sort((a, b) => (a.from < b.from ? 1 : a.from > b.from ? -1 : b.at - a.at))
@@ -98,8 +99,8 @@ function firestoreStaff(fs: NonNullable<typeof firestore>): StaffBackend {
       await setDoc(doc(leaves), { uid: m.uid, name: m.name.slice(0, 200), from: l.from, to: l.to, kind: l.kind, why: l.why.trim().slice(0, 500), state: 'pending', at: Date.now() })
     },
     async cancelLeave(id) { await updateDoc(doc(leaves, id), { state: 'cancelled' }) },
-    async decideLeave(id, ok, answer) {
-      await updateDoc(doc(leaves, id), { state: ok ? 'ok' : 'no', byName: myself().name.slice(0, 200), decidedAt: Date.now(), answer: answer.trim().slice(0, 500) })
+    async decideLeave(id, state, answer) {
+      await updateDoc(doc(leaves, id), { state, byName: myself().name.slice(0, 200), decidedAt: Date.now(), answer: answer.trim().slice(0, 500) })
     },
   }
 }
@@ -148,7 +149,7 @@ function localStaff(): StaffBackend {
     watchLeaves: (fromDate, on) => watch(() => load().leaves.filter((l) => l.to >= fromDate), on),
     async askLeave(l) { save({ ...load(), leaves: [...load().leaves, { ...l, id: Math.random().toString(36).slice(2), uid: 'demo-you', name: 'You', state: 'pending', at: Date.now() }] }) },
     async cancelLeave(id) { save({ ...load(), leaves: load().leaves.map((l) => (l.id === id ? { ...l, state: 'cancelled' } : l)) }) },
-    async decideLeave(id, ok, answer) { save({ ...load(), leaves: load().leaves.map((l) => (l.id === id ? { ...l, state: ok ? 'ok' : 'no', byName: 'You', decidedAt: Date.now(), answer } : l)) }) },
+    async decideLeave(id, state, answer) { save({ ...load(), leaves: load().leaves.map((l) => (l.id === id ? { ...l, state, byName: 'You', decidedAt: Date.now(), answer } : l)) }) },
   }
 }
 
