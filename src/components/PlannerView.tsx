@@ -9,7 +9,7 @@ import { byWhen } from './HomeView'
 import { Poster } from './Poster'
 import { PostCard } from './PostRow'
 import { CardSize } from './CardSize'
-import { mayMakeCustom, NewCustomPostSheet } from './CustomPost'
+import { draftWasOpen, mayMakeCustom, NewCustomPostSheet } from './CustomPost'
 import { CategoryChips, categoryOn, Empty, Icon, SearchBox, StyleChips, styleOn, dayLabel, showToast, timeLabel } from './ui'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -77,7 +77,8 @@ export function PlannerView({ data, onOpen }: { data: Data; onOpen: (id: string)
   const [style, setStyle] = useState('')
   const [category, setCategory] = useState('')
   // "New post": a text, photo or video post for the day in view (today from the month).
-  const [making, setMaking] = useState<string | null>(null)
+  // If the app was closed while one was being written (the phone ends a page left in the background), it opens again.
+  const [making, setMaking] = useState<string | null>(() => (mayMakeCustom() && draftWasOpen() ? (day && day > today ? day : today) : null))
   const sheet = making && <NewCustomPostSheet data={data} day={making} onClose={() => setMaking(null)} />
   const newPost = (d: string) => (mayMakeCustom() ? <button className="btn btn-primary new-post-btn" onClick={() => setMaking(d)}><Icon name="plus" size={18} />{t('New post')}</button> : null)
 

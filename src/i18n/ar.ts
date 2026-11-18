@@ -1178,6 +1178,8 @@ export const ar: Record<string, string> = {
   'Move earlier': 'تحريك للأمام',
   'Move later': 'تحريك للخلف',
   'Uploading': 'جارٍ رفع',
+  'Your unfinished post is back.': 'عاد منشورك غير المكتمل.',
+  'Start fresh': 'ابدأ من جديد',
   'Upload a video': 'رفع فيديو',
   'Change the video': 'تغيير الفيديو',
   'Add photos': 'إضافة صور',
