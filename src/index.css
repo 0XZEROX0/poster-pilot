@@ -1708,3 +1708,9 @@ button.hr-person:hover { background: var(--surface-2); }
 .hr-day-why { grid-column: 1 / -1; font-size: 0.8rem; color: var(--text-2); }
 .hr-day-acts { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: flex-end; }
 @media (min-width: 760px) { .hr-day-why, .hr-day-acts { grid-column: 1 / -1; } }
+.hr-off-box { display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); }
+.hr-off-box h3 { font-size: 0.95rem; }
+.hr-off-box .hr-list { box-shadow: none; }
+.hr-off-box .hr-change { padding: 6px 4px; }
+.form .hr-one > label { flex: 1 1 160px; }
+.form .hr-one > label > input[type='date'], .form .hr-one > label > input[type='time'] { flex: none; width: 100%; }

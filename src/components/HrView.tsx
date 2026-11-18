@@ -4,7 +4,7 @@ import { track } from '../data/activity'
 import { addDays, cairoNow } from '../data/logic'
 import { allowed } from '../data/store'
 import {
-  addMonths, cairoMs, checkSpot, clockOf, clockOpen, windowText, DAY_NAMES, DEFAULT_SETTINGS, deviceId, devicesOf, hm, hr, judgeDay, judgeMonth, metersPerLng, monthOf, myUid, openDay, shiftOn, templateDays, templateOf, UNITS, WEEK, weekdayOf, withDate, withPlan,
+  addMonths, cairoMs, checkSpot, clockOf, clockOpen, windowText, DAY_NAMES, DEFAULT_SETTINGS, deviceId, devicesOf, hm, hr, judgeDay, judgeMonth, metersPerLng, monthOf, myUid, openDay, giveTemplate, shiftOn, templateOf, weeklyOff, withWeeklyOff, UNITS, WEEK, weekdayOf, withDate, withPlan,
   type DayResult, type DayState, type HrSettings, type Month, type Person, type Place, type Shift, type Shifts, type Template, type Totals, type Unit,
 } from '../data/hr'
 import { locale, t, tn } from '../i18n'
@@ -379,6 +379,7 @@ function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { ui
   const [templates, setTemplates] = useState<Template[] | null>(null)
   const [tpEdit, setTpEdit] = useState<Template | null>(null)
   const [giving, setGiving] = useState<string | null>(null)
+  const [offFor, setOffFor] = useState<{ uid: string; name: string } | null | 'pick'>(null)
   useEffect(() => { hr.loadTemplates().then(setTemplates, () => setTemplates([])) }, [])
   const list = Object.entries(shifts).map(([uid, p]) => ({ uid, name: p.name, p })).sort((a, b) => a.name.localeCompare(b.name))
   const others = people.filter((x) => !shifts[x.uid])
@@ -393,19 +394,19 @@ function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { ui
               <button className="hr-tp-main" onClick={() => setGiving(tp.id)}>
                 <b dir="auto">{tp.name}</b>
                 <span dir="ltr">{tp.s} – {tp.e}</span>
-                <small className="muted">{offText(tp.off)}</small>
               </button>
               <button className="icon-btn" onClick={() => setTpEdit(tp)} aria-label={t('Edit')}><Icon name="edit" size={16} /></button>
             </div>
           ))}
-          {templates && templates.length < 20 && <button className="btn btn-small" onClick={() => setTpEdit({ id: '', name: '', s: '12:00', e: '20:00', off: [5] })}><Icon name="plus" size={16} />{t('New template')}</button>}
+          {templates && templates.length < 20 && <button className="btn btn-small" onClick={() => setTpEdit({ id: '', name: '', s: '12:00', e: '20:00' })}><Icon name="plus" size={16} />{t('New template')}</button>}
         </div>
-        {templates && templates.length > 0 && <p className="hint">{t('Tap a template to give it to people.')}</p>}
+        {templates && templates.length > 0 && <p className="hint">{t('Tap a template to give it to people. Each person keeps their own days off.')}</p>}
       </div>
       <div className="hr-week-nav">
         <button className="icon-btn" onClick={() => setStart(addDays(start, -7))} aria-label={t('Previous week')}><Icon name="left" /></button>
         <b>{dayLabel(dates[0])} – {dayLabel(dates[6])}</b>
         <button className="icon-btn" onClick={() => setStart(addDays(start, 7))} aria-label={t('Next week')}><Icon name="right" /></button>
+        <button className="btn btn-small" onClick={() => setOffFor('pick')} disabled={!everyone.length}><Icon name="calendar" size={16} />{t('Days off')}</button>
         {others.length > 0 && (
           <select className="hr-add" value={adding} onChange={(e) => { const x = others.find((o) => o.uid === e.target.value); if (x) setEditing(x); setAdding('') }}>
             <option value="">{t('+ Add a person')}</option>
@@ -438,11 +439,86 @@ function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { ui
       )}
       <p className="hint">{t('Tap a person to change their week or one day. A dotted cell is a one-day change.')}</p>
       {editing && <ShiftEditor uid={editing.uid} person={shifts[editing.uid] ?? { name: editing.name, plans: [], dates: {} }} onClose={() => setEditing(null)} onSaved={(p) => { onSaved({ [editing.uid]: p }); setEditing(null) }} />}
+      {offFor && <DaysOff everyone={everyone} shifts={shifts} first={offFor === 'pick' ? undefined : offFor.uid} onClose={() => setOffFor(null)} onSaved={onSaved} />}
       {tpEdit && templates && <TemplateEditor tp={tpEdit} list={templates} onClose={() => setTpEdit(null)} onSaved={(l) => { setTemplates(l); setTpEdit(null) }} />}
       {giving && templates?.find((x) => x.id === giving) && (
         <GiveShift tp={templates.find((x) => x.id === giving)!} shifts={shifts} everyone={everyone} onClose={() => setGiving(null)} onSaved={(changed) => { onSaved(changed); setGiving(null) }} />
       )}
     </>
+  )
+}
+
+/** Days off, apart from the hours: each person's weekly days off, and single days off HR gives. */
+function DaysOff({ everyone, shifts, first, onClose, onSaved }: { everyone: { uid: string; name: string }[]; shifts: Shifts; first?: string; onClose: () => void; onSaved: (changed: Shifts) => void }) {
+  const today = cairoNow().date
+  const [uid, setUid] = useState(first ?? everyone[0]?.uid ?? '')
+  const name = everyone.find((x) => x.uid === uid)?.name ?? shifts[uid]?.name ?? ''
+  const person: Person = shifts[uid] ?? { name, plans: [], dates: {} }
+  const [weekFrom, setWeekFrom] = useState(today)
+  const [off, setOff] = useState<number[]>(() => (shifts[uid] ? weeklyOff(shifts[uid], today) : [5]))
+  const [day, setDay] = useState({ from: addDays(today, 1), to: '' })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setOff(shifts[uid] ? weeklyOff(shifts[uid], weekFrom) : [5]) }, [uid, weekFrom, shifts])
+  async function save(next: Person, note: string) {
+    setBusy(true)
+    try {
+      await hr.savePerson(uid, next)
+      track('hr', 'hr.shifts', { what: name, note, ref: uid })
+      onSaved({ [uid]: next })
+      showToast(t('Saved.'))
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
+  function giveDays() {
+    const to = day.to && day.to >= day.from ? day.to : day.from
+    let p = person
+    let n = 0
+    for (let d = day.from; d <= to && n < 62; d = addDays(d, 1), n++) p = withDate(p, d, null)
+    save(p, `day off ${day.from}${to !== day.from ? ` → ${to}` : ''}`)
+  }
+  const singles = Object.entries(person.dates).filter(([d, x]) => x === null && d >= today).map(([d]) => d).sort()
+  return (
+    <Sheet title={t('Days off')} onClose={onClose}>
+      <div className="form">
+        <label><span>{t('Person')}</span>
+          <select value={uid} onChange={(e) => setUid(e.target.value)}>{everyone.map((x) => <option key={x.uid} value={x.uid}>{x.name}</option>)}</select>
+        </label>
+        <section className="hr-off-box">
+          <h3>{t('Weekly days off')}</h3>
+          <div className="hr-off-days">
+            {WEEK.map((d) => (
+              <label key={d} className={`hr-off-day${off.includes(d) ? ' on' : ''}`}>
+                <input type="checkbox" checked={off.includes(d)} onChange={(e) => setOff(e.target.checked ? [...off, d].sort() : off.filter((o) => o !== d))} />
+                {t(DAY_NAMES[d])}
+              </label>
+            ))}
+          </div>
+          <div className="hr-one">
+            <label><span>{t('Starting from')}</span><input type="date" value={weekFrom} onChange={(e) => setWeekFrom(e.target.value)} /></label>
+          </div>
+          <p className="hint">{shifts[uid] ? t('Their hours stay as they are. Only these days become days off.') : t('They have no shifts yet. Give them a template first, or they get 11:00 – 19:00.')}</p>
+          <button className="btn btn-primary" disabled={busy || !uid} onClick={() => save(withWeeklyOff(person, weekFrom, off), `weekly days off from ${weekFrom}: ${off.map((d) => DAY_NAMES[d]).join(', ') || 'none'}`)}>{t('Save weekly days off')}</button>
+        </section>
+        <section className="hr-off-box">
+          <h3>{t('A day off (or a few)')}</h3>
+          <div className="hr-one">
+            <label><span>{t('From')}</span><input type="date" value={day.from} onChange={(e) => setDay({ ...day, from: e.target.value })} /></label>
+            <label><span>{t('To (optional)')}</span><input type="date" value={day.to} min={day.from} onChange={(e) => setDay({ ...day, to: e.target.value })} /></label>
+          </div>
+          <button className="btn" disabled={busy || !uid || !day.from} onClick={giveDays}>{t('Give the day off')}</button>
+          {singles.length > 0 && (
+            <div className="hr-list">
+              {singles.map((d) => (
+                <div key={d} className="hr-change">
+                  <span>{dayLabel(d)}</span>
+                  <button className="btn btn-small btn-ghost" disabled={busy} onClick={() => save(withDate(person, d, undefined), `day off taken back ${d}`)}>{t('Remove')}</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </Sheet>
   )
 }
 
@@ -475,17 +551,6 @@ function TemplateEditor({ tp, list, onClose, onSaved }: { tp: Template; list: Te
           <label><span>{t('Starts')}</span><input type="time" value={x.s} onChange={(e) => setX({ ...x, s: e.target.value })} /></label>
           <label><span>{t('Ends')}</span><input type="time" value={x.e} onChange={(e) => setX({ ...x, e: e.target.value })} /></label>
         </div>
-        <div>
-          <span className="label">{t('Days off')}</span>
-          <div className="hr-off-days">
-            {WEEK.map((d) => (
-              <label key={d} className={`hr-off-day${x.off.includes(d) ? ' on' : ''}`}>
-                <input type="checkbox" checked={x.off.includes(d)} onChange={(e) => setX({ ...x, off: e.target.checked ? [...x.off, d].sort() : x.off.filter((o) => o !== d) })} />
-                {t(DAY_NAMES[d])}
-              </label>
-            ))}
-          </div>
-        </div>
         <p className="hint">{t('An end before the start ends the next day (a night shift).')}</p>
       </div>
     </Sheet>
@@ -504,7 +569,7 @@ function GiveShift({ tp, shifts, everyone, onClose, onSaved }: { tp: Template; s
     try {
       const changed: Shifts = Object.fromEntries(picked.map((uid) => {
         const p = shifts[uid] ?? { name: everyone.find((x) => x.uid === uid)?.name ?? '', plans: [], dates: {} }
-        return [uid, withPlan(p, { from, days: templateDays(tp) })]
+        return [uid, giveTemplate(p, tp, from)]
       }))
       await hr.savePeople(changed)
       track('hr', 'hr.shifts', { what: tp.name, note: `${tp.s}–${tp.e} from ${from}: ${picked.map((uid) => changed[uid].name).join(', ')}` })
@@ -515,7 +580,7 @@ function GiveShift({ tp, shifts, everyone, onClose, onSaved }: { tp: Template; s
   return (
     <Sheet title={tn('Give %n', { n: tp.name })} onClose={onClose} footer={<button className="btn btn-primary" disabled={busy || !picked.length} onClick={save}>{tn('Give to %n people', { n: picked.length })}</button>}>
       <div className="form">
-        <p className="hint" dir="auto">{tp.s} – {tp.e} · {offText(tp.off)}</p>
+        <p className="hint" dir="ltr">{tp.s} – {tp.e}</p>
         <label><span>{t('Starting from')}</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
         <div className="hr-pick-head">
           <span className="label">{t('People')}</span>
@@ -527,11 +592,11 @@ function GiveShift({ tp, shifts, everyone, onClose, onSaved }: { tp: Template; s
               <input type="checkbox" checked={picked.includes(x.uid)} onChange={(e) => setPicked(e.target.checked ? [...picked, x.uid] : picked.filter((u) => u !== x.uid))} />
               <Avatar uid={x.uid} name={x.name} size={28} />
               <span dir="auto">{x.name}</span>
-              {shifts[x.uid] && <small className="muted" dir="ltr">{shiftText(shiftOn(shifts[x.uid], from) ?? null)}</small>}
+              <small className="muted">{shifts[x.uid] ? offText(weeklyOff(shifts[x.uid], from)) : t('New · Friday off')}</small>
             </label>
           ))}
         </div>
-        <p className="hint">{t('Days before the start date keep their old shifts. One-day changes stay.')}</p>
+        <p className="hint">{t('Everyone keeps their own weekly days off. Days before the start date keep their old shifts.')}</p>
       </div>
     </Sheet>
   )

@@ -28,16 +28,44 @@ export type Shifts = Record<string, Person>
 export type Punch = { lat: number; lng: number; acc: number; place: number; dev: string }
 /** excused: the whole day counts nothing. exLate / exEarly: that late arrival or early leave is excused, with the reason in `why`. */
 export type Day = { in?: number; out?: number; inP?: Punch; outP?: Punch; excused?: boolean; exLate?: boolean; exEarly?: boolean; why?: string; note?: string; fixBy?: string }
-/** A ready-made shift HR gives to several people at once: hours, and the weekdays off (0 = Sunday … 6 = Saturday). */
-export type Template = { id: string; name: string; s: string; e: string; off: number[] }
-/** The weekly days of a template. */
-export const templateDays = (tp: Template): Record<string, Shift> => Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), tp.off.includes(d) ? null : { s: tp.s, e: tp.e }]))
-/** The template a person's current week matches, if any. */
+/** A ready-made shift: a name and hours only. Days off belong to each person (their weekly days off, and single days off). */
+export type Template = { id: string; name: string; s: string; e: string }
+/** The plan in force on a date. */
+const planOn = (p: Person | undefined, date: string) => (p ? [...p.plans].filter((x) => x.from <= date).sort((a, b) => (a.from < b.from ? 1 : -1))[0] : undefined)
+/** A person's weekly days off on a date (0 = Sunday … 6 = Saturday): the days their week has no shift. */
+export function weeklyOff(p: Person | undefined, date: string): number[] {
+  const plan = planOn(p, date)
+  return plan ? [0, 1, 2, 3, 4, 5, 6].filter((d) => !plan.days[String(d)]) : []
+}
+/** The hours someone works most days, in the plan in force on a date. */
+export function usualHours(p: Person | undefined, date: string): NonNullable<Shift> | null {
+  const plan = planOn(p, date)
+  const list = plan ? Object.values(plan.days).filter((x): x is NonNullable<Shift> => Boolean(x)) : []
+  const count = new Map<string, number>()
+  for (const x of list) count.set(`${x.s}-${x.e}`, (count.get(`${x.s}-${x.e}`) ?? 0) + 1)
+  const best = [...count.entries()].sort((a, b) => b[1] - a[1])[0]
+  return best ? { s: best[0].slice(0, 5), e: best[0].slice(6) } : null
+}
+/** A week of the same hours, with the given weekdays off. */
+export const weekOf = (hours: { s: string; e: string }, off: number[]): Record<string, Shift> => Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), off.includes(d) ? null : { s: hours.s, e: hours.e }]))
+/** Gives a template from a date on. The person keeps their own weekly days off (Friday for someone with no shifts yet). */
+export function giveTemplate(p: Person, tp: Template, from: string): Person {
+  return withPlan(p, { from, days: weekOf(tp, p.plans.length ? weeklyOff(p, from) : [5]) })
+}
+/** Sets a person's weekly days off from a date on. Working days keep the hours they had that weekday, or their usual hours. */
+export function withWeeklyOff(p: Person, from: string, off: number[], fallback = { s: '11:00', e: '19:00' }): Person {
+  const plan = planOn(p, from)
+  const usual = usualHours(p, from) ?? fallback
+  const days = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), off.includes(d) ? null : (plan?.days[String(d)] ?? usual)]))
+  return withPlan(p, { from, days })
+}
+/** The template a person's week matches on a date, if any: every working day has its hours. */
 export function templateOf(p: Person | undefined, templates: Template[], date: string): Template | undefined {
-  if (!p) return undefined
-  const plan = [...p.plans].filter((x) => x.from <= date).sort((a, b) => (a.from < b.from ? 1 : -1))[0]
+  const plan = planOn(p, date)
   if (!plan) return undefined
-  return templates.find((tp) => JSON.stringify(templateDays(tp)) === JSON.stringify(Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), plan.days[String(d)] ?? null]))))
+  const work = Object.values(plan.days).filter((x): x is NonNullable<Shift> => Boolean(x))
+  if (!work.length) return undefined
+  return templates.find((tp) => work.every((x) => x.s === tp.s && x.e === tp.e))
 }
 export const UNITS = ['EGP', 'hours', 'days'] as const
 export type Unit = (typeof UNITS)[number]
@@ -276,7 +304,7 @@ export function toShifts(d: DocumentData | undefined): Shifts {
 }
 export function toTemplates(d: DocumentData | undefined): Template[] {
   if (!Array.isArray(d?.list)) return []
-  return d.list.map((x: Record<string, unknown>) => ({ id: str(x.id, 40), name: str(x.name, 60), s: str(x.s, 5), e: str(x.e, 5), off: Array.isArray(x.off) ? x.off.filter((n): n is number => typeof n === 'number') : [] })).filter((x: Template) => x.s && x.e)
+  return d.list.map((x: Record<string, unknown>) => ({ id: str(x.id, 40), name: str(x.name, 60), s: str(x.s, 5), e: str(x.e, 5) })).filter((x: Template) => x.s && x.e)
 }
 export function toMonth(id: string, d: DocumentData): Month {
   const days: Record<string, Day> = {}
@@ -340,7 +368,7 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
       else await setDoc(shiftsRef, { people: clean })
     },
     async loadTemplates() { return toTemplates((await getDoc(doc(fs, 'hr', 'templates'))).data()) },
-    async saveTemplates(list) { await setDoc(doc(fs, 'hr', 'templates'), { list: list.slice(0, 20).map((x) => ({ id: x.id, name: x.name.trim().slice(0, 60), s: x.s, e: x.e, off: x.off })) }) },
+    async saveTemplates(list) { await setDoc(doc(fs, 'hr', 'templates'), { list: list.slice(0, 20).map((x) => ({ id: x.id, name: x.name.trim().slice(0, 60), s: x.s, e: x.e })) }) },
     async savePerson(uid, p) {
       // The whole person is replaced (a merge would keep one-day changes that were taken out).
       const clean: Person = { name: p.name.slice(0, 200), plans: p.plans, dates: p.dates }
@@ -447,7 +475,7 @@ function demoData(): Local {
   // Today: you have not clocked in yet, so the button can be tried.
   const mine = months.get(`demo-you_${monthOf(today)}`)
   if (mine) delete mine.days[today.slice(8, 10)]
-  return { settings: { places: [SHOP], maxAcc: 100, grace: 10, inFrom: '10:00', inTo: '15:00', outFrom: '18:00', outTo: '02:30' }, shifts, months: [...months.values()], templates: [{ id: 'a', name: 'Morning', s: '12:00', e: '20:00', off: [5] }, { id: 'b', name: 'Evening', s: '14:00', e: '22:00', off: [5] }] }
+  return { settings: { places: [SHOP], maxAcc: 100, grace: 10, inFrom: '10:00', inTo: '15:00', outFrom: '18:00', outTo: '02:30' }, shifts, months: [...months.values()], templates: [{ id: 'a', name: 'Morning', s: '12:00', e: '20:00' }, { id: 'b', name: 'Evening', s: '14:00', e: '22:00' }] }
 }
 
 let mem: Local | null = null
