@@ -24,6 +24,8 @@ App -> website: Confirm order / Open again = processing, Delivered = completed, 
 
 ## Runs
 - Website -> app: WooCommerce webhooks `order.created` + `order.updated` call `/webhook/static-website-order-<secret>`;
+  the address and the signing secret live only in n8n (this repository is public), and a call goes on only when its
+  `x-wc-webhook-signature` matches the body ("Sign the call" + `hook-check.js`, 2026-11-18);
   each call waits 30 s and only the newest of a burst goes on (data table `qRho6PXhcLVZDIrj`, key `orders`). Then one
   request: orders changed since the last read (10 min overlap). The first run reads the last `sinceDays` (30) days and
   every open order. App documents are read with one `batchGet`, written with one non-atomic `batchWrite`, each write with

@@ -12,6 +12,7 @@ Before: a change in the app waited for the App engine (every minute) and then fo
 2. "Static OS - App engine" (`qRX3fplFZLoSmgir`), trigger **App nudge** (`POST /webhook/static-os-nudge`):
    - `onlyRunIf` drops requests without a token-shaped value (no execution is created).
    - **Who is asking** checks the token with Google (`identitytoolkit accounts:lookup`, the app's public key).
+   - **Signed in?** stops the run when Google does not know the token, before any database read (2026-11-18).
    - **Is a member** reads `members/{uid}`; **Member?** stops the run unless that member exists.
    - Then the usual "app changes" steps run at once. `Plan app changes` (`../direct/engine-app.js`) now also
      returns `build: true` when a post needs a poster now (approved, Redo, missing photo), and

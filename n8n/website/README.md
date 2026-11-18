@@ -55,10 +55,11 @@ static-eg.com is WordPress + WooCommerce. n8n reads and writes it with the REST 
 ## Website changed (n8n `z7dVXPpKQodlrEfj` "Static OS - Website changed", 2026-11-16)
 - static-eg.com has a WooCommerce webhook (id 1, topic `product.updated`, also fires for option/variation saves) that
   posts to `/webhook/static-website-changed-<secret>` right after a product is saved on the website.
-- `hook-check.js` "Real product change?": only calls from static-eg.com with a product id go on (the creation ping is
-  dropped) → "Start website to app" starts `fHuULHd2qUV5IMAn` at once. Its own timer is now a once-an-hour safety run.
+- The address and the webhook's signing secret live only in n8n (this repository is public). "Sign the call" (Crypto,
+  HMAC SHA256 of the raw body, base64) works out the signature; `hook-check.js` "Real product change?" lets a call on
+  only when its `x-wc-webhook-signature` is the same and it has a product id (the creation ping is dropped) → "Start website to app" starts `fHuULHd2qUV5IMAn` at once. Its own timer is now a once-an-hour safety run.
 - Every hour `hook-keep.js` "Webhook fine?" makes sure the webhook exists and is active (WooCommerce switches it off
-  after repeated failed deliveries, for example while the engine computer is off) and fixes it.
+  after repeated failed deliveries, for example while the engine computer is off) and fixes it; a webhook to an older address is deleted. New address and secret set 2026-11-18 (security check).
 - WooCommerce sends webhooks in the background (Action Scheduler), so a delivery can take from a few seconds up to
   about a minute after the save, depending on site traffic.
 - `node n8n/website/build-changed.cjs` prints the workflow.
