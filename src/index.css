@@ -1739,3 +1739,17 @@ button.hr-person:hover { background: var(--surface-2); }
 .hr-note small { grid-column: 2; }
 .hr-off-box textarea { width: 100%; }
 .hr-leave .hr-day-chips { align-items: center; }
+.hr-review-row { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: center; padding: 10px 4px; text-align: start; border-bottom: 1px solid var(--border); background: none; }
+.hr-review-row:hover { background: var(--surface-2); }
+.hr-review-row small { grid-column: 1 / -1; }
+.hr-stars { display: inline-flex; align-items: center; gap: 1px; color: var(--border); font-size: 1rem; }
+.hr-stars .on { color: var(--orange); }
+.hr-stars b { margin-inline-start: 6px; color: var(--text); font-size: 0.9rem; }
+.hr-crit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.hr-crit > div:first-child { display: flex; flex-direction: column; min-width: 0; flex: 1 1 220px; }
+.hr-score { display: inline-flex; gap: 6px; }
+.hr-score button { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); font-weight: 700; }
+.hr-score button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hr-overall { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.hr-review-att { justify-content: flex-start; }
+.hr-add-punch { margin-inline-start: auto; }

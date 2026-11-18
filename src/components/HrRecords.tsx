@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { track } from '../data/activity'
 import { addDays, cairoNow } from '../data/logic'
-import { hr, myUid, withDate, type Person, type Shifts } from '../data/hr'
-import { annualUsed, leaveDates, staff, tenure, LEAVE_KINDS, NOTE_KINDS, type Leave, type LeaveKind, type NoteKind, type Staff } from '../data/staff'
+import { hm, hr, judgeMonth, myUid, withDate, type Person, type Shifts, type Totals } from '../data/hr'
+import { annualUsed, leaveDates, overallOf, prevQuarter, quarterMonths, quarterOf, staff, tenure, CRITERIA, LEAVE_KINDS, NOTE_KINDS, type Criterion, type Leave, type LeaveKind, type NoteKind, type Review, type Staff } from '../data/staff'
 import { locale, t, tn } from '../i18n'
 import { Sheet } from './Sheet'
 import { Avatar, Empty, showToast } from './ui'
@@ -171,7 +171,7 @@ function LeaveRow({ l, all, shifts, onShiftsSaved }: { l: Leave; all: Leave[]; s
 
 // ---------- Employee files ----------
 
-export function StaffFiles({ people, all }: { people: { uid: string; name: string }[]; all: Leave[] | null }) {
+export function StaffFiles({ people, all, shifts, grace }: { people: { uid: string; name: string }[]; all: Leave[] | null; shifts: Shifts; grace: number }) {
   const [open, setOpen] = useState<{ uid: string; name: string } | null>(null)
   const year = cairoNow().date.slice(0, 4)
   if (!people.length) return <Empty icon="users" text={t('Nobody has joined yet.')} />
@@ -187,13 +187,14 @@ export function StaffFiles({ people, all }: { people: { uid: string; name: strin
           </button>
         ))}
       </div>
-      {open && <StaffFile uid={open.uid} name={open.name} all={all ?? []} onClose={() => setOpen(null)} />}
+      {open && <StaffFile uid={open.uid} name={open.name} all={all ?? []} person={shifts[open.uid]} grace={grace} onClose={() => setOpen(null)} />}
     </>
   )
 }
 
-function StaffFile({ uid, name, all, onClose }: { uid: string; name: string; all: Leave[]; onClose: () => void }) {
+function StaffFile({ uid, name, all, person, grace, onClose }: { uid: string; name: string; all: Leave[]; person?: Person; grace: number; onClose: () => void }) {
   const [s, setS] = useState<Staff | null>(null)
+  const [reviewing, setReviewing] = useState<Review | { q: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState({ kind: 'note' as NoteKind, text: '' })
   useEffect(() => { staff.loadStaff(uid, name).then(setS, (e) => { refused(e); onClose() }) }, [uid, name]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -263,6 +264,104 @@ function StaffFile({ uid, name, all, onClose }: { uid: string; name: string; all
           <textarea rows={2} maxLength={1000} dir="auto" placeholder={t('What happened?')} value={note.text} onChange={(e) => setNote({ ...note, text: e.target.value })} />
           <button className="btn" disabled={busy || !note.text.trim()} onClick={addNote}>{t('Add to the file')}</button>
         </section>
+        <section className="hr-off-box">
+          <h3>{t('Quarterly reviews')}</h3>
+          {!s.reviews.some((r) => r.q === prevQuarter(quarterOf(cairoNow().date))) && <p className="banner" dir="auto">{tn('No review for %q yet.', { q: quarterText(prevQuarter(quarterOf(cairoNow().date))) })}</p>}
+          {s.reviews.map((r) => (
+            <button key={r.q} className="hr-review-row" onClick={() => setReviewing(r)}>
+              <b>{quarterText(r.q)}</b>
+              <Stars n={r.overall} />
+              <small className="muted" dir="auto">{dateLabel(r.at)} · {r.byName}</small>
+            </button>
+          ))}
+          <button className="btn" onClick={() => setReviewing({ q: s.reviews.some((r) => r.q === prevQuarter(quarterOf(cairoNow().date))) ? quarterOf(cairoNow().date) : prevQuarter(quarterOf(cairoNow().date)) })}>{t('New review')}</button>
+        </section>
+      </div>
+      {reviewing && <ReviewSheet uid={uid} name={name} person={person} grace={grace} start={reviewing} have={s.reviews} onClose={() => setReviewing(null)} onSaved={(reviews) => { setS({ ...s, reviews }); setReviewing(null) }} />}
+    </Sheet>
+  )
+}
+
+// ---------- Quarterly reviews ----------
+
+const CRIT_LABEL: Record<Criterion, [string, string]> = {
+  attendance: ['Attendance and time', 'Comes on time, rarely absent, clocks in and out.'],
+  work: ['Quality of work', 'Knows the products, careful, few mistakes.'],
+  customers: ['Customers and sales', 'Helps customers well, closes sales, follows up.'],
+  team: ['Teamwork', 'Helps others, easy to work with, shares what they know.'],
+  rules: ['Follows the rules', 'Keeps the shop rules, honest with money and stock.'],
+}
+const SCORE_LABEL = ['', 'Poor', 'Needs work', 'Good', 'Very good', 'Excellent']
+const quarterText = (q: string) => tn('Q%n %y', { n: q.slice(-1), y: q.slice(0, 4) })
+
+function Stars({ n }: { n: number }) {
+  return <span className="hr-stars" title={String(n)}>{[1, 2, 3, 4, 5].map((i) => <span key={i} className={i <= Math.round(n) ? 'on' : ''}>★</span>)}<b>{n ? n.toFixed(1) : '—'}</b></span>
+}
+
+/** Scores 1-5 for each criterion, what went well, what to improve and goals; the quarter's attendance is shown to help. */
+function ReviewSheet({ uid, name, person, grace, start, have, onClose, onSaved }: { uid: string; name: string; person?: Person; grace: number; start: Review | { q: string }; have: Review[]; onClose: () => void; onSaved: (r: Review[]) => void }) {
+  const now = quarterOf(cairoNow().date)
+  const [q, setQ] = useState(start.q)
+  const old = have.find((r) => r.q === q)
+  const [f, setF] = useState(() => ({ scores: old?.scores ?? {}, good: old?.good ?? '', improve: old?.improve ?? '', goals: old?.goals ?? '' }))
+  const [att, setAtt] = useState<Totals | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    const o = have.find((r) => r.q === q)
+    setF({ scores: o?.scores ?? {}, good: o?.good ?? '', improve: o?.improve ?? '', goals: o?.goals ?? '' })
+    let live = true
+    setAtt(null)
+    const months = quarterMonths(q).filter((m) => m <= cairoNow().date.slice(0, 7))
+    Promise.all(months.map((m) => hr.loadMonth(uid, m).then((x) => judgeMonth(m, person, x, grace).totals))).then((list) => {
+      if (!live) return
+      const sum = (k: keyof Totals) => list.reduce((a, x) => a + (x[k] as number), 0)
+      setAtt({ ...list[0], scheduled: sum('scheduled'), present: sum('present'), absent: sum('absent'), lateDays: sum('lateDays'), lateMin: sum('lateMin'), earlyDays: sum('earlyDays'), earlyMin: sum('earlyMin'), overtimeMin: sum('overtimeMin'), otDays: sum('otDays'), pens: { EGP: list.reduce((a, x) => a + x.pens.EGP, 0), hours: list.reduce((a, x) => a + x.pens.hours, 0), days: list.reduce((a, x) => a + x.pens.days, 0) } })
+    }, () => live && setAtt(null))
+    return () => { live = false }
+  }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const quarters = [now, prevQuarter(now), prevQuarter(prevQuarter(now)), prevQuarter(prevQuarter(prevQuarter(now)))]
+  const overall = overallOf(f.scores)
+  async function save() {
+    setBusy(true)
+    try {
+      const reviews = await staff.saveReview(uid, name, { q, ...f })
+      track('hr', 'hr.review', { what: name, note: `${q}: ${overall.toFixed(1)} / 5`, ref: uid })
+      showToast(t('Saved.'))
+      onSaved(reviews)
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
+  const pens = att ? [att.pens.EGP ? `${att.pens.EGP} ${t('EGP')}` : '', att.pens.hours ? tn('%n hours', { n: att.pens.hours }) : '', att.pens.days ? tn('%n days', { n: att.pens.days }) : ''].filter(Boolean).join(' · ') : ''
+  return (
+    <Sheet title={`${t('Quarterly review')} · ${name}`} onClose={onClose} footer={<button className="btn btn-primary" disabled={busy || !overall} onClick={save}>{old ? t('Save changes') : t('Save review')}</button>}>
+      <div className="form">
+        <label><span>{t('Quarter')}</span><select value={q} onChange={(e) => setQ(e.target.value)}>{quarters.map((x) => <option key={x} value={x}>{quarterText(x)}{have.some((r) => r.q === x) ? ` · ${t('done')}` : ''}</option>)}</select></label>
+        <section className="hr-off-box">
+          <h3>{t('Attendance this quarter')}</h3>
+          {!att ? <p className="muted small">{t('Loading…')}</p> : (
+            <div className="hr-day-chips hr-review-att">
+              <span className="chip">{tn('Present %a of %b days', { a: att.present, b: att.scheduled })}</span>
+              <span className={`chip ${att.absent ? 'chip-bad' : ''}`}>{tn('Absent %n', { n: att.absent })}</span>
+              <span className={`chip ${att.lateDays ? 'chip-bad' : ''}`}>{tn('Late %n times · %m', { n: att.lateDays, m: hm(att.lateMin) })}</span>
+              <span className={`chip ${att.earlyDays ? 'chip-warn' : ''}`}>{tn('Left early %n times', { n: att.earlyDays })}</span>
+              {att.overtimeMin > 0 && <span className="chip chip-good">{tn('+%m overtime', { m: hm(att.overtimeMin) })}</span>}
+              {pens && <span className="chip chip-bad">{tn('Penalties: %p', { p: pens })}</span>}
+            </div>
+          )}
+        </section>
+        {CRITERIA.map((c) => (
+          <div key={c} className="hr-crit">
+            <div><b>{t(CRIT_LABEL[c][0])}</b><small className="muted">{t(CRIT_LABEL[c][1])}</small></div>
+            <div className="hr-score" role="radiogroup" aria-label={t(CRIT_LABEL[c][0])}>
+              {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" role="radio" aria-checked={f.scores[c] === n} title={t(SCORE_LABEL[n])} className={f.scores[c] === n ? 'on' : ''} onClick={() => setF({ ...f, scores: { ...f.scores, [c]: n } })}>{n}</button>)}
+            </div>
+          </div>
+        ))}
+        <p className="hr-overall">{t('Overall')}: <Stars n={overall} /></p>
+        <label><span>{t('What went well')}</span><textarea rows={2} maxLength={1000} dir="auto" value={f.good} onChange={(e) => setF({ ...f, good: e.target.value })} /></label>
+        <label><span>{t('What to improve')}</span><textarea rows={2} maxLength={1000} dir="auto" value={f.improve} onChange={(e) => setF({ ...f, improve: e.target.value })} /></label>
+        <label><span>{t('Goals for next quarter')}</span><textarea rows={2} maxLength={1000} dir="auto" value={f.goals} onChange={(e) => setF({ ...f, goals: e.target.value })} /></label>
+        <p className="hint">{t('1 Poor · 2 Needs work · 3 Good · 4 Very good · 5 Excellent. Only people who can manage HR see reviews.')}</p>
       </div>
     </Sheet>
   )

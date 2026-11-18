@@ -391,6 +391,8 @@ export interface HrBackend {
   saveTemplates(list: Template[]): Promise<void>
   watchMine(month: string, on: (m: Month | undefined) => void, onError: (e: Error) => void): () => void
   watchAll(month: string, on: (list: Month[]) => void, onError: (e: Error) => void): () => void
+  /** One person's month (fixing a day in another month, a quarter's review). */
+  loadMonth(uid: string, month: string): Promise<Month | undefined>
   /** The people a manager can give shifts to. */
   loadPeople(): Promise<{ uid: string; name: string }[]>
   clockIn(date: string, punch: Punch): Promise<void>
@@ -434,6 +436,10 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
     },
     watchAll(month, on, onError) {
       return onSnapshot(query(col, where('month', '==', month)), (snap) => on(snap.docs.map((x) => toMonth(x.id, x.data()))), onError)
+    },
+    async loadMonth(uid, month) {
+      const s = await getDoc(doc(col, monthId(uid, month)))
+      return s.exists() ? toMonth(s.id, s.data()) : undefined
     },
     async loadPeople() {
       const snap = await getDocs(collection(fs, 'members'))
@@ -575,6 +581,7 @@ function localHr(): HrBackend {
     async saveTemplates(list) { save({ ...load(), templates: list }) },
     watchMine: (month, on) => watch(() => load().months.find((x) => x.id === monthId('demo-you', month)), on),
     watchAll: (month, on) => watch(() => load().months.filter((x) => x.month === month), on),
+    async loadMonth(uid, month) { return load().months.find((x) => x.uid === uid && x.month === month) },
     async loadPeople() { return Object.entries(load().shifts).map(([uid, p]) => ({ uid, name: p.name })).concat([{ uid: 'sara', name: 'Sara Nabil' }]) },
     async clockIn(date, p) { changeMonth('demo-you', monthOf(date), (m) => ({ ...m, days: { ...m.days, [date.slice(8, 10)]: { in: Date.now(), inP: p } } })) },
     async clockOut(date, p, why) { changeMonth('demo-you', monthOf(date), (m) => ({ ...m, days: { ...m.days, [date.slice(8, 10)]: { ...m.days[date.slice(8, 10)], out: Date.now(), outP: p, ...(why?.trim() ? { leaveWhy: why.trim() } : {}) } } })) },
