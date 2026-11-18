@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { addMinutes, cairoNow, driveThumb, KIND_LABEL, whenOf } from '../data/logic'
 import { checkFile, isVideoFile, MAX_PHOTOS, mediaUploads, uploadMedia, videoSeconds, type MediaProblem } from '../data/media'
-import { allowed, backend } from '../data/store'
+import { allowed, backend, myId } from '../data/store'
 import type { Data, NewPost, PostKind, PostMedia, PostPlaces } from '../data/types'
 import { t, tn } from '../i18n'
 import { Sheet } from './Sheet'
@@ -189,12 +189,31 @@ function freeTimeOn(day: string, data: Data): string {
  * time or posted at once. Only people who may schedule see it; the post is approved as it is made (no Review).
  */
 export function NewCustomPostSheet({ data, day, onClose }: { data: Data; day: string; onClose: () => void }) {
-  const [kind, setKind] = useState<PostKind>(mediaUploads() ? 'image' : 'text')
-  const [caption, setCaption] = useState('')
-  const [media, setMedia] = useState<PostMedia[]>([])
-  const [places, setPlaces] = useState<PostPlaces>('fb+ig')
-  const [postDate, setPostDate] = useState(day)
-  const [postTime, setPostTime] = useState(() => freeTimeOn(day, data))
+  const [saved] = useState(readDraft)
+  const [kind, setKind] = useState<PostKind>(saved?.kind ?? (mediaUploads() ? 'image' : 'text'))
+  const [caption, setCaption] = useState(saved?.caption ?? '')
+  const [media, setMedia] = useState<PostMedia[]>(saved?.media ?? [])
+  const [places, setPlaces] = useState<PostPlaces>(saved?.places ?? 'fb+ig')
+  const [postDate, setPostDate] = useState(saved?.postDate || day)
+  const [postTime, setPostTime] = useState(() => saved?.postTime || freeTimeOn(day, data))
+  const [restored, setRestored] = useState(!!saved)
+  const started = !!caption.trim() || media.length > 0
+  // Kept in this browser as it is typed, so leaving the app (or the phone closing it) loses nothing.
+  useEffect(() => {
+    if (started) writeDraft({ kind, caption, media, places, postDate, postTime, open: true })
+    else clearDraft()
+  }, [started, kind, caption, media, places, postDate, postTime])
+  const close = () => {
+    // Closed on purpose: the text stays for the next "New post", but the window does not open by itself.
+    const d = readDraft()
+    if (d) writeDraft({ ...d, open: false })
+    onClose()
+  }
+  const startFresh = () => {
+    clearDraft()
+    setKind(mediaUploads() ? 'image' : 'text'); setCaption(''); setMedia([]); setPlaces('fb+ig')
+    setPostDate(day); setPostTime(freeTimeOn(day, data)); setRestored(false); setError(''); setConfirmNow(false)
+  }
   const [confirmNow, setConfirmNow] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -229,6 +248,7 @@ export function NewCustomPostSheet({ data, day, onClose }: { data: Data; day: st
       const id = await backend.addPost(draft)
       // The database takes a new post only without a time; approving it and its time (or Post now) follow at once.
       await backend.updatePost(id, now ? { feedback: 'Done', postNow: 'yes', postDate: at.date, postTime: at.time } : { feedback: 'Done', postDate, postTime })
+      clearDraft()
       showToast(now ? `${t('Posting now on')} ${where}` : `${t('Set for')} ${dayLabel(postDate)} · ${timeLabel(postTime)}`)
       onClose()
     } catch {
@@ -253,8 +273,14 @@ export function NewCustomPostSheet({ data, day, onClose }: { data: Data; day: st
   )
 
   return (
-    <Sheet title={t('New post')} onClose={onClose} footer={footer}>
+    <Sheet title={t('New post')} onClose={close} footer={footer}>
       <div className="form narrow">
+        {restored && (
+          <p className="hint">
+            {t('Your unfinished post is back.')}{' '}
+            <button type="button" className="linkish" onClick={startFresh}>{t('Start fresh')}</button>
+          </p>
+        )}
         <KindPicker value={kind} onChange={pickKind} />
         {kind !== 'text' && <MediaPicker kind={kind} toInstagram={toInstagram} value={media} onChange={(m) => { setMedia(m); setError('') }} />}
         <label>
@@ -272,6 +298,27 @@ export function NewCustomPostSheet({ data, day, onClose }: { data: Data; day: st
     </Sheet>
   )
 }
+
+type Draft = { kind: PostKind; caption: string; media: PostMedia[]; places: PostPlaces; postDate: string; postTime: string; open: boolean }
+const draftKey = () => `posterpilot.newPostDraft.${myId() || 'demo'}`
+
+/** The unfinished "New post" kept in this browser, or null. */
+export function readDraft(): Draft | null {
+  try {
+    const d = JSON.parse(localStorage.getItem(draftKey()) ?? 'null') as Draft | null
+    return d && typeof d.caption === 'string' && Array.isArray(d.media) ? d : null
+  } catch {
+    return null
+  }
+}
+function writeDraft(d: Draft) {
+  try { localStorage.setItem(draftKey(), JSON.stringify(d)) } catch { /* only kept when storage works */ }
+}
+function clearDraft() {
+  try { localStorage.removeItem(draftKey()) } catch { /* nothing kept */ }
+}
+/** True when "New post" was open with something in it when the app was left: the Planner opens it again. */
+export const draftWasOpen = () => !!readDraft()?.open
 
 /** True when this person may make text, photo and video posts (the people who schedule). */
 export const mayMakeCustom = () => allowed('schedule')

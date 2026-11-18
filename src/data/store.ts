@@ -50,7 +50,10 @@ let stop = () => {}
 function listen() {
   stop()
   stop = backend.subscribe(
-    (data) => set({ data, error: '' }),
+    // Coming back from the background starts the listeners again from nothing. Until they have everything, keep
+    // what is on screen: a half-loaded update would swap the page for "Loading…" and close any open window
+    // (and the text typed in it).
+    (data) => { if (data.loaded || !state.data.loaded) set({ data, error: '' }) },
     (message) => set({ error: message }),
   )
 }
