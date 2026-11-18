@@ -750,6 +750,8 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await no('staff sets the shop location', setDoc(doc(st, 'hr/settings'), { places: [shop], maxAcc: 100, grace: 10 }))
   await no('owner sets a broken grace', setDoc(doc(boss, 'hr/settings'), { places: [shop], maxAcc: 100, grace: 2.5 }))
   await ok('owner sets the shop location', setDoc(doc(boss, 'hr/settings'), { places: [shop], maxAcc: 100, grace: 10 }))
+  await ok('owner sets clock-in and clock-out hours', setDoc(doc(boss, 'hr/settings'), { places: [shop], maxAcc: 100, grace: 10, inFrom: '10:00', inTo: '', outFrom: '18:00', outTo: '02:30' }))
+  await no('owner sets broken hours', setDoc(doc(boss, 'hr/settings'), { places: [shop], maxAcc: 100, grace: 10, inFrom: '10am' }))
   await ok('a role saved before HR existed reads the settings', getDoc(doc(st, 'hr/settings')))
   await no('a role without Clock in reads the settings', getDoc(doc(nc, 'hr/settings')))
   await no('outsider reads the settings', getDoc(doc(out, 'hr/settings')))
