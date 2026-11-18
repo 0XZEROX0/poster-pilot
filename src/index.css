@@ -1681,3 +1681,30 @@ button.hr-person:hover { background: var(--surface-2); }
 .clock-ask .banner { margin: 0; width: 100%; }
 .clock-ask-icon { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; background: var(--good-soft); color: var(--good); }
 .clock-ask-icon.out { background: color-mix(in srgb, var(--orange) 15%, transparent); color: var(--orange); }
+
+/* HR: shift templates, attendance table, excuses */
+@media (min-width: 760px) { .sheet.sheet-wide { max-width: 1180px; } }
+.hr-templates { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.hr-templates h3 { font-size: 0.95rem; }
+.hr-tp-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.hr-tp { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); }
+.hr-tp-main { display: flex; flex-direction: column; align-items: flex-start; padding: 8px 4px 8px 12px; text-align: start; font-variant-numeric: tabular-nums; }
+.hr-tp-main b { color: var(--accent); }
+.hr-tp-main:hover b { text-decoration: underline; }
+.hr-tp-tag { display: block; font-size: 0.72rem; font-weight: 600; color: var(--accent); }
+.hr-off-days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.form label.hr-off-day { flex-direction: row; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 0.85rem; cursor: pointer; }
+.form label.hr-off-day.on { background: var(--surface-2); border-color: var(--muted); }
+.hr-pick-head { display: flex; align-items: center; justify-content: space-between; }
+.hr-pick { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.form label.hr-pick-row { display: grid; grid-template-columns: auto auto 1fr auto; flex-direction: row; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; }
+.hr-pick-row + .hr-pick-row { border-top: 1px solid var(--border); }
+.hr-pick-row input { width: 20px; height: 20px; accent-color: var(--accent); }
+.hr-att td { font-variant-numeric: tabular-nums; }
+.hr-att tbody tr { cursor: default; }
+.hr-att tr.absent td { background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.hr-att td.hr-why { white-space: normal; text-align: start; min-width: 180px; max-width: 320px; font-size: 0.8rem; }
+.hr-att .hr-acts { display: flex; gap: 6px; justify-content: flex-end; }
+.hr-day-why { grid-column: 1 / -1; font-size: 0.8rem; color: var(--text-2); }
+.hr-day-acts { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: flex-end; }
+@media (min-width: 760px) { .hr-day-why, .hr-day-acts { grid-column: 1 / -1; } }
