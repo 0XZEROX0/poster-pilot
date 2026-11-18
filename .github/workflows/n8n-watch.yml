@@ -3,7 +3,12 @@ name: n8n watch
 # Checks from GitHub's servers (outside Egypt) that the n8n server answers.
 # Sends ONE WhatsApp message when it goes offline and ONE when it is back.
 # Needs repository secrets (Settings > Secrets and variables > Actions):
-#   WHATSAPP_PHONE   your WhatsApp number with country code, e.g. +2010xxxxxxxx
+#   WHATSAPP_PHONE   the WhatsApp number that gets alerts, with country code, e.g. +2010xxxxxxxx
+# WhatsApp through Green-API (free Developer plan, a linked WhatsApp sends it):
+#   GREENAPI_URL     apiUrl from the Green-API console, e.g. https://7105.api.greenapi.com
+#   GREENAPI_ID      idInstance
+#   GREENAPI_TOKEN   apiTokenInstance
+# Or WhatsApp through CallMeBot:
 #   WHATSAPP_APIKEY  the key CallMeBot sends you after activation
 # Telegram (used too if set):
 #   TELEGRAM_BOT_TOKEN  from @BotFather. Press Start on the bot once; the chat
@@ -47,6 +52,9 @@ jobs:
         env:
           WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
           WHATSAPP_APIKEY: ${{ secrets.WHATSAPP_APIKEY }}
+          GREENAPI_URL: ${{ secrets.GREENAPI_URL }}
+          GREENAPI_ID: ${{ secrets.GREENAPI_ID }}
+          GREENAPI_TOKEN: ${{ secrets.GREENAPI_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
@@ -78,7 +86,16 @@ jobs:
 
           send() {
             local text="$1" sent=0
-            if [ -n "$WHATSAPP_PHONE" ] && [ -n "$WHATSAPP_APIKEY" ]; then
+            if [ -n "$WHATSAPP_PHONE" ] && [ -n "$GREENAPI_URL" ] && [ -n "$GREENAPI_ID" ] && [ -n "$GREENAPI_TOKEN" ]; then
+              digits=$(printf '%s' "$WHATSAPP_PHONE" | tr -cd '0-9')
+              body=$(jq -n --arg c "$digits@c.us" --arg m "$text" '{chatId:$c, message:$m}')
+              code=$(curl -sS -m 30 -o ga.txt -w '%{http_code}' -H 'Content-Type: application/json' \
+                -d "$body" "${GREENAPI_URL%/}/waInstance$GREENAPI_ID/sendMessage/$GREENAPI_TOKEN") || true
+              code=${code:-000}
+              echo "WhatsApp (Green-API) answer: $code $(head -c 300 ga.txt 2>/dev/null | tr -d '\n')"
+              [ "$code" = 200 ] && sent=1
+            fi
+            if [ -n "$WHATSAPP_PHONE" ] && [ -n "$WHATSAPP_APIKEY" ] && [ $sent = 0 ]; then
               code=$(curl -sS -m 30 -o wa.txt -w '%{http_code}' -G https://api.callmebot.com/whatsapp.php \
                 --data-urlencode "phone=$WHATSAPP_PHONE" \
                 --data-urlencode "apikey=$WHATSAPP_APIKEY" \
