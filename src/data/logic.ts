@@ -390,3 +390,54 @@ export function listPriceOf(items: Pick<PostItem, 'category' | 'name'>[], produc
   }
   return { priceBefore: bad ? 'Check item' : (variants ? top : sum).toLocaleString('en-US'), company: companies.join(' + ') }
 }
+
+/** A product name made comparable: case, spaces, inch marks (″ vs "), "Wi Fi" vs "WIFI" and brackets do not count. */
+export const nameKey = (s: string) => s.toLowerCase().replace(/[″”“]/g, '"').replace(/wi[\s-]*fi/g, 'wifi').replace(/[()[\]]/g, ' ').replace(/\s+/g, ' ').trim()
+const words = (s: string) => new Set(nameKey(s).split(/[^a-z0-9.+]+/).filter(Boolean))
+
+/** The price list product closest to a name, in the same category when it has one; null when nothing is close enough. */
+export function closestProduct(name: string, category: string, products: Product[]): Product | null {
+  const want = words(name)
+  if (!want.size) return null
+  let best: Product | null = null
+  let score = 0
+  for (const p of products) {
+    if (category.trim() && p.category !== category.trim()) continue
+    const have = words(p.name)
+    let both = 0
+    for (const w of want) if (have.has(w)) both++
+    // Share of the words the two names have together (Jaccard), so "PD98 Pro" does not match "PD98 Pro V2 Mouse Pad".
+    const s = both / (want.size + have.size - both)
+    if (s > score) { score = s; best = p }
+  }
+  return score >= 0.5 ? best : null
+}
+
+/** One item of a post whose price cannot be found: not in the price list (by its exact name), or there without a number. */
+export type PriceIssue = { index: number; item: PostItem; reason: 'not-in-list' | 'no-price'; suggestion: Product | null }
+
+/**
+ * Why a product post has no usable Price before: each item the price list does not price (the same match as the engine:
+ * same category, exact name), with the closest list product to swap in. `missing` is true when the post shows no
+ * Price before at all ('Check item', empty or 0). Text, photo and video posts, published and skipped posts have none.
+ */
+export function priceIssues(post: Post, products: Product[]): { missing: boolean; items: PriceIssue[] } {
+  const none = { missing: false, items: [] }
+  if (post.kind || ['posted', 'skipped'].includes(stageOf(post))) return none
+  const before = post.priceBefore.trim()
+  const missing = before === '' || before === 'Check item' || !/[1-9]/.test(before)
+  // An empty product list (still loading) says nothing about the items.
+  if (!products.length) return { missing, items: [] }
+  const same = (a: string, b: string) => a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase()
+  const items: PriceIssue[] = []
+  post.items.forEach((item, index) => {
+    if (!item.name.trim()) return
+    const p = products.find((x) => x.category === item.category.trim() && same(x.name, item.name))
+    if (p && /[1-9]/.test(p.price)) return
+    items.push({ index, item, reason: p ? 'no-price' : 'not-in-list', suggestion: p ? null : closestProduct(item.name, item.category, products) })
+  })
+  return { missing: missing || items.length > 0, items }
+}
+
+/** Posts (not published, not skipped) that show no Price before or have an item the price list cannot price. */
+export const postsMissingPrice = (posts: Post[], products: Product[]) => posts.filter((p) => priceIssues(p, products).missing)

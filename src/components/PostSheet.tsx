@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
-import { buildCaption, cairoNow, itemName, listPriceOf, maxItems, nextFreeSlot, placesOf, stageOf, titleOf, whenOf } from '../data/logic'
+import { buildCaption, cairoNow, formatPrice, itemName, listPriceOf, maxItems, nextFreeSlot, placesOf, priceIssues, stageOf, titleOf, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, Post, PostItem, PostPlaces, Product } from '../data/types'
 import { t } from '../i18n'
@@ -56,6 +56,12 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   }
   // A product from the list in place of item i: its photo choices start again; a version name is kept only for the same product.
   const fresh = (p: Product, old?: PostItem): PostItem => ({ category: p.category, name: p.name, manualPhoto: '', nextPhoto: false, ...(old?.label !== undefined && old.name === p.name ? { label: old.label } : {}) })
+  // The same product under its price list name (it was renamed in the list): photo, version name and place are kept.
+  const relink = (i: number, p: Product) => setItems(draft.items.map((it, k) => {
+    if (k !== i) return it
+    const { photoMissing: _gone, ...rest } = it
+    return { ...rest, category: p.category, name: p.name }
+  }))
   const swapItem = (i: number, p: Product) => setItems(draft.items.map((it, k) => (k === i ? fresh(p, it) : it)))
   const removeItem = (i: number) => setItems(draft.items.filter((_, k) => k !== i))
   const addItem = (p: Product) => setItems([...draft.items, fresh(p)])
@@ -156,6 +162,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const mayChangeItems = !posted && !custom && (stage === 'offer' ? mayEdit : allowed('offers.approve') || mayReview)
   const itemsChanged = JSON.stringify(draft.items.map((it) => [it.category, it.name])) !== JSON.stringify(post.items.map((it) => [it.category, it.name]))
   const priceChanged = draft.priceBefore !== post.priceBefore || draft.priceAfter !== post.priceAfter
+  // Items the price list cannot price, worked out on the unsaved changes so the warning goes away once fixed.
+  const prices = priceIssues({ ...post, items: draft.items, priceBefore: draft.priceBefore }, data.products)
+  const listBefore = listPriceOf(draft.items, data.products, post.variants).priceBefore
   // Post now: an approved post with its poster, not on Facebook yet, no unsaved changes, not already asked for.
   const mayPostNow = mayPlan && stage === 'scheduled' && post.feedback === 'Done' && !onFacebook && post.postNow !== 'yes' && (custom ? !/^posting/i.test(post.igStatus) : !!post.posterUrl) && !dirty
   const where = custom ? placesOf(draft).map((w) => (w === 'fb' ? 'Facebook' : 'Instagram')).join(t(' and ')) : t('Facebook and Instagram')
@@ -237,6 +246,35 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             <div className="alert">
               <b><Icon name="fix" size={18} />{problem.title}</b>
               <p>{problem.advice}</p>
+            </div>
+          )}
+          {prices.missing && (
+            <div className="alert" role="status">
+              <b><Icon name="fix" size={18} />{t('Price before is missing')}</b>
+              {prices.items.length > 0 ? (
+                <>
+                  <p>{t('The price list has no product with this exact name, so the old price cannot show on the poster.')}</p>
+                  <ul className="price-fixes">
+                    {prices.items.map(({ index, item, reason, suggestion }) => (
+                      <li key={index}>
+                        <span dir="auto"><b>{itemName(item)}</b> · {t(reason === 'no-price' ? 'in the price list without a price' : 'not in the price list')}</span>
+                        {mayChangeItems && suggestion && (
+                          <button type="button" className="btn btn-small" onClick={() => relink(index, suggestion)}>
+                            <Icon name="check" size={16} /><span dir="auto">{t('Use')} {suggestion.name} · {formatPrice(suggestion.price)} EGP</span>
+                          </button>
+                        )}
+                        {mayChangeItems && <button type="button" className="link" onClick={() => { setSwapping(index); setAdding(false) }}>{t(suggestion ? 'Pick another product' : 'Pick the product from the list')}</button>}
+                      </li>
+                    ))}
+                  </ul>
+                  {!mayChangeItems && <p className="muted small">{t('Ask someone who approves offers to fix the product name.')}</p>}
+                </>
+              ) : (
+                <p>
+                  {t('Type the Price before below.')}{' '}
+                  {/[1-9]/.test(listBefore) && <button type="button" className="link" onClick={() => set({ priceBefore: listBefore })}>{t('Use the list price')} {formatPrice(listBefore)} EGP</button>}
+                </p>
+              )}
             </div>
           )}
           {!posted && post.variants && (
