@@ -103,6 +103,8 @@ service cloud.firestore {
             && now.get('takeDownAt', 0) is int && now.get('takeDownBy', '') is string && now.get('takeDownBy', '').size() <= 200
             && was.get('fbStatus', '') == 'Published'))
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
+        // "Ignore" on a missing Price before: the products it was ignored for (a change of products shows it again).
+        && (!keys.hasAny(['priceIgnored']) || ((can('offers.approve') || can('designs.approve') || can('fix')) && now.get('priceIgnored', '') is string && now.get('priceIgnored', '').size() <= 2000))
         // Asking for the website photos of the items, for the photo picker.
         && (!keys.hasAny(['photoAsk']) || can('offers.create') || can('fix') || can('designs.approve'))
         && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle', 'media', 'places']) || can('offers.create') || can('fix') || can('designs.approve') || (was.get('kind', '') != '' && can('schedule')))
@@ -117,7 +119,7 @@ service cloud.firestore {
         // where a post stands (zone, order, the workflow queues `q`), what Facebook and the poster maker report, and
         // the workflows' own notes (`ex`: Facebook photo ids, story ids...), so nobody can point a workflow at another post.
         && keys.hasOnly(['postDate', 'postTime', 'postNow', 'story', 'storyDelay', 'storyDesign', 'feedback', 'appDeleted', 'takeDown', 'takeDownAt', 'takeDownBy',
-          'ignoredProblem', 'photoAsk', 'marketAsk', 'retriedAt', 'items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details',
+          'ignoredProblem', 'priceIgnored', 'photoAsk', 'marketAsk', 'retriedAt', 'items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details',
           'caption', 'captionStyle', 'media', 'places', 'offer', 'offerNote', 'offerBy', 'appEdits', 'appDirty', 'appEditedAt']);
     }
     // The first list from before codes existed. Its first email is the owner; the others may

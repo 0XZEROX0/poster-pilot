@@ -421,7 +421,7 @@ export type PriceIssue = { index: number; item: PostItem; reason: 'not-in-list' 
  * same category, exact name), with the closest list product to swap in. `missing` is true when the post shows no
  * Price before at all ('Check item', empty or 0). Text, photo and video posts, published and skipped posts have none.
  */
-export function priceIssues(post: Post, products: Product[]): { missing: boolean; items: PriceIssue[] } {
+export function priceIssues(post: Post, products: Product[]): { missing: boolean; items: PriceIssue[]; ignored?: boolean } {
   const none = { missing: false, items: [] }
   if (post.kind || ['posted', 'skipped'].includes(stageOf(post))) return none
   const before = post.priceBefore.trim()
@@ -436,8 +436,17 @@ export function priceIssues(post: Post, products: Product[]): { missing: boolean
     if (p && /[1-9]/.test(p.price)) return
     items.push({ index, item, reason: p ? 'no-price' : 'not-in-list', suggestion: p ? null : closestProduct(item.name, item.category, products) })
   })
-  return { missing: missing || items.length > 0, items }
+  const found = missing || items.length > 0
+  // Ignored for exactly these products: no warning; a change of products brings it back.
+  if (found && post.priceIgnored && post.priceIgnored === priceKey(post)) return { missing: false, items, ignored: true }
+  return { missing: found, items }
 }
+
+/** The products of a post, as an ignored missing Price before remembers them. */
+export const priceKey = (post: Pick<Post, 'items'>) => post.items.map((i) => `${i.category.trim()}|${i.name.trim()}`).join('\n')
+
+/** Who may set a missing Price before aside: the people who approve offers or posters, or fix problems. */
+export const PRICE_IGNORE_PERMS = ['offers.approve', 'designs.approve', 'fix'] as const
 
 /** Posts (not published, not skipped) that show no Price before or have an item the price list cannot price. */
 export const postsMissingPrice = (posts: Post[], products: Product[]) => posts.filter((p) => priceIssues(p, products).missing)

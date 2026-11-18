@@ -128,6 +128,8 @@ export function describe(before: Post | undefined, patch: Partial<Post>): Omit<L
   }
   if (moved) return { act: date && time ? 'schedule.set' : 'schedule.cleared', ...whenNote, ...extra }
   if (patch.ignoredProblem && patch.ignoredProblem !== before?.ignoredProblem) return { act: 'problem.ignored', note: short(patch.ignoredProblem, 300) }
+  // A missing Price before set aside (logged), or shown again (nothing to log).
+  if ('priceIgnored' in patch) return patch.priceIgnored ? { act: 'problem.ignored', note: 'No Price before' } : null
   if (patch.marketAsk) return { act: 'prices.recheck' }
   // Looking at the website photos changes nothing yet; the photo that is then chosen is logged as an edit.
   if (patch.photoAsk) return null
