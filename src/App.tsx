@@ -23,6 +23,7 @@ import { ActivityView } from './components/ActivityView'
 import { MaintenanceView } from './components/MaintenanceView'
 import { OrdersView } from './components/OrdersView'
 import { HrView } from './components/HrView'
+import { ClockPrompt } from './components/ClockPrompt'
 import { allowed, isOwner, myId, ownOffer, postWork, seesPage, signIn, signOutNow, useSession } from './data/store'
 import type { Perm } from './data/team'
 import { locale, t, tn, useLang } from './i18n'
@@ -215,6 +216,7 @@ export default function App() {
       {openPost && <PostSheet key={openPost.id} post={openPost} data={data} onClose={close} />}
       {overlay?.kind === 'new' && <NewPostSheet data={data} onClose={close} />}
       {overlay?.kind === 'settings' && <SettingsSheet session={session} onClose={close} />}
+      {(session.mode === 'demo' || session.access === 'in') && (allowed('hr.clock') || allowed('hr')) && <ClockPrompt />}
       <Toast />
     </>
   )

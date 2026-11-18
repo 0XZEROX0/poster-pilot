@@ -6,7 +6,8 @@ import { addDays, cairoNow } from './logic'
 
 // HR: clocking in and out at the shop, shifts, late and early counting, penalties.
 //
-//   hr/settings                 { places: Place[], maxAcc, grace }      where the shop is, read once per visit
+//   hr/settings                 { places: Place[], maxAcc, grace, inFrom, inTo, outFrom, outTo }
+//                               where the shop is, and the hours clocking in and out are open; read once per visit
 //   hr/shifts                   { people: { [uid]: Person } }           everyone's shifts, one document (one read)
 //   attendance/{uid}_{YYYY-MM}  { uid, month, last, days: { [DD]: Day }, pens: Penalty[] }
 //                               one document per person per month: the whole month costs one read
@@ -16,7 +17,8 @@ import { addDays, cairoNow } from './logic'
 // minutes are never stored: they are worked out from the shift of that day, so they cannot be typed in.
 
 export type Place = { name: string; lat: number; lng: number; radius: number; kx: number }
-export type HrSettings = { places: Place[]; maxAcc: number; grace: number }
+/** The hours ('HH:MM', Cairo) clocking in and clocking out are open. Empty means any time. A window may cross midnight. */
+export type HrSettings = { places: Place[]; maxAcc: number; grace: number; inFrom: string; inTo: string; outFrom: string; outTo: string }
 /** Start and end, 'HH:MM' Cairo time. An end before the start ends the next day (a night shift). Null is a day off. */
 export type Shift = { s: string; e: string } | null
 /** A weekly pattern from a date on. days['0'] is Sunday … days['6'] is Saturday. */
@@ -30,7 +32,7 @@ export type Unit = (typeof UNITS)[number]
 export type Penalty = { at: number; by: string; byName: string; date: string; amount: number; unit: Unit; reason: string }
 export type Month = { id: string; uid: string; month: string; days: Record<string, Day>; pens: Penalty[] }
 
-export const DEFAULT_SETTINGS: HrSettings = { places: [], maxAcc: 100, grace: 10 }
+export const DEFAULT_SETTINGS: HrSettings = { places: [], maxAcc: 100, grace: 10, inFrom: '', inTo: '', outFrom: '', outTo: '' }
 /** Saturday first, the way the week is counted in Egypt. */
 export const WEEK = [6, 0, 1, 2, 3, 4, 5]
 export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -61,6 +63,30 @@ export function checkSpot(s: HrSettings, lat: number, lng: number, acc: number):
   if (acc > s.maxAcc) return { ok: false, why: 'vague', dist: n.dist, place: n.index }
   if (n.dist > s.places[n.index].radius) return { ok: false, why: 'far', dist: n.dist, place: n.index }
   return { ok: true, place: n.index, dist: n.dist }
+}
+
+// ---------- Clock hours ----------
+
+/** Whether a Cairo time ('HH:MM') is inside a window. No window, or half of one, means open from or until that end. */
+export function inWindow(from: string, to: string, time: string): boolean {
+  if (!from && !to) return true
+  if (!from) return time <= to
+  if (!to) return time >= from
+  return from <= to ? time >= from && time <= to : time >= from || time <= to
+}
+export const clockOpen = (s: HrSettings, kind: 'in' | 'out', time: string) => (kind === 'in' ? inWindow(s.inFrom, s.inTo, time) : inWindow(s.outFrom, s.outTo, time))
+/** "10:00 – 12:00", "from 10:00", "until 12:00" */
+export const windowText = (from: string, to: string) => (from && to ? `${from} – ${to}` : from ? `≥ ${from}` : to ? `≤ ${to}` : '')
+
+/** What to ask when the app opens: clock in (shift today, not in yet, clock-in hours) or out (still in, clock-out hours). */
+export function promptFor(s: HrSettings, person: Person | undefined, m: Month | undefined, now = Date.now()): 'in' | 'out' | null {
+  if (!person || !s.places.length) return null
+  const { date, time } = cairoNow(new Date(now))
+  const open = openDay(m, date)
+  if (open) return clockOpen(s, 'out', time) && (s.outFrom || s.outTo) ? 'out' : null
+  if (m?.days[date.slice(8, 10)]?.in) return null
+  if (!shiftOn(person, date)) return null
+  return clockOpen(s, 'in', time) && (s.inFrom || s.inTo) ? 'in' : null
 }
 
 // ---------- Time ----------
@@ -218,7 +244,8 @@ const asPunch = (v: unknown): Punch | undefined => {
 export function toSettings(d: DocumentData | undefined): HrSettings {
   if (!d) return DEFAULT_SETTINGS
   const places = Array.isArray(d.places) ? d.places.map((p: Record<string, unknown>) => ({ name: str(p.name, 80), lat: num(p.lat), lng: num(p.lng), radius: num(p.radius, 100), kx: num(p.kx, metersPerLng(num(p.lat))) })) : []
-  return { places, maxAcc: num(d.maxAcc, DEFAULT_SETTINGS.maxAcc), grace: num(d.grace, DEFAULT_SETTINGS.grace) }
+  const hhmm = (v: unknown) => (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : '')
+  return { places, maxAcc: num(d.maxAcc, DEFAULT_SETTINGS.maxAcc), grace: num(d.grace, DEFAULT_SETTINGS.grace), inFrom: hhmm(d.inFrom), inTo: hhmm(d.inTo), outFrom: hhmm(d.outFrom), outTo: hhmm(d.outTo) }
 }
 export function toShifts(d: DocumentData | undefined): Shifts {
   const out: Shifts = {}
@@ -279,7 +306,7 @@ function firestoreHr(fs: NonNullable<typeof firestore>): HrBackend {
   }
   return {
     async loadSettings() { return toSettings((await getDoc(settingsRef)).data()) },
-    async saveSettings(s) { await setDoc(settingsRef, { places: s.places, maxAcc: s.maxAcc, grace: Math.round(s.grace) }) },
+    async saveSettings(s) { await setDoc(settingsRef, { places: s.places, maxAcc: s.maxAcc, grace: Math.round(s.grace), inFrom: s.inFrom, inTo: s.inTo, outFrom: s.outFrom, outTo: s.outTo }) },
     async loadShifts() { return toShifts((await getDoc(shiftsRef)).data()) },
     async savePerson(uid, p) {
       // The whole person is replaced (a merge would keep one-day changes that were taken out).
@@ -380,7 +407,7 @@ function demoData(): Local {
   // Today: you have not clocked in yet, so the button can be tried.
   const mine = months.get(`demo-you_${monthOf(today)}`)
   if (mine) delete mine.days[today.slice(8, 10)]
-  return { settings: { places: [SHOP], maxAcc: 100, grace: 10 }, shifts, months: [...months.values()] }
+  return { settings: { places: [SHOP], maxAcc: 100, grace: 10, inFrom: '10:00', inTo: '15:00', outFrom: '18:00', outTo: '02:30' }, shifts, months: [...months.values()] }
 }
 
 let mem: Local | null = null

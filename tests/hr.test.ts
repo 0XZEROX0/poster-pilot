@@ -1,5 +1,5 @@
 import { describe as group, expect, it } from 'vitest'
-import { addMonths, cairoMs, checkSpot, clockOf, daysIn, devicesOf, distance, judgeDay, judgeMonth, metersPerLng, openDay, shiftMinutes, shiftOn, withDate, withPlan, type Month, type Person } from '../src/data/hr'
+import { inWindow, promptFor, addMonths, cairoMs, checkSpot, clockOf, daysIn, devicesOf, distance, judgeDay, judgeMonth, metersPerLng, openDay, shiftMinutes, shiftOn, withDate, withPlan, type Month, type Person } from '../src/data/hr'
 
 const week = (s: string, e: string, off: number[] = [5]) => Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), off.includes(d) ? null : { s, e }]))
 const shop = { name: 'Shop', lat: 30.0626, lng: 31.3363, radius: 100, kx: metersPerLng(30.0626) }
@@ -95,5 +95,31 @@ group('HR counting', () => {
     const p = { lat: 1, lng: 1, acc: 5, place: 0 }
     const m: Month = { id: 'x', uid: 'a', month: '2026-11', pens: [], days: { '01': { in: 1, inP: { ...p, dev: 'a' } }, '02': { in: 1, inP: { ...p, dev: 'b' } } } }
     expect(devicesOf(m).size).toBe(2)
+  })
+})
+
+group('HR clock hours and the ask on opening', () => {
+  it('knows when a window is open, also across midnight', () => {
+    expect(inWindow('', '', '03:00')).toBe(true)
+    expect(inWindow('10:00', '15:00', '09:59')).toBe(false)
+    expect(inWindow('10:00', '15:00', '15:00')).toBe(true)
+    expect(inWindow('18:00', '02:30', '23:10')).toBe(true)
+    expect(inWindow('18:00', '02:30', '01:00')).toBe(true)
+    expect(inWindow('18:00', '02:30', '12:00')).toBe(false)
+    expect(inWindow('10:00', '', '22:00')).toBe(true)
+  })
+  it('asks to clock in on a shift day inside the hours, and to clock out later', () => {
+    const s = { ...settings, inFrom: '10:00', inTo: '15:00', outFrom: '18:00', outTo: '02:30' }
+    const p: Person = { name: 'A', plans: [{ from: '2026-01-01', days: week('11:00', '19:00') }], dates: {} }
+    const d = '2026-11-18'
+    const at = (time: string) => cairoMs(d, time)
+    expect(promptFor(s, p, undefined, at('09:00'))).toBeNull()
+    expect(promptFor(s, p, undefined, at('10:30'))).toBe('in')
+    expect(promptFor(s, undefined, undefined, at('10:30'))).toBeNull()
+    expect(promptFor(s, p, undefined, cairoMs('2026-11-20', '10:30'))).toBeNull() // Friday off
+    const m: Month = { id: 'x', uid: 'a', month: '2026-11', pens: [], days: { 18: { in: at('10:40') } } }
+    expect(promptFor(s, p, m, at('12:00'))).toBeNull()
+    expect(promptFor(s, p, m, at('19:00'))).toBe('out')
+    expect(promptFor({ ...s, inFrom: '', inTo: '' }, p, undefined, at('10:30'))).toBeNull()
   })
 })

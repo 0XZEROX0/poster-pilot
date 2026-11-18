@@ -4,7 +4,7 @@ import { track } from '../data/activity'
 import { addDays, cairoNow } from '../data/logic'
 import { allowed } from '../data/store'
 import {
-  addMonths, cairoMs, checkSpot, clockOf, DAY_NAMES, DEFAULT_SETTINGS, deviceId, devicesOf, hm, hr, judgeDay, judgeMonth, metersPerLng, monthOf, myUid, openDay, shiftOn, UNITS, WEEK, weekdayOf, withDate, withPlan,
+  addMonths, cairoMs, checkSpot, clockOf, clockOpen, windowText, DAY_NAMES, DEFAULT_SETTINGS, deviceId, devicesOf, hm, hr, judgeDay, judgeMonth, metersPerLng, monthOf, myUid, openDay, shiftOn, UNITS, WEEK, weekdayOf, withDate, withPlan,
   type DayResult, type DayState, type HrSettings, type Month, type Person, type Place, type Shift, type Shifts, type Totals, type Unit,
 } from '../data/hr'
 import { locale, t, tn } from '../i18n'
@@ -88,6 +88,39 @@ export function HrView() {
 
 // ---------- Clocking in ----------
 
+/** Clocks the signed-in person in (or out of the open day): checks the hours, then the location. Says what happened. */
+export async function punchNow(settings: HrSettings, open: string | null, today: string): Promise<{ bad: boolean; text: string }> {
+  if (!settings.places.length) return { bad: true, text: t('The shop location is not set yet. Ask the owner to set it in HR, Shop location.') }
+  const kind = open ? 'out' : 'in'
+  if (!clockOpen(settings, kind, clockOf(Date.now()))) {
+    const hours = kind === 'in' ? windowText(settings.inFrom, settings.inTo) : windowText(settings.outFrom, settings.outTo)
+    return { bad: true, text: tn(kind === 'in' ? 'Clocking in is open %h only.' : 'Clocking out is open %h only. Ask HR to fix the time if you have to leave now.', { h: hours }) }
+  }
+  try {
+    const pos = await locate()
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords
+    const acc = Math.round(accuracy)
+    const c = checkSpot(settings, lat, lng, acc)
+    if (!c.ok) {
+      const place = c.place !== undefined ? settings.places[c.place] : undefined
+      return {
+        bad: true,
+        text: c.why === 'vague' ? tn('Your location is not exact enough (±%a m, at most ±%m m). Turn on precise location or GPS, step near a window and try again.', { a: acc, m: settings.maxAcc })
+          : c.why === 'far' && place ? tn('You are %d from %p. Clocking in works only within %r m of the shop.', { d: c.dist! >= 1000 ? `${(c.dist! / 1000).toFixed(1)} km` : `${Math.round(c.dist!)} m`, p: place.name, r: place.radius })
+            : t('The shop location is not set yet. Ask the owner to set it in HR, Shop location.'),
+      }
+    }
+    const p = { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)), acc, place: c.place, dev: deviceId() }
+    if (open) await hr.clockOut(open, p)
+    else await hr.clockIn(today, p)
+    return { bad: false, text: tn(open ? 'Clocked out at %t. %d m from %p.' : 'Clocked in at %t. %d m from %p.', { t: clockOf(Date.now()), d: Math.round(c.dist), p: settings.places[c.place].name }) }
+  } catch (e) {
+    if (typeof (e as { code?: unknown }).code === 'number') return { bad: true, text: locateError(e) }
+    console.error(e)
+    return { bad: true, text: /permission/i.test(String(e)) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : t('Could not save. Check the connection and try again.') }
+  }
+}
+
 function MyAttendance({ settings, person, mine }: { settings: HrSettings; person?: Person; mine?: Month }) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 20_000); return () => clearInterval(id) }, [])
@@ -104,31 +137,8 @@ function MyAttendance({ settings, person, mine }: { settings: HrSettings; person
 
   async function punch() {
     setMsg(null)
-    if (!settings.places.length) return setMsg({ bad: true, text: t('The shop location is not set yet. Ask the owner to set it in HR, Shop location.') })
     setBusy(true)
-    try {
-      const pos = await locate()
-      const { latitude: lat, longitude: lng, accuracy } = pos.coords
-      const acc = Math.round(accuracy)
-      const c = checkSpot(settings, lat, lng, acc)
-      if (!c.ok) {
-        const place = c.place !== undefined ? settings.places[c.place] : undefined
-        setMsg({
-          bad: true,
-          text: c.why === 'vague' ? tn('Your location is not exact enough (±%a m, at most ±%m m). Turn on precise location or GPS, step near a window and try again.', { a: acc, m: settings.maxAcc })
-            : c.why === 'far' && place ? tn('You are %d from %p. Clocking in works only within %r m of the shop.', { d: c.dist! >= 1000 ? `${(c.dist! / 1000).toFixed(1)} km` : `${Math.round(c.dist!)} m`, p: place.name, r: place.radius })
-              : t('The shop location is not set yet. Ask the owner to set it in HR, Shop location.'),
-        })
-      } else {
-        const p = { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)), acc, place: c.place, dev: deviceId() }
-        if (open) await hr.clockOut(open, p)
-        else await hr.clockIn(today, p)
-        setMsg({ bad: false, text: tn(open ? 'Clocked out at %t. %d m from %p.' : 'Clocked in at %t. %d m from %p.', { t: clockOf(Date.now()), d: Math.round(c.dist), p: settings.places[c.place].name }) })
-      }
-    } catch (e) {
-      if ((e as { code?: number }).code !== undefined && !(e as { name?: string }).name?.includes('Firebase')) setMsg({ bad: true, text: locateError(e) })
-      else refused(e)
-    }
+    setMsg(await punchNow(settings, open, today))
     setBusy(false)
   }
 
@@ -154,6 +164,9 @@ function MyAttendance({ settings, person, mine }: { settings: HrSettings; person
         )}
         {msg && <p className={msg.bad ? 'banner banner-bad hr-msg' : 'banner hr-msg'}>{msg.text}</p>}
         <p className="hint">{t('Your location is checked when you tap, and only then. It must be inside the shop.')}</p>
+        {(settings.inFrom || settings.inTo || settings.outFrom || settings.outTo) && (
+          <p className="hint" dir="auto">{[windowText(settings.inFrom, settings.inTo) && `${t('Clock in')} ${windowText(settings.inFrom, settings.inTo)}`, windowText(settings.outFrom, settings.outTo) && `${t('Clock out')} ${windowText(settings.outFrom, settings.outTo)}`].filter(Boolean).join(' · ')}</p>
+        )}
       </section>
       <TotalsTiles totals={month.totals} />
       <MonthDays days={month.days} />
@@ -603,11 +616,11 @@ function Setup({ settings, onSaved }: { settings: HrSettings; onSaved: (s: HrSet
   async function save() {
     const places = s.places.map((p) => ({ name: p.name.trim().slice(0, 80) || t('Shop'), lat: p.lat, lng: p.lng, radius: Math.max(20, Math.min(2000, Math.round(p.radius) || 100)), kx: metersPerLng(p.lat) }))
     if (places.some((p) => !p.lat && !p.lng)) return showToast(t('Set each place\'s location first: stand in the shop and tap Use my location.'))
-    const next = { places, maxAcc: Math.max(10, Math.min(2000, Math.round(s.maxAcc) || 100)), grace: Math.max(0, Math.min(180, Math.round(s.grace) || 0)) }
+    const next = { ...s, places, maxAcc: Math.max(10, Math.min(2000, Math.round(s.maxAcc) || 100)), grace: Math.max(0, Math.min(180, Math.round(s.grace) || 0)) }
     setBusy('save')
     try {
       await hr.saveSettings(next)
-      track('hr', 'hr.settings', { what: places.map((p) => `${p.name} (${p.radius} m)`).join(', '), note: `±${next.maxAcc} m · grace ${next.grace} min` })
+      track('hr', 'hr.settings', { what: places.map((p) => `${p.name} (${p.radius} m)`).join(', '), note: `±${next.maxAcc} m · grace ${next.grace} min · in ${windowText(next.inFrom, next.inTo) || 'any time'} · out ${windowText(next.outFrom, next.outTo) || 'any time'}` })
       onSaved(next)
       setS(next)
       showToast(t('Saved.'))
@@ -633,6 +646,18 @@ function Setup({ settings, onSaved }: { settings: HrSettings; onSaved: (s: HrSet
         ))}
         {s.places.length < 10 && <button className="btn" onClick={() => setS({ ...s, places: [...s.places, { name: s.places.length ? '' : 'Static', lat: 0, lng: 0, radius: 100, kx: 0 }] })}><Icon name="plus" size={18} />{t('Add a place')}</button>}
         <label><span>{t('Least accuracy a phone must have (meters)')}</span><input type="number" min="10" max="2000" value={s.maxAcc} onChange={(e) => setS({ ...s, maxAcc: Number(e.target.value) })} /></label>
+        <h3>{t('Clock-in and clock-out hours')}</h3>
+        <p className="hint">{t('Outside these hours the button does not work. Inside them, people who open Static OS are asked to clock in (or out). Leave both empty for any time.')}</p>
+        <div className="hr-hours">
+          <span>{t('Clock in')}</span>
+          <input type="time" value={s.inFrom} onChange={(e) => setS({ ...s, inFrom: e.target.value })} aria-label={t('Clock in from')} />
+          <span>–</span>
+          <input type="time" value={s.inTo} onChange={(e) => setS({ ...s, inTo: e.target.value })} aria-label={t('Clock in until')} />
+          <span>{t('Clock out')}</span>
+          <input type="time" value={s.outFrom} onChange={(e) => setS({ ...s, outFrom: e.target.value })} aria-label={t('Clock out from')} />
+          <span>–</span>
+          <input type="time" value={s.outTo} onChange={(e) => setS({ ...s, outTo: e.target.value })} aria-label={t('Clock out until')} />
+        </div>
         <label><span>{t('Grace minutes before someone counts as late')}</span><input type="number" min="0" max="180" value={s.grace} onChange={(e) => setS({ ...s, grace: Number(e.target.value) })} /></label>
         <button className="btn btn-primary" onClick={save} disabled={busy !== null}>{t('Save')}</button>
       </section>
