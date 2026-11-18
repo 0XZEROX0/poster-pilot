@@ -1,5 +1,5 @@
 import { describe as group, expect, it } from 'vitest'
-import { inWindow, promptFor, addMonths, cairoMs, checkSpot, clockOf, daysIn, devicesOf, distance, judgeDay, judgeMonth, metersPerLng, openDay, shiftMinutes, shiftOn, giveTemplate, templateOf, weeklyOff, withWeeklyOff, withDate, withPlan, type Month, type Person } from '../src/data/hr'
+import { earlyBy, h12, leavePending, leaveRequests, inWindow, promptFor, addMonths, cairoMs, checkSpot, clockOf, daysIn, devicesOf, distance, judgeDay, judgeMonth, metersPerLng, openDay, shiftMinutes, shiftOn, giveTemplate, templateOf, weeklyOff, withWeeklyOff, withDate, withPlan, type Month, type Person } from '../src/data/hr'
 
 const week = (s: string, e: string, off: number[] = [5]) => Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), off.includes(d) ? null : { s, e }]))
 const shop = { name: 'Shop', lat: 30.0626, lng: 31.3363, radius: 100, kx: metersPerLng(30.0626) }
@@ -163,5 +163,31 @@ group('HR shift templates and days off', () => {
     expect(shiftOn(p, '2026-11-27')).toEqual({ s: '12:00', e: '20:00' }) // Friday now works, same hours
     expect(shiftOn(p, '2026-11-28')).toBeNull() // Saturday off
     expect(shiftOn(p, '2026-11-20')).toBeNull() // before the change, Friday was off
+  })
+})
+
+group('HR 12-hour clock and leaving early', () => {
+  it('shows times on a 12-hour clock', () => {
+    expect(h12('00:15')).toBe('12:15 AM')
+    expect(h12('09:05')).toBe('9:05 AM')
+    expect(h12('12:00')).toBe('12:00 PM')
+    expect(h12('19:30')).toBe('7:30 PM')
+  })
+  it('knows how early someone would leave', () => {
+    const p: Person = { name: 'A', plans: [{ from: '2026-01-01', days: week('11:00', '19:00') }], dates: {} }
+    expect(earlyBy(p, '2026-11-18', cairoMs('2026-11-18', '17:30'))).toBe(90)
+    expect(earlyBy(p, '2026-11-18', cairoMs('2026-11-18', '19:05'))).toBe(0)
+    expect(earlyBy(p, '2026-11-20', cairoMs('2026-11-20', '12:00'))).toBe(0) // Friday off
+  })
+  it('lists early leaves waiting for HR until accepted or declined', () => {
+    const p: Person = { name: 'A', plans: [{ from: '2026-01-01', days: week('11:00', '19:00') }], dates: {} }
+    const day = { in: cairoMs('2026-11-18', '11:00'), out: cairoMs('2026-11-18', '17:00'), leaveWhy: 'sick' }
+    const m: Month = { id: 'a_2026-11', uid: 'a', month: '2026-11', pens: [], days: { 18: day } }
+    const list = leaveRequests([m], { a: p }, 10)
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ name: 'A', date: '2026-11-18', r: { rawEarly: 120, early: 120 } })
+    expect(leavePending({ ...day, exEarly: true })).toBe(false)
+    expect(leavePending({ ...day, leaveNo: true })).toBe(false)
+    expect(judgeDay('2026-11-18', { s: '11:00', e: '19:00' }, { ...day, exEarly: true }, 10).early).toBe(0)
   })
 })

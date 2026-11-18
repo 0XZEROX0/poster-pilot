@@ -4,7 +4,7 @@ import { track } from '../data/activity'
 import { addDays, cairoNow } from '../data/logic'
 import { allowed } from '../data/store'
 import {
-  addMonths, cairoMs, checkSpot, clockOf, clockOpen, windowText, DAY_NAMES, DEFAULT_SETTINGS, deviceId, devicesOf, hm, hr, judgeDay, judgeMonth, metersPerLng, monthOf, myUid, openDay, giveTemplate, shiftOn, templateOf, weeklyOff, withWeeklyOff, UNITS, WEEK, weekdayOf, withDate, withPlan,
+  addMonths, cairoMs, checkSpot, clock12, clockOf, clockOpen, earlyBy, h12, windowText, DAY_NAMES, DEFAULT_SETTINGS, deviceId, devicesOf, hm, hr, judgeDay, judgeMonth, leavePending, leaveRequests, metersPerLng, monthOf, myUid, openDay, giveTemplate, shiftOn, templateOf, weeklyOff, withWeeklyOff, UNITS, WEEK, weekdayOf, withDate, withPlan,
   type DayResult, type DayState, type HrSettings, type Month, type Person, type Place, type Shift, type Shifts, type Template, type Totals, type Unit,
 } from '../data/hr'
 import { locale, t, tn } from '../i18n'
@@ -21,7 +21,7 @@ const UNIT_LABEL: Record<Unit, string> = { EGP: 'EGP', hours: 'hours', days: 'da
 
 const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const monthLabel = (month: string) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString(locale(), { month: 'long', year: 'numeric', timeZone: 'UTC' })
-const shiftText = (s: Shift) => (s ? `${s.s} – ${s.e}` : t('Off'))
+const shiftText = (s: Shift) => (s ? `${h12(s.s)} – ${h12(s.e)}` : t('Off'))
 const mapLink = (lat: number, lng: number) => `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`
 const refused = (e: unknown) => {
   console.error(e)
@@ -68,12 +68,13 @@ export function HrView() {
     return hr.watchAll(watchMonth, setAll, (e) => setError(String(e)))
   }, [wantAll, watchMonth])
 
+  const pending = all && settings && shifts && watchMonth === thisMonth ? leaveRequests(all, shifts, settings.grace).length : 0
   if (!settings || !shifts) return <div className="hr"><p className="muted">{t('Loading…')}</p></div>
   return (
     <div className="hr">
       {sections.length > 1 && (
         <div className="filters">
-          {sections.map((s) => <button key={s} className={`filter${section === s ? ' on' : ''}`} onClick={() => setSection(s)}>{t(SECTION_LABEL[s])}</button>)}
+          {sections.map((s) => <button key={s} className={`filter${section === s ? ' on' : ''}`} onClick={() => setSection(s)}>{t(SECTION_LABEL[s])}{s === 'today' && pending > 0 && <span className="hr-badge">{pending}</span>}</button>)}
         </div>
       )}
       {error && <p className="banner banner-bad hr-banner" dir="ltr">{/permission/i.test(error) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : error}</p>}
@@ -88,11 +89,20 @@ export function HrView() {
 
 // ---------- Clocking in ----------
 
-/** Clocks the signed-in person in (or out of the open day): checks the hours, then the location. Says what happened. */
-export async function punchNow(settings: HrSettings, open: string | null, today: string): Promise<{ bad: boolean; text: string }> {
+export type PunchResult = { bad: boolean; text: string; needWhy?: boolean }
+/**
+ * Clocks the signed-in person in (or out of the open day): checks the hours, then the location. Says what happened.
+ * Clocking out before the clock-out hours or before the shift ends needs a reason (`why`), which HR sees on that day.
+ */
+export async function punchNow(settings: HrSettings, open: string | null, today: string, person?: Person, why = ''): Promise<PunchResult> {
   if (!settings.places.length) return { bad: true, text: t('The shop location is not set yet. Ask the owner to set it in HR, Shop location.') }
   const kind = open ? 'out' : 'in'
-  if (!clockOpen(settings, kind, clockOf(Date.now()))) {
+  if (open && !why.trim()) {
+    const early = earlyBy(person, open)
+    const closed = !clockOpen(settings, 'out', clockOf(Date.now()))
+    if (early > 0 || closed) return { bad: true, needWhy: true, text: early > 0 ? tn('Your shift ends in %m. To leave now, type why. HR will see it.', { m: hm(early) }) : tn('Clocking out is open %h. To clock out now, type why. HR will see it.', { h: windowText(settings.outFrom, settings.outTo) }) }
+  }
+  if (kind === 'in' && !clockOpen(settings, kind, clockOf(Date.now()))) {
     const hours = kind === 'in' ? windowText(settings.inFrom, settings.inTo) : windowText(settings.outFrom, settings.outTo)
     return { bad: true, text: tn(kind === 'in' ? 'Clocking in is open %h only.' : 'Clocking out is open %h only. Ask HR to fix the time if you have to leave now.', { h: hours }) }
   }
@@ -111,9 +121,9 @@ export async function punchNow(settings: HrSettings, open: string | null, today:
       }
     }
     const p = { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)), acc, place: c.place, dev: deviceId() }
-    if (open) await hr.clockOut(open, p)
+    if (open) await hr.clockOut(open, p, why)
     else await hr.clockIn(today, p)
-    return { bad: false, text: tn(open ? 'Clocked out at %t. %d m from %p.' : 'Clocked in at %t. %d m from %p.', { t: clockOf(Date.now()), d: Math.round(c.dist), p: settings.places[c.place].name }) }
+    return { bad: false, text: tn(open ? 'Clocked out at %t. %d m from %p.' : 'Clocked in at %t. %d m from %p.', { t: clock12(Date.now()), d: Math.round(c.dist), p: settings.places[c.place].name }) }
   } catch (e) {
     if (typeof (e as { code?: unknown }).code === 'number') return { bad: true, text: locateError(e) }
     console.error(e)
@@ -131,26 +141,29 @@ function MyAttendance({ settings, person, mine }: { settings: HrSettings; person
   const shift = shiftOn(person, today)
   const r = judgeDay(today, shift, day, settings.grace, now)
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<{ bad: boolean; text: string } | null>(null)
+  const [msg, setMsg] = useState<PunchResult | null>(null)
+  const [why, setWhy] = useState('')
   const month = judgeMonth(monthOf(today), person, mine, settings.grace, now)
   const doneToday = Boolean(day?.in && day.out) && !open
 
   async function punch() {
     setMsg(null)
     setBusy(true)
-    setMsg(await punchNow(settings, open, today))
+    const r = await punchNow(settings, open, today, person, why)
+    setMsg(r)
+    if (!r.bad) setWhy('')
     setBusy(false)
   }
 
   return (
     <div className="hr-me">
       <section className="hr-clock">
-        <p className="hr-now" dir="ltr">{clockOf(now)}</p>
+        <p className="hr-now" dir="ltr">{clock12(now)}</p>
         <p className="muted">{dayLabel(today)} · {shift ? tn('Shift %s', { s: shiftText(shift) }) : person ? t('Day off today') : t('No shift set for you yet')}</p>
         <div className="hr-state">
           <span className={`chip ${STATE_TONE[r.state]}`}>{t(STATE_LABEL[r.state])}</span>
-          {day?.in && <span className="chip">{tn('In %t', { t: clockOf(day.in) })}</span>}
-          {day?.out && <span className="chip">{tn('Out %t', { t: clockOf(day.out) })}</span>}
+          {day?.in && <span className="chip">{tn('In %t', { t: clock12(day.in) })}</span>}
+          {day?.out && <span className="chip">{tn('Out %t', { t: clock12(day.out) })}</span>}
           {r.late > 0 && <span className="chip chip-bad">{tn('%m late', { m: hm(r.late) })}</span>}
           {r.early > 0 && <span className="chip chip-warn">{tn('Left %m early', { m: hm(r.early) })}</span>}
         </div>
@@ -163,6 +176,7 @@ function MyAttendance({ settings, person, mine }: { settings: HrSettings; person
           </button>
         )}
         {msg && <p className={msg.bad ? 'banner banner-bad hr-msg' : 'banner hr-msg'}>{msg.text}</p>}
+        {msg?.needWhy && open && <LeaveWhy why={why} setWhy={setWhy} busy={busy} onGo={punch} />}
         <p className="hint">{t('Your location is checked when you tap, and only then. It must be inside the shop.')}</p>
         {(settings.inFrom || settings.inTo || settings.outFrom || settings.outTo) && (
           <p className="hint" dir="auto">{[windowText(settings.inFrom, settings.inTo) && `${t('Clock in')} ${windowText(settings.inFrom, settings.inTo)}`, windowText(settings.outFrom, settings.outTo) && `${t('Clock out')} ${windowText(settings.outFrom, settings.outTo)}`].filter(Boolean).join(' · ')}</p>
@@ -171,6 +185,16 @@ function MyAttendance({ settings, person, mine }: { settings: HrSettings; person
       <TotalsTiles totals={month.totals} />
       <MonthDays days={month.days} />
       {mine && mine.pens.length > 0 && <Penalties list={mine.pens} />}
+    </div>
+  )
+}
+
+/** The reason for leaving early, asked before clocking out early. */
+export function LeaveWhy({ why, setWhy, busy, onGo }: { why: string; setWhy: (v: string) => void; busy: boolean; onGo: () => void }) {
+  return (
+    <div className="form hr-leave-why">
+      <label><span>{t('Why are you leaving early?')}</span><input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={500} placeholder={t('For example: family emergency, feeling sick')} autoFocus /></label>
+      <button className="btn btn-primary" disabled={busy || !why.trim()} onClick={onGo}>{busy ? t('Checking your location…') : t('Clock out with this reason')}</button>
     </div>
   )
 }
@@ -197,7 +221,7 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
   const list = [...days].reverse().filter((r) => r.state !== 'off' || r.day)
   if (!list.length) return <Empty icon="calendar" text={t('Nothing this month yet.')} />
   const canExcuse = (r: DayResult) => Boolean(onExcuse && (r.rawLate || r.rawEarly))
-  const reason = (r: DayResult) => [r.day?.why, r.day?.note].filter(Boolean).join(' · ')
+  const reason = (r: DayResult) => [r.day?.leaveWhy && tn('Their reason: %r', { r: r.day.leaveWhy }), r.day?.why, r.day?.note].filter(Boolean).join(' · ')
   if (desktop) {
     return (
       <div className="hr-week-wrap">
@@ -208,13 +232,13 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
               <tr key={r.date} className={r.state === 'absent' ? 'absent' : ''}>
                 <th>{dayLabel(r.date)}</th>
                 <td className="muted" dir="ltr">{shiftText(r.shift)}</td>
-                <td dir="ltr">{r.day?.in ? clockOf(r.day.in) : r.state === 'absent' ? <span className="chip chip-bad">{t('Absent')}</span> : '—'}</td>
-                <td dir="ltr">{r.day?.out ? clockOf(r.day.out) : r.state === 'noOut' ? <span className="chip chip-warn">{t('No clock-out')}</span> : r.state === 'working' ? <span className="chip chip-info">{t('Working')}</span> : '—'}</td>
+                <td dir="ltr">{r.day?.in ? clock12(r.day.in) : r.state === 'absent' ? <span className="chip chip-bad">{t('Absent')}</span> : '—'}</td>
+                <td dir="ltr">{r.day?.out ? clock12(r.day.out) : r.state === 'noOut' ? <span className="chip chip-warn">{t('No clock-out')}</span> : r.state === 'working' ? <span className="chip chip-info">{t('Working')}</span> : '—'}</td>
                 <td>{r.worked ? hm(r.worked) : '—'}</td>
                 <td><MinChip raw={r.rawLate} counted={r.late} label="%m" tone="chip-bad" />{!r.rawLate && '—'}</td>
                 <td><MinChip raw={r.rawEarly} counted={r.early} label="%m" tone="chip-warn" />{!r.rawEarly && '—'}</td>
                 <td className={r.missing ? 'bad' : ''}>{r.missing ? hm(r.missing) : '—'}</td>
-                <td className="hr-why" dir="auto">{r.day?.excused && <span className="chip chip-good">{t('Excused day')}</span>} {reason(r)}{r.day?.fixBy && <small className="muted"> · {tn('fixed by %n', { n: r.day.fixBy })}</small>}</td>
+                <td className="hr-why" dir="auto">{r.day?.excused && <span className="chip chip-good">{t('Excused day')}</span>}{leavePending(r.day) && <span className="chip chip-warn">{t('Waiting for HR')}</span>}{r.day?.leaveNo && <span className="chip chip-bad">{t('Early leave declined')}</span>} {reason(r)}{r.day?.fixBy && <small className="muted"> · {tn('fixed by %n', { n: r.day.fixBy })}</small>}</td>
                 {(onFix || onExcuse) && (
                   <td><div className="hr-acts">
                     {canExcuse(r) && <button className="btn btn-small" onClick={() => onExcuse!(r)}>{t('Excuse')}</button>}
@@ -234,12 +258,14 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
         <div key={r.date} className="hr-day">
           <span className="hr-day-date">{dayLabel(r.date)}</span>
           <span className="hr-day-shift muted" dir="ltr">{shiftText(r.shift)}</span>
-          <span className="hr-day-times" dir="ltr">{r.day?.in ? clockOf(r.day.in) : '—'} → {r.day?.out ? clockOf(r.day.out) : '—'}{r.worked ? <small className="muted"> · {hm(r.worked)}</small> : null}</span>
+          <span className="hr-day-times" dir="ltr">{r.day?.in ? clock12(r.day.in) : '—'} → {r.day?.out ? clock12(r.day.out) : '—'}{r.worked ? <small className="muted"> · {hm(r.worked)}</small> : null}</span>
           <span className="hr-day-chips">
             {r.state !== 'done' && <span className={`chip ${STATE_TONE[r.state]}`}>{t(STATE_LABEL[r.state])}</span>}
             <MinChip raw={r.rawLate} counted={r.late} label="%m late" tone="chip-bad" />
             <MinChip raw={r.rawEarly} counted={r.early} label="%m early" tone="chip-warn" />
             {r.day?.excused && <span className="chip chip-good">{t('Excused day')}</span>}
+            {leavePending(r.day) && <span className="chip chip-warn">{t('Waiting for HR')}</span>}
+            {r.day?.leaveNo && <span className="chip chip-bad">{t('Early leave declined')}</span>}
             {r.day?.fixBy && <span className="chip">{t('Fixed by hand')}</span>}
           </span>
           {reason(r) && <span className="hr-day-why" dir="auto">{reason(r)}</span>}
@@ -259,14 +285,14 @@ function MonthDays({ days, onFix, onExcuse }: { days: DayResult[]; onFix?: (r: D
 function ExcuseDay({ uid, name, r, onClose }: { uid: string; name: string; r: DayResult; onClose: () => void }) {
   const [late, setLate] = useState(r.rawLate > 0)
   const [early, setEarly] = useState(r.rawEarly > 0)
-  const [why, setWhy] = useState(r.day?.why ?? '')
+  const [why, setWhy] = useState(r.day?.why ?? r.day?.leaveWhy ?? '')
   const [busy, setBusy] = useState(false)
   async function save(excuse: boolean) {
     if (excuse && !why.trim()) return showToast(t('Type the reason.'))
     setBusy(true)
     try {
       const fix = excuse ? { exLate: late && r.rawLate > 0, exEarly: early && r.rawEarly > 0, why } : { exLate: false, exEarly: false, why: '' }
-      await hr.fixDay(uid, r.date, fix)
+      await hr.fixDay(uid, r.date, fix.exEarly ? { ...fix, leaveNo: false } : fix)
       track('hr', 'hr.fixed', { what: name, note: `${r.date}: ${excuse ? `excused ${[fix.exLate && `${hm(r.rawLate)} late`, fix.exEarly && `${hm(r.rawEarly)} early`].filter(Boolean).join(' + ')} · ${why.trim()}` : 'excuse taken back'}`, ref: uid })
       onClose()
     } catch (e) { refused(e) }
@@ -279,7 +305,8 @@ function ExcuseDay({ uid, name, r, onClose }: { uid: string; name: string; r: Da
       <button className="btn btn-primary" disabled={busy} onClick={() => save(true)}>{t('Excuse')}</button>
     </>}>
       <div className="form">
-        <p className="hint" dir="ltr">{t('Shift')}: {shiftText(r.shift)} · {r.day?.in ? clockOf(r.day.in) : '—'} → {r.day?.out ? clockOf(r.day.out) : '—'}</p>
+        <p className="hint" dir="ltr">{t('Shift')}: {shiftText(r.shift)} · {r.day?.in ? clock12(r.day.in) : '—'} → {r.day?.out ? clock12(r.day.out) : '—'}</p>
+        {r.day?.leaveWhy && <p className="banner" dir="auto">{tn('Their reason: %r', { r: r.day.leaveWhy })}</p>}
         {r.rawLate > 0 && <label className="check"><input type="checkbox" checked={late} onChange={(e) => setLate(e.target.checked)} /><span>{tn('Excuse coming %m late', { m: hm(r.rawLate) })}</span></label>}
         {r.rawEarly > 0 && <label className="check"><input type="checkbox" checked={early} onChange={(e) => setEarly(e.target.checked)} /><span>{tn('Excuse leaving %m early', { m: hm(r.rawEarly) })}</span></label>}
         <label><span>{t('Reason (they see it)')}</span><input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={500} placeholder={t('For example: family emergency, asked by the manager')} autoFocus /></label>
@@ -328,6 +355,7 @@ function TodayBoard({ settings, shifts, months }: { settings: HrSettings; shifts
   if (!rows.length) return <Empty icon="users" text={t('Nobody has shifts yet. Open Shifts to add your team.')} />
   return (
     <>
+      <LeaveRequests list={leaveRequests(months, shifts, settings.grace)} />
       <div className="hr-tiles">
         <div className="tile tile-good"><b>{count((s) => s === 'working')}</b><span>{t('In the shop now')}</span></div>
         <div className={`tile ${rows.some((x) => x.r.late) ? 'tile-bad' : 'tile-zero'}`}><b>{rows.filter((x) => x.r.late).length}</b><span>{t('Came late today')}</span></div>
@@ -346,9 +374,9 @@ function TodayBoard({ settings, shifts, months }: { settings: HrSettings; shifts
                 <span className="muted small" dir="ltr">{shiftText(r.shift)}</span>
               </div>
               <div className="hr-person-times" dir="ltr">
-                <span>{r.day?.in ? clockOf(r.day.in) : '—'}</span>
+                <span>{r.day?.in ? clock12(r.day.in) : '—'}</span>
                 <span className="muted">→</span>
-                <span>{r.day?.out ? clockOf(r.day.out) : '—'}</span>
+                <span>{r.day?.out ? clock12(r.day.out) : '—'}</span>
               </div>
               <div className="hr-day-chips">
                 <span className={`chip ${STATE_TONE[r.state]}`}>{t(STATE_LABEL[r.state])}</span>
@@ -362,6 +390,69 @@ function TodayBoard({ settings, shifts, months }: { settings: HrSettings; shifts
         })}
       </div>
     </>
+  )
+}
+
+/** Early leaves waiting for HR: accept (it counts nothing) or decline (it counts, with a penalty for the rest of the shift if HR wants). */
+function LeaveRequests({ list }: { list: { uid: string; name: string; date: string; r: DayResult }[] }) {
+  const [busy, setBusy] = useState('')
+  const [declining, setDeclining] = useState<{ uid: string; name: string; date: string; r: DayResult } | null>(null)
+  if (!list.length) return null
+  async function accept(x: (typeof list)[number]) {
+    setBusy(x.uid + x.date)
+    try {
+      await hr.fixDay(x.uid, x.date, { exEarly: true, leaveNo: false, why: x.r.day?.leaveWhy ?? '' })
+      track('hr', 'hr.fixed', { what: x.name, note: `${x.date}: early leave accepted (${hm(x.r.rawEarly)}) · ${x.r.day?.leaveWhy ?? ''}`, ref: x.uid })
+    } catch (e) { refused(e) }
+    setBusy('')
+  }
+  return (
+    <section className="hr-requests">
+      <h3>{tn('Early leave requests (%n)', { n: list.length })}</h3>
+      {list.map((x) => (
+        <div key={x.uid + x.date} className="hr-request">
+          <Avatar uid={x.uid} name={x.name} size={36} />
+          <div className="hr-person-main">
+            <b dir="auto">{x.name}</b>
+            <span className="muted small" dir="auto">{dayLabel(x.date)} · {tn('left %m early', { m: hm(x.r.rawEarly) })} · <span dir="ltr">{x.r.day?.out ? clock12(x.r.day.out) : '—'} / {shiftText(x.r.shift)}</span></span>
+            <span className="hr-day-why" dir="auto">“{x.r.day?.leaveWhy}”</span>
+          </div>
+          <div className="hr-day-acts">
+            <button className="btn btn-small btn-ghost" disabled={busy === x.uid + x.date} onClick={() => setDeclining(x)}>{t('Decline')}</button>
+            <button className="btn btn-small btn-primary" disabled={busy === x.uid + x.date} onClick={() => accept(x)}>{t('Accept')}</button>
+          </div>
+        </div>
+      ))}
+      {declining && <DeclineLeave x={declining} onClose={() => setDeclining(null)} />}
+    </section>
+  )
+}
+
+function DeclineLeave({ x, onClose }: { x: { uid: string; name: string; date: string; r: DayResult }; onClose: () => void }) {
+  const hours = Math.max(0.25, Math.round((x.r.rawEarly / 60) * 4) / 4)
+  const [pen, setPen] = useState(true)
+  const [amount, setAmount] = useState(String(hours))
+  const [busy, setBusy] = useState(false)
+  async function go() {
+    setBusy(true)
+    try {
+      await hr.fixDay(x.uid, x.date, { leaveNo: true, exEarly: false })
+      const n = Number(amount)
+      if (pen && n > 0) await hr.addPenalty(x.uid, monthOf(x.date), { amount: n, unit: 'hours', date: x.date, reason: tn('Left %m early, not accepted: %r', { m: hm(x.r.rawEarly), r: x.r.day?.leaveWhy ?? '' }) })
+      track('hr', 'hr.fixed', { what: x.name, note: `${x.date}: early leave declined (${hm(x.r.rawEarly)})${pen && n > 0 ? ` · penalty ${n} hours` : ''}`, ref: x.uid })
+      onClose()
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
+  return (
+    <Sheet title={`${t('Decline')} · ${x.name} · ${dayLabel(x.date)}`} onClose={onClose} footer={<button className="btn btn-primary" disabled={busy} onClick={go}>{t('Decline')}</button>}>
+      <div className="form">
+        <p className="hint" dir="auto">{tn('They left %m before the end of their shift. Declined, those minutes count as missing.', { m: hm(x.r.rawEarly) })}</p>
+        <p className="banner" dir="auto">{tn('Their reason: %r', { r: x.r.day?.leaveWhy ?? '' })}</p>
+        <label className="check"><input type="checkbox" checked={pen} onChange={(e) => setPen(e.target.checked)} /><span>{t('Also give a penalty for the rest of the shift')}</span></label>
+        {pen && <label><span>{t('Penalty (hours)')}</span><input type="number" min="0" step="0.25" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>}
+      </div>
+    </Sheet>
   )
 }
 
@@ -393,7 +484,7 @@ function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { ui
             <div key={tp.id} className="hr-tp">
               <button className="hr-tp-main" onClick={() => setGiving(tp.id)}>
                 <b dir="auto">{tp.name}</b>
-                <span dir="ltr">{tp.s} – {tp.e}</span>
+                <span dir="ltr">{h12(tp.s)} – {h12(tp.e)}</span>
               </button>
               <button className="icon-btn" onClick={() => setTpEdit(tp)} aria-label={t('Edit')}><Icon name="edit" size={16} /></button>
             </div>
@@ -428,7 +519,7 @@ function ShiftsBoard({ shifts, people, onSaved }: { shifts: Shifts; people: { ui
                     <th><span className="hr-who"><Avatar uid={uid} name={name} size={28} /><span><span dir="auto">{name}</span>{tp && <small className="hr-tp-tag" dir="auto">{tp.name}</small>}</span></span></th>
                     {dates.map((d) => {
                       const s = shiftOn(p, d)
-                      return <td key={d} className={`${s ? '' : 'off'}${d in p.dates ? ' changed' : ''}${d === today ? ' today' : ''}`} dir="ltr">{s ? <>{s.s}<br />{s.e}</> : t('Off')}</td>
+                      return <td key={d} className={`${s ? '' : 'off'}${d in p.dates ? ' changed' : ''}${d === today ? ' today' : ''}`} dir="ltr">{s ? <>{h12(s.s)}<br />{h12(s.e)}</> : t('Off')}</td>
                     })}
                   </tr>
                 )
@@ -580,7 +671,7 @@ function GiveShift({ tp, shifts, everyone, onClose, onSaved }: { tp: Template; s
   return (
     <Sheet title={tn('Give %n', { n: tp.name })} onClose={onClose} footer={<button className="btn btn-primary" disabled={busy || !picked.length} onClick={save}>{tn('Give to %n people', { n: picked.length })}</button>}>
       <div className="form">
-        <p className="hint" dir="ltr">{tp.s} – {tp.e}</p>
+        <p className="hint" dir="ltr">{h12(tp.s)} – {h12(tp.e)}</p>
         <label><span>{t('Starting from')}</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
         <div className="hr-pick-head">
           <span className="label">{t('People')}</span>
@@ -616,7 +707,7 @@ function ShiftPick({ value, templates, custom, onChange, label }: { value: Shift
         if (x) onChange({ s: x.s, e: x.e }, false)
       }}>
         <option value="off">{t('Day off')}</option>
-        {templates.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.s} – {x.e}</option>)}
+        {templates.map((x) => <option key={x.id} value={x.id}>{x.name} · {h12(x.s)} – {h12(x.e)}</option>)}
         <option value="custom">{t('Other hours…')}</option>
       </select>
       {value && key === 'custom' && (
@@ -855,8 +946,8 @@ function PersonMonth({ uid, name, month, m, days, totals, onClose }: { uid: stri
 }
 
 function FixDay({ uid, name, r, onClose }: { uid: string; name: string; r: DayResult; onClose: () => void }) {
-  const [inT, setIn] = useState(r.day?.in ? clockOf(r.day.in) : '')
-  const [outT, setOut] = useState(r.day?.out ? clockOf(r.day.out) : '')
+  const [inT, setIn] = useState(r.day?.in ? clock12(r.day.in) : '')
+  const [outT, setOut] = useState(r.day?.out ? clock12(r.day.out) : '')
   const [excused, setExcused] = useState(Boolean(r.day?.excused))
   const [note, setNote] = useState(r.day?.note ?? '')
   const [busy, setBusy] = useState(false)

@@ -1720,3 +1720,11 @@ button.hr-person:hover { background: var(--surface-2); }
 .hr-edit-name { flex: 0 0 auto; min-width: 96px; font-size: 0.9rem; }
 .hr-pick-shift { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .form .hr-pick-shift select { width: auto; min-width: 200px; min-height: 40px; }
+.hr-leave-why { margin-top: 10px; text-align: start; }
+.hr-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 6px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 0.75rem; font-weight: 700; }
+.hr-requests { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; border-inline-start: 4px solid var(--warn); display: flex; flex-direction: column; gap: 4px; }
+.hr-requests h3 { font-size: 0.95rem; }
+.hr-request { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; padding: 8px 0; }
+.hr-request + .hr-request { border-top: 1px solid var(--border); }
+.hr-request .hr-day-acts { grid-column: 1 / -1; }
+@media (min-width: 760px) { .hr-request { grid-template-columns: auto 1fr auto; } .hr-request .hr-day-acts { grid-column: auto; } }
