@@ -461,3 +461,22 @@ function localOrders(): OrderBackend {
 }
 
 export const orders: OrderBackend = firestore ? firestoreOrders(firestore) : localOrders()
+
+/** The groups the Orders page counts for a period: refunded and failed go with cancelled. */
+export const SUM_GROUPS = ['new', 'confirmed', 'completed', 'cancelled'] as const
+export type SumGroup = (typeof SUM_GROUPS)[number]
+export const groupOf = (s: Status): SumGroup => (s === 'refunded' || s === 'failed' ? 'cancelled' : s)
+
+/** How many orders (and how much money, at the agreed price) per status; "all" leaves out the cancelled ones' money. */
+export function periodSummary(list: Order[]): Record<SumGroup | 'all', { n: number; sum: number }> {
+  const out = { all: { n: 0, sum: 0 }, new: { n: 0, sum: 0 }, confirmed: { n: 0, sum: 0 }, completed: { n: 0, sum: 0 }, cancelled: { n: 0, sum: 0 } }
+  for (const o of list) {
+    const g = groupOf(o.status)
+    const p = priceOf(o)
+    out[g].n++
+    out[g].sum += p
+    out.all.n++
+    if (g !== 'cancelled') out.all.sum += p
+  }
+  return out
+}

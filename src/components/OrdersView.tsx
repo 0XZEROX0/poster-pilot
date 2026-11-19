@@ -7,7 +7,7 @@ import { PERIOD_LABEL, PERIODS, periodDays, periodRange, type Period } from '../
 import { nudgeEngine } from '../data/nudge'
 import { nameOf } from '../data/profiles'
 import {
-  ADDABLE, CATEGORIES, DEFAULT_REPS, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, priceOf, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
+  ADDABLE, CATEGORIES, DEFAULT_REPS, groupOf, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, periodSummary, priceOf, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
   type Order, type Status, type Step, type StepKind,
 } from '../data/orders'
 import { allowed, isOwner } from '../data/store'
@@ -45,6 +45,21 @@ const refused = (e: unknown) => {
   console.error(e)
   showToast(/permission/i.test(String(e)) ? t('Your role does not allow this. Make sure the latest rules are published in Firebase.') : t('Could not save. Check the connection and try again.'))
 }
+/** Orders placed in a period, kept for a few minutes so going back and forth between periods does not read them again. */
+const placedCache = new Map<string, { at: number; list: Order[] }>()
+const CACHE_MS = 5 * 60_000
+async function loadPlacedCached(from: number, to: number): Promise<Order[]> {
+  const key = `${from}-${to}`
+  const hit = placedCache.get(key)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.list
+  const list = await orders.loadPlaced(from, to)
+  placedCache.set(key, { at: Date.now(), list })
+  return list
+}
+const SUM_TILES: { f: Filter; label: string; cls: string }[] = [
+  { f: 'all', label: 'All orders', cls: '' }, { f: 'new', label: 'New', cls: 'warn' }, { f: 'confirmed', label: 'Confirmed', cls: 'info' },
+  { f: 'completed', label: 'Completed', cls: 'good' }, { f: 'cancelled', label: 'Cancelled', cls: 'bad' },
+]
 const tellEngine = () => { if (firestore) nudgeEngine(getAuth(firestore.app), ['orders']) }
 
 function StatusChip({ o }: { o: Order }) {
@@ -95,7 +110,7 @@ export function OrdersView() {
     let live = true
     setPlaced(null)
     const r = periodRange(days)
-    orders.loadPlaced(r.from, r.to).then((l) => { if (live) setPlaced(l) }, (e) => { if (live) setError(String(e)) })
+    loadPlacedCached(r.from, r.to).then((l) => { if (live) setPlaced(l) }, (e) => { if (live) setError(String(e)) })
     return () => { live = false }
   }, [days?.from, days?.to]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -118,6 +133,8 @@ export function OrdersView() {
     for (const x of open ?? []) { c[x.status] = (c[x.status] ?? 0) + 1; if (!x.closed) c.open++ }
     return c
   }, [open])
+  /** Totals for the picked days (every status), shown above the list. */
+  const summary = useMemo(() => (days && placed ? periodSummary(all) : null), [all, days, placed])
   const today2 = (open ?? []).filter((x) => x.date === today).length
 
   const list = all
@@ -125,8 +142,7 @@ export function OrdersView() {
       if (search.trim()) return matchesOrder(x, search)
       if (filter === 'all') return true
       if (filter === 'open') return !x.closed
-      if (filter === 'cancelled') return ['cancelled', 'refunded', 'failed'].includes(x.status)
-      return x.status === filter
+      return groupOf(x.status) === filter
     })
     .sort((a, b) => {
       // Newest placed first, whatever the status; or the soonest pickup / delivery day first, then the newest without one.
@@ -176,16 +192,6 @@ export function OrdersView() {
   return (
     <div className="mt">
       {top}
-      <div className="mt-top">
-        <div className="filters">
-          {FILTERS.map((f) => (
-            <button key={f} className={`filter${filter === f && !search.trim() ? ' on' : ''}`} onClick={() => { setFilter(f); setSearch('') }}>
-              {t(f === 'all' ? 'All' : f === 'open' ? 'Open' : STATUS_LABEL[f as Status])}
-              {(f === 'open' || f === 'new' || f === 'confirmed') && counts[f] ? <i>{counts[f]}</i> : null}
-            </button>
-          ))}
-        </div>
-      </div>
       <div className="filters or-days">
         <button className={`filter${period === 'all' ? ' on' : ''}`} onClick={() => setPeriod('all')}>{t('Any day')}</button>
         {PERIODS.map((p) => <button key={p} className={`filter${period === p ? ' on' : ''}`} onClick={() => setPeriod(p)}>{t(PERIOD_LABEL[p])}</button>)}
@@ -196,6 +202,36 @@ export function OrdersView() {
           <label><span>{t('To')}</span><input type="date" value={to} max={today} onChange={(e) => setTo(e.target.value)} /></label>
         </div></div>
       )}
+      {days && (
+        <div className="or-sum" aria-live="polite">
+          {SUM_TILES.map(({ f, label, cls }) => {
+            const v = summary?.[f === 'all' ? 'all' : (f as keyof typeof summary)]
+            return (
+              <button key={f} type="button" className={`or-sum-tile ${cls}${filter === f && !search.trim() ? ' on' : ''}`} onClick={() => { setFilter(f); setSearch('') }}>
+                <small>{t(label)}</small>
+                <b>{v ? v.n.toLocaleString(locale()) : '…'}</b>
+                <span dir="ltr">{v ? money(v.sum) : ''}</span>
+              </button>
+            )
+          })}
+          {summary && <p className="small t2 or-sum-note">{t('Money is at the agreed price. "All orders" leaves out cancelled ones.')}</p>}
+        </div>
+      )}
+      <div className="mt-top">
+        <div className="filters">
+          {FILTERS.map((f) => {
+            // With days picked, every chip shows how many of those days' orders it has.
+            const n = days ? (summary ? (f === 'all' ? summary.all.n : f === 'open' ? summary.new.n + summary.confirmed.n : summary[f].n) : 0)
+              : (f === 'open' || f === 'new' || f === 'confirmed') ? counts[f] : 0
+            return (
+              <button key={f} className={`filter${filter === f && !search.trim() ? ' on' : ''}`} onClick={() => { setFilter(f); setSearch('') }}>
+                {t(f === 'all' ? 'All' : f === 'open' ? 'Open' : STATUS_LABEL[f as Status])}
+                {n ? <i>{n}</i> : null}
+              </button>
+            )
+          })}
+        </div>
+      </div>
       <div className="or-searchrow">
         <SearchBox value={search} onChange={setSearch} placeholder={t('Search name, phone, product, order number')} />
         <label className="or-sort"><span>{t('Sort')}</span>
