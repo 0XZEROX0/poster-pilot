@@ -248,3 +248,16 @@ describe('a new hand order matches the database rules', () => {
     expect(listed('manualOrderKeys').every((k) => keys.includes(k))).toBe(true)
   })
 })
+
+import { periodSummary } from '../src/data/orders'
+describe('periodSummary', () => {
+  const mk = (id: string, status: string, total: number) => toOrder(id, { status, closed: status !== 'new' && status !== 'confirmed', webTotal: total, steps: [], items: [] })
+  it('counts each status and keeps cancelled money out of the total', () => {
+    const s = periodSummary([mk('a', 'new', 100), mk('b', 'completed', 300), mk('c', 'completed', 200), mk('d', 'cancelled', 50), mk('e', 'refunded', 70), mk('f', 'confirmed', 10)])
+    expect(s.all).toEqual({ n: 6, sum: 610 })
+    expect(s.completed).toEqual({ n: 2, sum: 500 })
+    expect(s.cancelled).toEqual({ n: 2, sum: 120 })
+    expect(s.new.n).toBe(1)
+    expect(s.confirmed.n).toBe(1)
+  })
+})

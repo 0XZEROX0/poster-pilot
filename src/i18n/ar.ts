@@ -1162,6 +1162,8 @@ export const ar: Record<string, string> = {
   'Changes are sent to the order on the website too. After that, the app keeps these details: changes made on the website itself no longer come in (the status still does).': 'التعديلات بتتبعت لطلب الموقع كمان. بعد كده التطبيق هو اللي ماسك التفاصيل دي: أي تعديل على الموقع نفسه مش هيوصل للتطبيق (الحالة بس اللي بتوصل).',
   'Note changed': 'الملاحظة اتغيرت',
   'Any day': 'أي يوم',
+  'All orders': 'كل الطلبات',
+  'Money is at the agreed price. "All orders" leaves out cancelled ones.': 'المبالغ بالسعر المتفق عليه. "كل الطلبات" لا تشمل الملغاة.',
   'No orders here for these days.': 'مفيش طلبات هنا في الأيام دي.',
   'Delete orders': 'حذف الطلبات',
   'Remove an order from the app for good (a website order stays on the website). The owner can always do it.': 'حذف طلب من التطبيق نهائياً (طلب الموقع بيفضل على الموقع). المالك يقدر يعمل كده دايماً.',

@@ -1753,3 +1753,21 @@ button.hr-person:hover { background: var(--surface-2); }
 .hr-overall { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .hr-review-att { justify-content: flex-start; }
 .hr-add-punch { margin-inline-start: auto; }
+/* Orders: totals for the picked days, one tile per status (tap to filter the list). */
+.or-sum { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.or-sum-tile { display: grid; gap: 2px; text-align: start; padding: 10px 12px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); color: var(--text); border: 2px solid transparent; font: inherit; cursor: pointer; min-width: 0; }
+.or-sum-tile small { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+.or-sum-tile b { font-size: 1.5rem; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.or-sum-tile span { font-size: 0.78rem; color: var(--text-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.or-sum-tile.good b { color: var(--good); }
+.or-sum-tile.bad b { color: var(--bad); }
+.or-sum-tile.warn b { color: var(--warn, var(--accent)); }
+.or-sum-tile.info b { color: var(--info, var(--accent)); }
+.or-sum-tile.on { border-color: var(--accent); }
+.or-sum-note { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 640px) {
+  .or-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .or-sum-tile:first-child { grid-column: 1 / -1; }
+  .or-sum-tile { padding: 8px 12px; }
+  .or-sum-tile b { font-size: 1.25rem; }
+}
