@@ -2,12 +2,12 @@ import { addDays } from './logic'
 import { costAt, costKey, type CostHist, type CostMap } from './costMath'
 import type { CostLinks, SavedCosts } from './orderCosts'
 import { plainName } from './nameMatch'
-import { isManual, priceOf, type Order } from './orders'
+import { isManual, saleOf, type Order } from './orders'
 
 // Sales and profit of orders (website and added by hand), for a period. Pure sums; the page reads the orders.
 //
 // Orders count by the day they were placed (Cairo). Sales are the completed orders' agreed price (the website total
-// when none was agreed). Delivery is passed on to the courier, so profit = (sales - delivery) - what the items cost.
+// when none was agreed) WITHOUT delivery: delivery is the courier's money, not a sale. Profit = sales - what the items cost.
 // An order whose items do not all have a known cost is left out of the profit (and counted, so the page can say so):
 // counting it would show the whole sale as profit. A line's cost is the one saved on the order, else the price list
 // cost the product had on the day the order was placed (see lineCosts).
@@ -154,7 +154,7 @@ export type Sums = {
   /** Still new or confirmed, and what they are worth. */
   open: number
   openValue: number
-  /** Completed orders: what customers paid in all, the delivery part of it, and the average order. */
+  /** Completed orders: what was sold (items only), the delivery paid on top (not a sale), and the average order. */
   sales: number
   delivery: number
   average: number
@@ -173,10 +173,10 @@ function rowsOf(list: Order[], ctx: CostCtx | null): Row[] {
   return list.map((o) => {
     const open = o.status === 'new' || o.status === 'confirmed'
     const done = o.status === 'completed'
-    const sale = priceOf(o)
+    const sale = saleOf(o)
     const c = done && ctx ? orderCost(o, ctx) : null
     const whole = c && !c.missing && o.items.length > 0
-    return { o, open, done, sale, profit: whole ? r2(sale - o.shipping - c.cost) : null, cost: whole ? c.cost : null, lines: c?.lines ?? null, missing: c ? (o.items.length ? c.missing : 1) : 0 }
+    return { o, open, done, sale, profit: whole ? r2(sale - c.cost) : null, cost: whole ? c.cost : null, lines: c?.lines ?? null, missing: c ? (o.items.length ? c.missing : 1) : 0 }
   })
 }
 function add(s: Sums, r: Row) {
