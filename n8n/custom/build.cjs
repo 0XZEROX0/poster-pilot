@@ -86,6 +86,9 @@ const write = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: {
 ${code('again', 'Again soon?', rd('again.js'))}
 const wait = node({ type: 'n8n-nodes-base.wait', version: 1.1, config: { name: 'Wait 30 s', parameters: { resume: 'timeInterval', amount: 30, unit: 'seconds' } } });
 const self = node({ type: 'n8n-nodes-base.executeWorkflow', version: 1.2, config: { name: 'Run again', onError: 'continueRegularOutput', parameters: { source: 'database', mode: 'once', options: { waitForSubWorkflow: false }, workflowId: { __rl: true, mode: 'id', value: expr('{{ $workflow.id }}') } } } });
+${code('timers', 'Timers to start', "// One timer per post that waits in the app (time under 30 minutes away): it runs this workflow at that minute.\nreturn $input.all().filter(i => i.json.wait).map(i => ({ json: { at: i.json.wait, target: 'custom', id: i.json.id } }));\n")}
+const startTimer = node({ type: 'n8n-nodes-base.executeWorkflow', version: 1.2, config: { name: 'Start post timer', notes: 'Starts "Static OS - Post at time" (../attime) for each post and does not wait: it sleeps until the post minute, then runs this workflow again.', parameters: { source: 'database', mode: 'each', options: { waitForSubWorkflow: false }, workflowId: { __rl: true, mode: 'id', value: 'O7LGzamX1eTPHxIs', cachedResultName: 'Static OS - Post at time' } } } });
+
 export default workflow('static-os-custom-posts', 'Static OS - Text, photo and video posts')
   .add(asked).to(take)
   .add(timer).to(take)
@@ -108,5 +111,6 @@ export default workflow('static-os-custom-posts', 'Static OS - Text, photo and v
   .add(rIgMade).to(save)
   .add(rIgWait).to(save)
   .add(rIgDone).to(save)
-  .add(save).to(write);
+  .add(save).to(write)
+  .add(plan).to(timers.to(startTimer));
 `);

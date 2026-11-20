@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
-import { buildCaption, cairoNow, formatPrice, itemName, listPriceOf, maxItems, nextFreeSlot, placesOf, priceIssues, stageOf, titleOf, whenOf } from '../data/logic'
+import { buildCaption, cairoNow, formatPrice, itemName, listPriceOf, maxItems, nextFreeSlot, placesOf, postsFromApp, priceIssues, stageOf, titleOf, waitsInApp, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, Post, PostItem, PostPlaces, Product } from '../data/types'
 import { t } from '../i18n'
@@ -362,6 +362,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               <p className="hint">
                 {t('A post goes out only when it has a date and a time. You can also set them in the Planner.')} {mayPlan && <button className="link" onClick={useNextSlot}>{t('Next free slot')}</button>}
               </p>
+              {!posted && (waitsInApp(post) || postsFromApp(draft.postDate, draft.postTime)) && (
+                <p className="hint">{t("Less than 30 minutes away: Facebook won't hold it on its schedule, so the app posts it on Facebook and Instagram at that minute.")}</p>
+              )}
             </>
           )}
           {STORIES_ON && !custom && stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} onDesign={() => setDesigning(true)} />}

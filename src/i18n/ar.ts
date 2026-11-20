@@ -299,6 +299,8 @@ export const ar: Record<string, string> = {
   'It was tried again and failed the same way. Open it and paste a photo link, or try the next photo.': 'تمت المحاولة مرة أخرى وفشلت بنفس السبب. افتحه والصق رابط صورة أو جرّب الصورة التالية.',
   'Fix it': 'إصلاح',
   'Being scheduled': 'جاري الجدولة',
+  'from the app': 'من التطبيق',
+  "Less than 30 minutes away: Facebook won't hold it on its schedule, so the app posts it on Facebook and Instagram at that minute.": 'أقل من 30 دقيقة: فيسبوك لا يقبل جدولته، لذلك سينشره التطبيق على فيسبوك وإنستجرام في نفس الدقيقة.',
   'Needs a time': 'يحتاج وقتًا',
   'Approved. Give it a time in the Planner.': 'تمت الموافقة. حدد له وقتًا من المخطط.',
   'Take off the schedule': 'إلغاء الجدولة',
