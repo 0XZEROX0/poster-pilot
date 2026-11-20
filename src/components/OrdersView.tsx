@@ -214,7 +214,7 @@ export function OrdersView() {
               </button>
             )
           })}
-          {summary && <p className="small t2 or-sum-note">{t('Money is at the agreed price. "All orders" leaves out cancelled ones.')}</p>}
+          {summary && <p className="small t2 or-sum-note">{t('Money is what was sold, at the agreed price, without delivery. "All orders" leaves out cancelled ones.')}</p>}
         </div>
       )}
       <div className="mt-top">

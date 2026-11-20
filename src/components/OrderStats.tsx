@@ -207,7 +207,7 @@ function Body({ list, ctx, onOpen, costRole, kit }: { list: Order[]; ctx: CostCt
             )}
           </div>
         )}
-        <div className="tile" style={{ '--tone': 'var(--accent)' } as CSSProperties}><span>{t('Average order')}</span><b dir="ltr">{money(s.all.average)}</b><small className="muted">{tn('Delivery: %m', { m: money(s.all.delivery) })}</small></div>
+        <div className="tile" style={{ '--tone': 'var(--accent)' } as CSSProperties}><span>{t('Average order')}</span><b dir="ltr">{money(s.all.average)}</b><small className="muted">{tn('Delivery not counted: %m', { m: money(s.all.delivery) })}</small></div>
         <div className="tile" style={{ '--tone': 'var(--warn)' } as CSSProperties}><span>{t('Still open')}</span><b dir="ltr">{money(s.all.openValue)}</b><small className="muted">{tn(s.all.open === 1 ? '%n order' : '%n orders', { n: s.all.open })} · {tn('%n cancelled', { n: s.all.cancelled })}</small></div>
       </div>
 
@@ -394,8 +394,8 @@ function FixCard({ line, kit }: { line: OrderLine; kit: Kit }) {
         </details>
       )}
       <div className="os-fix-foot">
-        <span className={`num ${known ? (sale - o.shipping - cost >= 0 ? 'good' : 'bad') : 'muted'}`} dir="ltr">
-          {known ? `${t('Profit')}: ${money(sale - o.shipping - cost)}` : t('No cost')}
+        <span className={`num ${known ? (sale - cost >= 0 ? 'good' : 'bad') : 'muted'}`} dir="ltr">
+          {known ? `${t('Profit')}: ${money(sale - cost)}` : t('No cost')}
         </span>
         <button className="btn btn-primary btn-small" disabled={busy || !dirty} onClick={save}>{t('Save')}</button>
       </div>

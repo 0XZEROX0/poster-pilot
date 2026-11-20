@@ -134,6 +134,8 @@ export type Order = {
 export const orderNo = (o: Pick<Order, 'number' | 'wooId'>) => `#${o.number || o.wooId}`
 export const itemsTotal = (items: Pick<Item, 'total'>[]) => Math.round(items.reduce((n, x) => n + (x.total || 0), 0) * 100) / 100
 export const priceOf = (o: Pick<Order, 'agreed' | 'webTotal'>) => (o.agreed ?? o.webTotal)
+/** What the shop sold: the order's price without delivery. Delivery is the courier's money, so it is never counted as a sale. */
+export const saleOf = (o: Pick<Order, 'agreed' | 'webTotal' | 'shipping'>) => Math.max(0, Math.round((priceOf(o) - (o.shipping || 0)) * 100) / 100)
 export const paidOf = (o: Pick<Order, 'steps'>) => o.steps.reduce((n, s) => n + (s.kind === 'paid' && typeof s.amount === 'number' ? s.amount : 0), 0)
 export const leftOf = (o: Pick<Order, 'steps' | 'agreed' | 'webTotal'>) => Math.round((priceOf(o) - paidOf(o)) * 100) / 100
 
@@ -467,12 +469,12 @@ export const SUM_GROUPS = ['new', 'confirmed', 'completed', 'cancelled'] as cons
 export type SumGroup = (typeof SUM_GROUPS)[number]
 export const groupOf = (s: Status): SumGroup => (s === 'refunded' || s === 'failed' ? 'cancelled' : s)
 
-/** How many orders (and how much money, at the agreed price) per status; "all" leaves out the cancelled ones' money. */
+/** How many orders (and how much they sold, at the agreed price without delivery) per status; "all" leaves out the cancelled ones' money. */
 export function periodSummary(list: Order[]): Record<SumGroup | 'all', { n: number; sum: number }> {
   const out = { all: { n: 0, sum: 0 }, new: { n: 0, sum: 0 }, confirmed: { n: 0, sum: 0 }, completed: { n: 0, sum: 0 }, cancelled: { n: 0, sum: 0 } }
   for (const o of list) {
     const g = groupOf(o.status)
-    const p = priceOf(o)
+    const p = saleOf(o)
     out[g].n++
     out[g].sum += p
     out.all.n++

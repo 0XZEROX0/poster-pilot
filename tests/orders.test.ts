@@ -155,11 +155,12 @@ describe('sales and profit', () => {
       mk('M3', { source: 'phone', status: 'completed', webTotal: 700 }),
     ]
     const s = statsOf(list, ctx())
-    expect(s.all).toMatchObject({ orders: 6, completed: 4, cancelled: 1, open: 1, openValue: 500, sales: 6600, delivery: 300, costed: 2, uncosted: 2 })
-    // W1: 2100 - 300 delivery - 1800 cost = 0; M1: 2800 - 2400 = 400; M3 has no items, so no cost: never all profit
+    expect(s.all).toMatchObject({ orders: 6, completed: 4, cancelled: 1, open: 1, openValue: 500, sales: 6300, delivery: 300, costed: 2, uncosted: 2 })
+    // W1 sold 1800 (2100 - 300 delivery, which is not a sale) - 1800 cost = 0; M1: 2800 - 2400 = 400; M3 has no items, so no cost: never all profit
     expect(s.all.profit).toBe(400)
     expect(s.manual).toMatchObject({ orders: 3, completed: 2, sales: 3500, profit: 400 })
-    expect(s.website).toMatchObject({ orders: 3, completed: 2, sales: 3100 })
+    expect(s.website).toMatchObject({ orders: 3, completed: 2, sales: 2800 })
+    expect(s.lines.find((l) => l.o.id === 'W1')).toMatchObject({ sale: 1800, profit: 0 })
     expect(statsOf(list, null).all.uncosted).toBe(4)
     expect(s.lines.find((l) => l.o.id === 'W2')).toMatchObject({ profit: null, missing: 1 })
   })
@@ -259,5 +260,11 @@ describe('periodSummary', () => {
     expect(s.cancelled).toEqual({ n: 2, sum: 120 })
     expect(s.new.n).toBe(1)
     expect(s.confirmed.n).toBe(1)
+  })
+  it('counts only what was sold, never the delivery', () => {
+    const o = (id: string, more: Record<string, unknown>) => toOrder(id, { status: 'completed', closed: true, steps: [], items: [], ...more })
+    const s = periodSummary([o('a', { webTotal: 2300, shipping: 300 }), o('b', { webTotal: 2300, shipping: 300, agreed: 2100 }), o('c', { webTotal: 500 })])
+    expect(s.completed).toEqual({ n: 3, sum: 4300 })
+    expect(s.all.sum).toBe(4300)
   })
 })
