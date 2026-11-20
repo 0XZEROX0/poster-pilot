@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth'
 import { track } from '../data/activity'
 import { firestore } from '../data/firebase'
 import { cairoNow } from '../data/logic'
-import { CATEGORIES, DEFAULT_REPS, itemsTotal, MANUAL_SOURCES, orderNo, orders, PAY_METHODS, SOURCE_LABEL, stepBy, type Draft, type Item, type Order } from '../data/orders'
+import { agreedAfterShipping, CATEGORIES, DEFAULT_REPS, itemsTotal, MANUAL_SOURCES, orderNo, orders, PAY_METHODS, SOURCE_LABEL, stepBy, type Draft, type Item, type Order } from '../data/orders'
 import { nudgeEngine } from '../data/nudge'
 import { matches, usePrices, type PriceItem } from '../data/prices'
 import { t, tn } from '../i18n'
@@ -103,6 +103,8 @@ export function OrderForm({ edit, onClose, onSaved }: { edit?: Order; onClose: (
       agreed: agreed.trim() === '' ? null : Math.round(Number(agreed) * 100) / 100,
       rep, category,
     }
+    // Switching between pickup and delivery moves an untouched agreed price by the delivery fee (it includes delivery).
+    if (edit && d.agreed !== null && d.agreed === edit.agreed) d.agreed = agreedAfterShipping(d.agreed, edit.shipping, ship)
     if (rep.trim()) keepRep(rep.trim())
     try {
       if (edit) {

@@ -7,7 +7,7 @@ import { PERIOD_LABEL, PERIODS, periodDays, periodRange, type Period } from '../
 import { nudgeEngine } from '../data/nudge'
 import { nameOf } from '../data/profiles'
 import {
-  ADDABLE, CATEGORIES, DEFAULT_REPS, groupOf, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, periodSummary, priceOf, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
+  ADDABLE, CATEGORIES, DEFAULT_REPS, groupOf, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, periodSummary, priceOf, switchDraft, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
   type Order, type Status, type Step, type StepKind,
 } from '../data/orders'
 import { allowed, isOwner } from '../data/store'
@@ -291,6 +291,27 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
   const [tagging, setTagging] = useState(false)
   const [repIn, setRepIn] = useState(o.rep)
   const [catIn, setCatIn] = useState(o.category)
+  // Switch between store pickup and home delivery (with the address and delivery fee), straight from the order.
+  const [moving, setMoving] = useState(false)
+  const [addrIn, setAddrIn] = useState(o.address)
+  const [cityIn, setCityIn] = useState(o.city)
+  const [feeIn, setFeeIn] = useState(o.shipping ? String(o.shipping) : '')
+  const toWhat: Order['delivery'] = o.delivery === 'pickup' ? 'delivery' : 'pickup'
+  function startMove() { setAddrIn(o.address); setCityIn(o.city); setFeeIn(o.shipping ? String(o.shipping) : ''); setMoving(true) }
+  async function saveMove() {
+    const fee = Number(feeIn || 0)
+    if (!isFinite(fee) || fee < 0) return
+    const d = switchDraft(o, toWhat, { address: addrIn.trim(), city: cityIn.trim(), shipping: fee })
+    const what = toWhat === 'pickup' ? t('Changed to store pickup') : [t('Changed to home delivery'), fee > 0 && `${t('Delivery')}: ${money(fee)}`].filter(Boolean).join(' · ')
+    setBusy(true)
+    try {
+      await orders.edit(o, d, stepBy('edited', what))
+      if (!manual) tellEngine()
+      track('orders', 'order.edited', { what: `${orderNo(o)} · ${o.customer}`, note: what, ref: o.id })
+      setMoving(false)
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
   async function saveTag() {
     setBusy(true)
     try {
@@ -388,7 +409,7 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         <dt>{t('Phone')}</dt><dd dir="ltr">{o.phone || '—'}</dd>
         {o.email && <><dt>{t('Email')}</dt><dd dir="ltr">{o.email}</dd></>}
         <dt>{t(o.delivery === 'pickup' ? 'Store pickup' : 'Home delivery')}</dt>
-        <dd dir="auto">{o.date ? whenLabel(o) : t('No date yet')}</dd>
+        <dd dir="auto">{o.date ? whenLabel(o) : t('No date yet')}{canChange && !o.closed && !moving && <button className="link-btn or-tag" onClick={startMove}>{t(toWhat === 'pickup' ? 'Change to store pickup' : 'Change to home delivery')}</button>}</dd>
         {(o.delivery === 'delivery' || o.address) && <><dt>{t('Address')}</dt><dd className="plain" dir="auto">{[o.address, o.city, o.area].filter(Boolean).join(', ') || '—'}</dd></>}
         <dt>{t('Pays by')}</dt><dd dir="auto">{o.payMethod ? t(o.payMethod) : '—'}</dd>
         <dt>{t('Sales rep')}</dt>
@@ -397,6 +418,26 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         {o.shipState && <><dt>{t('Shipping state')}</dt><dd dir="auto">{o.shipState}</dd></>}
         {o.customerNote && <><dt>{t('Customer note')}</dt><dd className="plain" dir="auto">{o.customerNote}</dd></>}
       </dl>
+      {moving && (
+        <div className="form or-tagform">
+          {toWhat === 'delivery' ? (
+            <>
+              <label><span>{t('Address')}</span><input value={addrIn} onChange={(e) => setAddrIn(e.target.value)} dir="auto" autoFocus /></label>
+              <div className="two">
+                <label><span>{t('City')}</span><input value={cityIn} onChange={(e) => setCityIn(e.target.value)} dir="auto" /></label>
+                <label><span>{t('Delivery (EGP)')}</span><input value={feeIn} onChange={(e) => setFeeIn(e.target.value.replace(/[^\d.]/g, ''))} inputMode="decimal" dir="ltr" /></label>
+              </div>
+            </>
+          ) : (
+            <p className="small t2">{o.shipping > 0 ? tn('The customer picks the order up from the store. The %m delivery fee is taken off.', { m: money(o.shipping) }) : t('The customer picks the order up from the store.')}</p>
+          )}
+          {!manual && <p className="small t2">{t('The website order changes too.')}</p>}
+          <div className="mt-acts end">
+            <button className="btn btn-sm" onClick={() => setMoving(false)}>{t('Cancel')}</button>
+            <button className="btn btn-sm btn-primary" disabled={busy || (toWhat === 'delivery' && !isFinite(Number(feeIn || 0)))} onClick={saveMove}>{t(toWhat === 'pickup' ? 'Change to store pickup' : 'Change to home delivery')}</button>
+          </div>
+        </div>
+      )}
       {tagging && (
         <div className="form or-tagform">
           <div className="two">
