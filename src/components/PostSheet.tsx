@@ -156,11 +156,13 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   const when = whenOf(post)
   const mayReview = allowed('designs.approve')
   const mayPlan = allowed('schedule')
-  const mayEdit = allowed('offers.create') || allowed('fix') || mayReview || (!!custom && mayPlan)
+  // Management ('Manage all offers') may edit and delete any offer at any stage before it is posted.
+  const mayManage = allowed('offers.manage')
+  const mayEdit = allowed('offers.create') || allowed('fix') || mayReview || mayManage || (!!custom && mayPlan)
   const dirty = Object.keys(changes()).length > 0
   // Changing which products are in the offer: the maker (or anyone who may make offers) while it waits for approval;
-  // after approval only someone who may approve offers or posters, so an approved offer is not changed behind their back.
-  const mayChangeItems = !posted && !custom && (stage === 'offer' ? mayEdit : allowed('offers.approve') || mayReview)
+  // after approval only someone who may approve offers or posters, or management, so an approved offer is not changed behind their back.
+  const mayChangeItems = !posted && !custom && (stage === 'offer' ? mayEdit : allowed('offers.approve') || mayReview || mayManage)
   const itemsChanged = JSON.stringify(draft.items.map((it) => [it.category, it.name])) !== JSON.stringify(post.items.map((it) => [it.category, it.name]))
   const priceChanged = draft.priceBefore !== post.priceBefore || draft.priceAfter !== post.priceAfter
   // Items the price list cannot price, worked out on the unsaved changes so the warning goes away once fixed.
@@ -403,10 +405,10 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               )}
             </div>
           )}
-          {allowed('delete') && (
+          {(allowed('delete') || mayManage) && (
             <div className="danger">
               {locked ? (
-                <span className="muted">{t('This post is already on the schedule, so it cannot be deleted here.')}</span>
+                <span className="muted">{t('This post is already on the schedule, so it cannot be deleted here.')}{mayPlan ? ` ${t('Cancel its schedule first, then delete it.')}` : ''}</span>
               ) : confirmDelete ? (
                 <>
                   <span>{t('Delete this post?')}{posted && !removed ? ` ${t('It stays on Facebook and Instagram.')}` : ''}</span>

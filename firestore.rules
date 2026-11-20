@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr.fix', 'hr', 'health.view'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr.fix', 'hr', 'health.view', 'offers.manage'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
@@ -56,10 +56,14 @@ service cloud.firestore {
     }
     // Someone who may only look (for example 'See offers') cannot change a post in any way.
     function canAct() {
-      return isMember() && permsOf(myRole()).hasAny(['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'social.delete']);
+      return isMember() && permsOf(myRole()).hasAny(['offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'social.delete', 'offers.manage']);
     }
     function can(perm) {
       return isMember() && perm in permsOf(myRole());
+    }
+    // Any one of these permissions: one look at the role instead of one per permission (rules stop after 1000 steps).
+    function canAny(list) {
+      return isMember() && permsOf(myRole()).hasAny(list);
     }
     function isAdmin() {
       return can('people');
@@ -70,7 +74,7 @@ service cloud.firestore {
       return (custom && (can('schedule') || can('designs.approve')))
         || (value == 'Cancel' ? can('schedule')
           : (value == 'Done' && was == 'Cancel') ? (can('schedule') || can('designs.approve'))
-          : value in ['Redo', 'Redo next image'] ? (can('designs.approve') || can('fix') || can('offers.create'))
+          : value in ['Redo', 'Redo next image'] ? canAny(['designs.approve', 'fix', 'offers.create', 'offers.manage'])
           : can('designs.approve'));
     }
     // Text, photo and video posts (`kind`): the kind is set when the post is made and never changes; up to 10
@@ -94,7 +98,8 @@ service cloud.firestore {
         // Also posting it as a story (where, and how long after the post) belongs to scheduling too.
         && (!keys.hasAny(['story', 'storyDelay', 'storyDesign']) || can('schedule'))
         && (!keys.hasAny(['feedback']) || (feedbackOk(now.get('feedback', ''), was.get('feedback', ''), was.get('kind', '') != '') && feedbackOk(edits.get('feedback', now.get('feedback', '')), was.get('feedback', ''), was.get('kind', '') != '')))
-        && (!keys.hasAny(['appDeleted']) || can('delete'))
+        // 'Manage all offers' (management) may also delete any post that is not on the schedule.
+        && (!keys.hasAny(['appDeleted']) || canAny(['delete', 'offers.manage']))
         // "Delete from Facebook and Instagram" takes a published post off the Page and Instagram for good: only with
         // its own permission, only as a new ask ('asked', with the time and the name of who asked), and only once
         // (again only after the engine reported that it failed).
@@ -104,10 +109,10 @@ service cloud.firestore {
             && was.get('fbStatus', '') == 'Published'))
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
         // "Ignore" on a missing Price before: the products it was ignored for (a change of products shows it again).
-        && (!keys.hasAny(['priceIgnored']) || ((can('offers.approve') || can('designs.approve') || can('fix')) && now.get('priceIgnored', '') is string && now.get('priceIgnored', '').size() <= 2000))
+        && (!keys.hasAny(['priceIgnored']) || (canAny(['offers.approve', 'designs.approve', 'fix', 'offers.manage']) && now.get('priceIgnored', '') is string && now.get('priceIgnored', '').size() <= 2000))
         // Asking for the website photos of the items, for the photo picker.
-        && (!keys.hasAny(['photoAsk']) || can('offers.create') || can('fix') || can('designs.approve'))
-        && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle', 'media', 'places']) || can('offers.create') || can('fix') || can('designs.approve') || (was.get('kind', '') != '' && can('schedule')))
+        && (!keys.hasAny(['photoAsk']) || canAny(['offers.create', 'fix', 'designs.approve', 'offers.manage']))
+        && (!keys.hasAny(['items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details', 'caption', 'captionStyle', 'media', 'places']) || canAny(['offers.create', 'fix', 'designs.approve', 'offers.manage']) || (was.get('kind', '') != '' && can('schedule')))
         && customOk(now) && customOk(edits)
         // An offer is approved by someone other than the person who made it. The owner always may.
         && (!keys.hasAny(['offer', 'offerNote', 'offerBy'])
