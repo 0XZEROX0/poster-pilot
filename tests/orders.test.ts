@@ -268,3 +268,24 @@ describe('periodSummary', () => {
     expect(s.all.sum).toBe(4300)
   })
 })
+
+import { agreedAfterShipping, switchDraft, editFields as editF } from '../src/data/orders'
+describe('switching pickup and delivery', () => {
+  const base = toOrder('W9', { source: 'website', status: 'confirmed', closed: false, steps: [], delivery: 'delivery', shipping: 300, address: '12 St', city: 'Giza', webTotal: 2300, agreed: 2200, items: [{ name: 'Case', qty: 1, total: 2000, pid: 1, vid: 0 }] })
+  it('to pickup drops the fee, the address and the fee inside the agreed price', () => {
+    const d = switchDraft(base, 'pickup')
+    expect(d).toMatchObject({ delivery: 'pickup', shipping: 0, address: '', city: '', agreed: 1900, status: 'confirmed' })
+    expect(editF(base, d)).toMatchObject({ local: true, push: true, webTotal: 2000, shipping: 0, delivery: 'pickup' })
+  })
+  it('to delivery adds the new fee and address', () => {
+    const p = { ...base, delivery: 'pickup' as const, shipping: 0, address: '', city: '', agreed: null, webTotal: 2000 }
+    const d = switchDraft(p, 'delivery', { address: '5 Nile St', city: 'Cairo', shipping: 250 })
+    expect(editF(p, d)).toMatchObject({ delivery: 'delivery', shipping: 250, address: '5 Nile St', city: 'Cairo', webTotal: 2250, agreed: null })
+  })
+  it('moves an agreed price by the fee change only', () => {
+    expect(agreedAfterShipping(null, 300, 0)).toBeNull()
+    expect(agreedAfterShipping(1000, 300, 0)).toBe(700)
+    expect(agreedAfterShipping(100, 300, 0)).toBe(0)
+    expect(agreedAfterShipping(1000, 0, 200)).toBe(1200)
+  })
+})

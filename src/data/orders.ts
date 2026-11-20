@@ -279,6 +279,23 @@ export type Draft = Pick<Order, 'customer' | 'phone' | 'email' | 'address' | 'ci
   agreed: number | null
 }
 
+/** The agreed price after the delivery fee changes from `before` to `after`: an agreed price includes delivery, so it
+ * moves by the same amount (never below 0). null stays null (the total follows the lines + delivery by itself). */
+export function agreedAfterShipping(agreed: number | null, before: number, after: number): number | null {
+  if (agreed === null || before === after) return agreed
+  return Math.max(0, Math.round((agreed - before + after) * 100) / 100)
+}
+
+/** An order switched to store pickup or home delivery, as a form draft: everything else stays as it is. */
+export function switchDraft(o: Order, to: Order['delivery'], place: { address: string; city: string; shipping: number } = { address: o.address, city: o.city, shipping: o.shipping }): Draft {
+  const shipping = to === 'delivery' ? Math.max(0, Math.round((place.shipping || 0) * 100) / 100) : 0
+  return {
+    source: o.source, customer: o.customer, phone: o.phone, email: o.email, address: to === 'delivery' ? place.address : '', city: to === 'delivery' ? place.city : '', area: o.area,
+    delivery: to, shipping, payMethod: o.payMethod, items: o.items, customerNote: o.customerNote, date: o.date, time: o.time, rep: o.rep, category: o.category,
+    status: o.status === 'confirmed' ? 'confirmed' : 'new', agreed: agreedAfterShipping(o.agreed, o.shipping, shipping),
+  }
+}
+
 /** The details part of an order added by hand, cleaned, with its total. */
 export function draftFields(d: Draft) {
   const items = d.items.filter((x) => x.name.trim()).slice(0, 100).map((x) => {
