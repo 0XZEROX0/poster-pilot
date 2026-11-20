@@ -240,19 +240,22 @@ function Body({ list, ctx, onOpen, costRole, kit }: { list: Order[]; ctx: CostCt
 /** One table of sums: orders, completed, sales and (for cost roles) profit per row. */
 function Split({ title, rows, profit, costRole, total }: { title: string; rows: [string, Sums][]; profit: (x: Sums) => string | null; costRole?: boolean; total?: boolean }) {
   if (!rows.length) return null
+  // On a phone the money cells drop " EGP" (the column headers carry it), so the table fits the screen.
+  const cell = (v: string | null) => (v?.endsWith(' EGP') ? <>{v.slice(0, -4)}<span className="os-unit"> EGP</span></> : v)
+  const unit = <span className="os-unit-head"> (EGP)</span>
   return (
     <div>
       <h3 className="mt-h3">{t(title)}</h3>
-      <table className="or-items-table os-table">
-        <thead><tr><th /><th className="num">{t('Orders')}</th><th className="num">{t('Completed')}</th><th className="num">{t('Sales')}</th>{costRole && <th className="num">{t('Profit')}</th>}</tr></thead>
+      <div className="os-scroll"><table className="or-items-table os-table">
+        <thead><tr><th /><th className="num">{t('Orders')}</th><th className="num">{t('Completed')}</th><th className="num">{t('Sales')}{unit}</th>{costRole && <th className="num">{t('Profit')}{unit}</th>}</tr></thead>
         <tbody>
           {rows.map(([label, x], i) => (
             <tr key={label} className={total && i === rows.length - 1 ? 'sum' : ''}>
-              <td dir="auto">{t(label)}</td><td className="num">{x.orders}</td><td className="num">{x.completed}</td><td className="num" dir="ltr">{money(x.sales)}</td>{costRole && <td className="num" dir="ltr">{profit(x)}</td>}
+              <td dir="auto">{t(label)}</td><td className="num">{x.orders}</td><td className="num">{x.completed}</td><td className="num" dir="ltr">{cell(money(x.sales))}</td>{costRole && <td className="num" dir="ltr">{cell(profit(x))}</td>}
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </div>
   )
 }
