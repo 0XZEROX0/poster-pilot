@@ -1,6 +1,6 @@
 # System health
 
-The **System health** page in Static OS (tab `health`, permission "See the activity log") shows whether the server,
+The **System health** page in Static OS (tab `health`, permission "See system health" `health.view`; owner always) shows whether the server,
 its internet, n8n, the workflows, the website, Facebook/Instagram and the app itself are working, with a 24 h / 7 day
 timeline and a "What happened" list. Added 2026-11-20. No outside alerts (WhatsApp etc.), by the owner's choice.
 
@@ -17,7 +17,7 @@ Nothing here reads or writes Firestore on a timer. Everything lives in two n8n d
   (Workflow settings > Error workflow). **Give every new workflow the same setting.**
 - **Server report** (`server.js`): lines from the watchdog (`server/static-watchdog/`), POST `static-os-health-server`.
 - **App asks** (`member.js`, `remember.js`, `app-errors.js`, `report.js`): POST `static-os-health` with a Firebase
-  ID token. Members are checked once an hour (cached in static data). `op=get` returns the report, `op=report` saves
+  ID token. Members and their role (roles/{id}.perms has health.view, or owner; unsaved admin) are checked once an hour (cached in static data). `op=get` returns the report, `op=report` saves
   errors the app caught (crashes, failed saves).
 - **Every night** 03:15: drops old rows.
 

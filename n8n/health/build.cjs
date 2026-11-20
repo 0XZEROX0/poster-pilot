@@ -45,6 +45,7 @@ const who = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { n
 ${code('known', 'Known member?', 'member.js')}
 ${iff('lookUp', 'Look up member?', '!!$json.uid && !$json.known')}
 const member = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Read member', onError: 'continueRegularOutput', alwaysOutputData: true, credentials: ${FS}, parameters: { method: 'GET', url: expr("https://firestore.googleapis.com/v1/projects/poster-pilot-8d35e/databases/(default)/documents/members/{{ $json.uid }}"), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', options: { timeout: 20000 } } } });
+const role = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Read role', onError: 'continueRegularOutput', alwaysOutputData: true, executeOnce: true, credentials: ${FS}, parameters: { method: 'GET', url: expr("https://firestore.googleapis.com/v1/projects/poster-pilot-8d35e/databases/(default)/documents/roles/{{ $json.fields?.role?.stringValue || 'none' }}"), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', options: { timeout: 20000 } } } });
 ${code('isMember', 'Is a member', 'remember.js')}
 ${iff('allowed', 'Allowed?', '$json.ok === true')}
 ${answer('refuse', 'Refuse', '{ ok: false, error: "Not allowed" }', 403)}
@@ -65,7 +66,7 @@ export default workflow('static-os-health', 'Static OS - Health')
   .add(every).to(google).to(cloudflare).to(result).to(saveCheck)
   .add(failed).to(describe).to(saveFail)
   .add(server).to(serverLines).to(saveServer)
-  .add(app).to(who).to(known).to(lookUp.onTrue(member.to(isMember)).onFalse(isMember))
+  .add(app).to(who).to(known).to(lookUp.onTrue(member.to(role).to(isMember)).onFalse(isMember))
   .add(isMember).to(allowed
     .onTrue(isReport
       .onTrue(appLines.to(hasLines.onTrue(saveApp.to(thanks)).onFalse(thanks)))
