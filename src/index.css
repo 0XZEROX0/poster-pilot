@@ -125,7 +125,8 @@ section h2 { font-size: 0.8125rem; font-weight: 600; color: var(--muted); text-t
 .chip-info { background: var(--accent-soft); color: var(--accent); }
 
 /* Home tiles */
-.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tile { min-width: 0; }
 .tiles > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 .tile { text-align: start; padding: 16px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 2px; border-inline-start: 4px solid var(--tone); }
 .tile b { font-size: 2rem; line-height: 1.1; font-weight: 700; color: var(--tone); }
@@ -1202,7 +1203,9 @@ button.stock:hover { filter: brightness(1.15); }
 .cost-cell .cost-profit small { display: block; white-space: normal; }
 
 /* ---------- Maintenance ---------- */
-.mt { display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 110px; }
+.mt { display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 110px; min-width: 0; }
+/* On the phone the page already has its 16px side margin: no second one. */
+main > .mt, main > .hr { padding-inline: 0; }
 .page-maintenance .mt { padding: 0; }
 .mt-top { display: flex; align-items: center; gap: 12px; }
 .mt-top .filters { flex: 1; min-width: 0; }
@@ -1533,7 +1536,10 @@ button.stock:hover { filter: brightness(1.15); }
   .or-line-name { grid-column: 1 / -1; }
   .or-line-price { grid-column: 1 / 2; }
 }
-.os { display: grid; gap: 14px; min-width: 0; }
+.os { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+/* A sums table never widens the page: it scrolls sideways inside its own box when it cannot fit. */
+.os-scroll { overflow-x: auto; scrollbar-width: none; }
+.os-unit-head { display: none; }
 .os .form { max-width: 420px; }
 .os-tiles .tile b { font-size: 1.6rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .desk .os-tiles .tile b { font-size: 1.9rem; }
@@ -1549,6 +1555,13 @@ button.stock:hover { filter: brightness(1.15); }
 .os-line .bad { color: var(--bad); }
 @media (max-width: 520px) {
   .os-line { grid-template-columns: minmax(0, 1fr) auto; }
+  .os-table { font-size: 0.8rem; }
+  .os-table th, .os-table th.num, .or-items-table.os-table td.num { padding-inline-start: 8px; }
+  .os-table td:first-child { min-width: 64px; }
+  .os-unit { display: none; }
+  .os-unit-head { display: inline; }
+  .os-tiles .tile b { font-size: clamp(1.15rem, 6vw, 1.6rem); }
+  .os-tiles .tile { padding: 14px; }
 }
 .or-tag { margin-inline-start: 10px; color: var(--accent); font-weight: 600; font-size: 0.85rem; background: none; padding: 0; }
 .or-tagform { background: var(--surface-2); border-radius: 12px; padding: 10px; }
@@ -1846,4 +1859,7 @@ button.hr-person:hover { background: var(--surface-2); }
   .hl-row { grid-template-columns: 78px minmax(0, 1fr); }
   .hl-row-pct { display: none; }
   .hl-axis > span:last-child { display: none; }
+  /* 56 blocks in the 7-day view: thinner gaps so the bar fits a narrow phone. */
+  .hl-bar { gap: 1px; }
+  .hl-bar i { min-width: 1px; }
 }
