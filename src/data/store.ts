@@ -1,3 +1,4 @@
+import { reportAppError } from './health'
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, type User } from 'firebase/auth'
 import { useSyncExternalStore } from 'react'
 import type { Backend } from './backend'
@@ -41,6 +42,7 @@ function guarded(b: Backend): Backend {
   const tell = <A extends unknown[], R>(work: (...args: A) => Promise<R>) => (...args: A) =>
     work(...args).catch((e: { code?: string }) => {
       if (e.code === 'permission-denied') showToast(t('Your role does not allow this.'))
+      else reportAppError('Save', e)
       throw e
     })
   return { ...b, addPost: tell(b.addPost), updatePost: tell(b.updatePost), removePost: tell(b.removePost), saveTemplates: tell(b.saveTemplates) }
@@ -54,7 +56,7 @@ function listen() {
     // what is on screen: a half-loaded update would swap the page for "Loading…" and close any open window
     // (and the text typed in it).
     (data) => { if (data.loaded || !state.data.loaded) set({ data, error: '' }) },
-    (message) => set({ error: message }),
+    (message) => { set({ error: message }); reportAppError('Database', message) },
   )
 }
 
