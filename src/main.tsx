@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import './theme'
 import App from './App.tsx'
+import { catchAppErrors } from './data/health'
+
+// Crashes anywhere in the app go to System health (App errors), so they are seen even when nobody reports them.
+catchAppErrors()
 
 import('virtual:pwa-register').then(({ registerSW }) =>
   registerSW({

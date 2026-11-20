@@ -6,6 +6,10 @@
 #  3. public link (Tailscale Funnel)   -> handled by tailscale-healthcheck.timer (every 10 min), not here
 #  4. disk over 85% used               -> snapper cleanup (uses snapper's own keep rules), docker image/build cache prune
 #  5. n8n database log (WAL) over 3 GB -> shrink it, but only between 02:00 and 05:00 Cairo time (stops n8n ~1 min)
+#  6. report to the app's System health page (n8n "Static OS - Health"): internet, n8n answering, uptime, disk and
+#     problems. Sent every 30 min and at once when something changes; while n8n is down the lines wait in a queue and go
+#     out together when it is back, so the page can tell "n8n stopped" from "server off" from "no internet".
+#     The key is in /etc/static-watchdog/health.key (written by install.sh, never in the repository).
 # State + status: /var/lib/static-watchdog/ (status.json is read by n8n's self-heal workflow through a mount, if set up).
 set -uo pipefail
 LOG=/var/log/static-watchdog.log
@@ -63,6 +67,36 @@ if [ -n "$VOL" ] && [ -f "$VOL/database.sqlite-wal" ]; then
     docker start "$CT" >/dev/null 2>&1; mark last-wal; mark last-n8n-restart
     log "database log now $(( $(stat -c %s "$VOL/database.sqlite-wal" 2>/dev/null || echo 0) / 1048576 )) MB, n8n started"
   elif [ "$wal" -gt 3221225472 ]; then problems+=("n8n database log $((wal/1048576)) MB (shrinks at night)"); fi
+fi
+
+# ---- 6: report to System health ----
+KEYF=/etc/static-watchdog/health.key
+if [ -s "$KEYF" ]; then
+  net=0
+  for u in https://www.google.com/generate_204 https://1.1.1.1/cdn-cgi/trace; do
+    curl -fsS -o /dev/null --max-time 8 "$u" 2>/dev/null && { net=1; break; }
+  done
+  n8n=0; curl -fsS -o /dev/null --max-time 10 "$LOCAL" 2>/dev/null && n8n=1
+  boot=$(cut -d' ' -f1 /proc/uptime | cut -d. -f1)
+  note=$(printf '%s, ' "${problems[@]+"${problems[@]}"}" | sed 's/, $//' | tr -d '"\\' | cut -c1-280)
+  sig="$net|$n8n|$note"
+  Q="$STATE/health-queue.jsonl"
+  # A line when something changed, every 30 min, and every run while something is down (for the timeline).
+  if [ "$sig" != "$(cat "$STATE/health-last" 2>/dev/null)" ] || [ "$(since last-health)" -ge 1740 ] || [ $net -eq 0 ] || [ $n8n -eq 0 ]; then
+    printf '{"at":%s000,"internet":%s,"n8n":%s,"up":%s,"disk":%s,"note":"%s"}\n' "$now" "$net" "$n8n" "${boot:-0}" "${use:-0}" "$note" >> "$Q"
+    echo "$sig" > "$STATE/health-last"; mark last-health
+    [ $net -eq 0 ] && log "health: no internet at the server"
+  fi
+  if [ -s "$Q" ] && [ $n8n -eq 1 ]; then
+    tail -n 500 "$Q" > "$Q.send"
+    body=$(printf '{"key":"%s","lines":[%s]}' "$(tr -dc 'A-Za-z0-9' < "$KEYF")" "$(paste -sd, "$Q.send")")
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -H 'Content-Type: application/json' --data-binary @- \
+      http://127.0.0.1:5678/webhook/static-os-health-server <<< "$body" 2>/dev/null || echo 000)
+    if [ "$code" = 200 ]; then : > "$Q"; else log "health: report not sent (HTTP $code), kept $(wc -l < "$Q") lines"; fi
+    rm -f "$Q.send"
+  fi
+  # Never let the queue grow without end (8 days of 5-minute lines).
+  [ -f "$Q" ] && [ "$(wc -l < "$Q")" -gt 2400 ] && { tail -n 2400 "$Q" > "$Q.tmp" && mv "$Q.tmp" "$Q"; }
 fi
 
 # ---- status for the app ----

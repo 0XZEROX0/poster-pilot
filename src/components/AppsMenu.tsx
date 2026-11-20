@@ -39,7 +39,7 @@ export function usePins(available: string[]) {
 const GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Shop', ids: ['prices', 'builder', 'orders', 'maintenance'] },
   { title: 'Posters', ids: ['offers', 'review', 'fix', 'calendar', 'brainstorm', 'posted', 'database'] },
-  { title: 'Team', ids: ['hr', 'activity'] },
+  { title: 'Team', ids: ['hr', 'activity', 'health'] },
 ]
 
 /** Every app as a tile, opened from the bar's Apps button. "Edit bar" picks which apps sit in the bar. */

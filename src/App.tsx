@@ -20,6 +20,9 @@ import { cairoNow, offerOf, stageOf } from './data/logic'
 import { applyEditToStored, builderOpen, edits } from './data/builder'
 import { DatabaseView } from './components/DatabaseView'
 import { ActivityView } from './components/ActivityView'
+import { HealthView } from './components/HealthView'
+import { HEALTH_URL, spanLabel, useHealth, watchHealth } from './data/health'
+import { firestore } from './data/firebase'
 import { MaintenanceView } from './components/MaintenanceView'
 import { OrdersView } from './components/OrdersView'
 import { HrView } from './components/HrView'
@@ -32,7 +35,7 @@ import { APP_GROUPS, AppIcon, Launcher } from './components/Launcher'
 import { useLayout } from './layout'
 
 /** What a tab needs. A tab the person's role cannot use is not shown. */
-const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view', brainstorm: 'brainstorm', maintenance: 'tickets', orders: 'orders' }
+const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view', health: 'activity.view', brainstorm: 'brainstorm', maintenance: 'tickets', orders: 'orders' }
 
 const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
@@ -50,6 +53,7 @@ const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'database', label: 'Database', icon: 'database' },
   { id: 'hr', label: 'HR', icon: 'badge' },
   { id: 'activity', label: 'Activity', icon: 'clock' },
+  { id: 'health', label: 'System health', icon: 'pulse' },
 ]
 
 type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'settings' } | { kind: 'apps' } | null
@@ -58,7 +62,7 @@ type Overlay = { kind: 'post'; id: string } | { kind: 'new' } | { kind: 'setting
 const tabFromHash = (): Tab => ALL_TABS.find((x) => location.hash === `#/${x.id}` || location.hash.startsWith(`#/${x.id}/`))?.id ?? 'home'
 
 /** Sidebar headings: the shop tools, then everything about posters. */
-const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' || id === 'maintenance' || id === 'orders' ? 'Shop' : id === 'activity' || id === 'hr' ? 'Team' : 'Posters')
+const groupOf = (id: string) => (id === 'home' ? '' : id === 'prices' || id === 'builder' || id === 'maintenance' || id === 'orders' ? 'Shop' : id === 'activity' || id === 'hr' || id === 'health' ? 'Team' : 'Posters')
 
 /** The engine is "quiet" when it has not written its sign of life for this long. */
 // The engine's timed run (which writes the heartbeat) is now hourly; the app's signals start everything else.
@@ -72,12 +76,17 @@ export default function App() {
   const [wanted, setTab] = useState<Tab>(tabFromHash)
   // The app grid (default) or the older sidebar layout, chosen in Settings.
   const solo = useLayout() === 'grid'
-  const TABS = ALL_TABS.filter((x) => (x.id === 'dashboard' ? solo : true)).filter((x) => x.id === 'home' || x.id === 'dashboard' || x.id === 'activity' || x.id === 'brainstorm' || x.id === 'maintenance' || x.id === 'orders' || x.id === 'hr' || seesPage(x.id)).filter((x) => (x.id === 'hr' ? allowed('hr.clock') || allowed('hr.fix') || allowed('hr') : x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'orders' ? allowed('orders') || allowed('orders.edit') || allowed('orders.change') || allowed('orders.delete') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
+  const TABS = ALL_TABS.filter((x) => (x.id === 'dashboard' ? solo : true)).filter((x) => x.id === 'home' || x.id === 'dashboard' || x.id === 'activity' || x.id === 'health' || x.id === 'brainstorm' || x.id === 'maintenance' || x.id === 'orders' || x.id === 'hr' || seesPage(x.id)).filter((x) => (x.id === 'hr' ? allowed('hr.clock') || allowed('hr.fix') || allowed('hr') : x.id === 'maintenance' ? allowed('tickets') || allowed('tickets.edit') : x.id === 'orders' ? allowed('orders') || allowed('orders.edit') || allowed('orders.change') || allowed('orders.delete') : x.id === 'offers' ? allowed('offers.view') || allowed('offers.approve') || allowed('offers.create') : !NEEDS[x.id] || allowed(NEEDS[x.id]!)))
   const tab = TABS.some((x) => x.id === wanted) ? wanted : 'home'
   const canAdd = allowed('offers.create')
   const [overlay, setOverlay] = useState<Overlay>(null)
   const desktop = useDesktop()
   const { pins, toggle: togglePin } = usePins(TABS.map((x) => x.id))
+  // System health: watched while someone who may see it is in (asks the engine every few minutes, no database reads).
+  const seesHealth = TABS.some((x) => x.id === 'health') && (session.mode === 'demo' || session.access === 'in') && (!!HEALTH_URL || !firestore)
+  const hs = useHealth()
+  useEffect(() => (seesHealth ? watchHealth() : undefined), [seesHealth])
+  const serverDown = seesHealth && hs.state === 'down'
 
   // Someone changed this person's quote (Live quotes) while their Builder was closed: keep the change for when they open it.
   const builderUser = session.mode === 'cloud' && session.access === 'in' && seesPage('builder') ? session.user?.uid : undefined
@@ -163,16 +172,24 @@ export default function App() {
   }
   const openPost = overlay?.kind === 'post' ? data.posts.find((p) => p.id === overlay.id) : undefined
   const health = data.health
-  const quiet = session.mode === 'cloud' && data.loaded && postWork() && (!health || Date.now() - health.lastSync > QUIET_MS)
+  // With System health watched, its own check (every few minutes) says whether the server answers; the hourly
+  // heartbeat below is only for people who cannot see that page.
+  const quiet = !seesHealth && session.mode === 'cloud' && data.loaded && postWork() && (!health || Date.now() - health.lastSync > QUIET_MS)
   // The last knock to the engine did not arrive after a few tries (shown for 30 minutes, or until a knock arrives).
   const unheard = session.mode === 'cloud' && postWork() && signal?.state === 'failed' && Date.now() - signal.at < 30 * 60_000
-  const dotBad = quiet || unheard
-  const dotTitle = signal && signal.state !== 'failed' ? `${t('Engine received the last change')}: ${agoLabel(signal.at)}` : unheard ? t('The engine did not answer the app') : (health ? agoLabel(health.lastSync) : '')
+  const dotBad = quiet || unheard || serverDown
+  const dotTitle = serverDown ? t('The server does not answer. Open System health.') : signal && signal.state !== 'failed' ? `${t('Engine received the last change')}: ${agoLabel(signal.at)}` : unheard ? t('The engine did not answer the app') : (health ? agoLabel(health.lastSync) : '')
 
   const title = t(tab === 'home' ? (desktop ? 'Dashboard' : 'Static OS') : TABS.find((x) => x.id === tab)!.label)
   const banners = (
     <>
       {session.mode === 'demo' && <p className="banner"><b>{t('Demo mode')}.</b> {t('Sample data in this browser. Nothing is posted.')}</p>}
+      {serverDown && (
+        <p className="banner banner-bad banner-link">
+          {tn('The server has not answered for %s. Posts, prices and website orders wait until it is back.', { s: spanLabel(Date.now() - (hs.lastSeen || hs.checkedAt), t) })}
+          {tab !== 'health' && <button onClick={() => go('health')}>{t('See system health')}</button>}
+        </p>
+      )}
       {quiet && <p className="banner banner-bad">{t('The engine has been quiet for a while. Check that n8n is running.')}</p>}
       {unheard && !quiet && <p className="banner banner-bad">{t('The engine did not answer the app. Your change is saved and will be done at the engine\'s next check. Check that n8n is running.')}</p>}
       {session.error && <p className="banner banner-bad" dir="ltr">{session.error}</p>}
@@ -181,7 +198,7 @@ export default function App() {
   const page = !data.loaded ? (
     <div className="splash">{t('Loading…')}</div>
   ) : tab === 'home' && solo ? (
-    <Launcher items={TABS.filter((x) => x.id !== 'home')} counts={counts} name={myNameFor(session.user)} uid={session.user?.uid} photo={session.user?.photoURL ?? ''} onGo={(id) => go(id as Tab)} onSettings={() => setOverlay({ kind: 'settings' })} />
+    <Launcher items={TABS.filter((x) => x.id !== 'home')} counts={counts} alerts={serverDown || (hs.state === 'ok' && Object.values(hs.report?.tiles ?? {}).some((x) => x.state === 'bad')) ? ['health'] : []} name={myNameFor(session.user)} uid={session.user?.uid} photo={session.user?.photoURL ?? ''} onGo={(id) => go(id as Tab)} onSettings={() => setOverlay({ kind: 'settings' })} />
   ) : tab === 'home' || tab === 'dashboard' ? (
     <HomeView data={data} go={go} onOpen={open} desktop={desktop} />
   ) : tab === 'prices' ? (
@@ -206,6 +223,8 @@ export default function App() {
     <BrainstormView data={data} onOpen={open} />
   ) : tab === 'database' ? (
     <DatabaseView data={data} onOpen={open} />
+  ) : tab === 'health' ? (
+    <HealthView />
   ) : tab === 'activity' ? (
     <ActivityView data={data} onOpen={open} />
   ) : (
@@ -253,7 +272,7 @@ export default function App() {
         )}
         <span className="appbar-end">
           {desktop && addHere && <button className="btn btn-primary" onClick={() => setOverlay({ kind: 'new' })}><Icon name="plus" size={20} />{t('New offer')}</button>}
-          {session.mode === 'cloud' && postWork() && <span className={`health${dotBad ? ' health-bad' : ''}`} title={dotTitle} />}
+          {session.mode === 'cloud' && (postWork() || seesHealth) && (seesHealth ? <button className={`health health-btn${dotBad ? ' health-bad' : ''}`} title={dotTitle} aria-label={t('System health')} onClick={() => go('health')} /> : <span className={`health${dotBad ? ' health-bad' : ''}`} title={dotTitle} />)}
           <button className="icon-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')} title={t('Settings')}><Icon name="settings" /></button>
           {desktop && <button className="avatar-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')}><Avatar uid={session.user?.uid} name={name} photo={session.user?.photoURL ?? ''} title={name} /></button>}
         </span>
@@ -340,7 +359,7 @@ export default function App() {
       <header className="top">
         <Logo size={30} />
         <h1>{title}</h1>
-        {session.mode === 'cloud' && postWork() && <span className={`health${dotBad ? ' health-bad' : ''}`} title={dotTitle} />}
+        {session.mode === 'cloud' && (postWork() || seesHealth) && (seesHealth ? <button className={`health health-btn${dotBad ? ' health-bad' : ''}`} title={dotTitle} aria-label={t('System health')} onClick={() => go('health')} /> : <span className={`health${dotBad ? ' health-bad' : ''}`} title={dotTitle} />)}
         <button className="icon-btn" onClick={() => setOverlay({ kind: 'settings' })} aria-label={t('Settings')}><Icon name="settings" /></button>
       </header>
       {banners}

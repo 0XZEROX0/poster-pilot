@@ -21,6 +21,7 @@ const COLORS: Record<string, string> = {
   database: '#56657f',
   hr: '#0d8a5f',
   activity: '#4f55d6',
+  health: '#0e9f6e',
   settings: '#6b7280',
 }
 
@@ -28,7 +29,7 @@ const COLORS: Record<string, string> = {
 export const APP_GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Shop', ids: ['prices', 'builder', 'orders', 'maintenance'] },
   { title: 'Posters', ids: ['dashboard', 'offers', 'review', 'fix', 'calendar', 'brainstorm', 'posted', 'database'] },
-  { title: 'Team', ids: ['hr', 'activity'] },
+  { title: 'Team', ids: ['hr', 'activity', 'health'] },
 ]
 
 /** An app's icon: a coloured rounded square with the app's line icon in white. */
@@ -41,9 +42,11 @@ export function AppIcon({ id, icon, size = 64 }: { id: string; icon: string; siz
 }
 
 /** The home screen: every app the person can open, as an icon. Opening one shows only that app. */
-export function Launcher({ items, counts, name, uid, photo, onGo, onSettings }: {
+export function Launcher({ items, counts, alerts = [], name, uid, photo, onGo, onSettings }: {
   items: LauncherItem[]
   counts: Partial<Record<string, number>>
+  /** Apps that show a red dot (System health when something is down). */
+  alerts?: string[]
   name: string
   uid?: string
   photo?: string
@@ -59,7 +62,7 @@ export function Launcher({ items, counts, name, uid, photo, onGo, onSettings }: 
     <button key={x.id} className="launch-tile" onClick={onClick}>
       <span className="launch-icon">
         <AppIcon id={x.id} icon={x.icon} />
-        {counts[x.id] ? <i className={x.id === 'fix' ? 'badge badge-bad' : 'badge'}>{counts[x.id]}</i> : null}
+        {counts[x.id] ? <i className={x.id === 'fix' ? 'badge badge-bad' : 'badge'}>{counts[x.id]}</i> : alerts.includes(x.id) ? <i className="badge badge-bad badge-dot" aria-label={t('Needs a look')}>!</i> : null}
       </span>
       <span className="launch-label">{t(x.label)}</span>
     </button>
