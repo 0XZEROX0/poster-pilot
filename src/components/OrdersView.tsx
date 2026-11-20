@@ -13,6 +13,7 @@ import {
 import { allowed, isOwner } from '../data/store'
 import { locale, t, tn } from '../i18n'
 import { OrderForm } from './OrderForm'
+import { OrderLinkSheet, OrderLinksPanel } from './OrderLinks'
 import { OrderStats } from './OrderStats'
 import { Sheet } from './Sheet'
 import { useDesktop } from './useDesktop'
@@ -94,6 +95,9 @@ export function OrdersView() {
   const days = period === 'all' ? null : periodDays(period, today, from, to)
   const [placed, setPlaced] = useState<Order[] | null>(null)
   const canEdit = allowed('orders.edit')
+  /** Order links for WhatsApp customers: anyone who can open Orders. */
+  const canLink = allowed('orders') || canEdit || allowed('orders.change') || allowed('orders.delete')
+  const [linking, setLinking] = useState(false)
   /** An order opened from the sales page that is not among the loaded ones. */
   const [extra, setExtra] = useState<Order | null>(null)
 
@@ -175,9 +179,13 @@ export function OrdersView() {
         <button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>{t('Orders')}</button>
         <button className={view === 'stats' ? 'on' : ''} onClick={() => setView('stats')}>{t('Sales')}</button>
       </div>
-      {canEdit && <button className="btn btn-primary" onClick={() => setForm({})}><Icon name="plus" size={20} />{t('Add order')}</button>}
+      <span className="ol-actions">
+        {canLink && <button className="btn" onClick={() => setLinking(true)}><Icon name="link" size={20} />{t('Order link')}</button>}
+        {canEdit && <button className="btn btn-primary" onClick={() => setForm({})}><Icon name="plus" size={20} />{t('Add order')}</button>}
+      </span>
     </div>
   )
+  const linkSheet = linking && <OrderLinkSheet onClose={() => setLinking(false)} />
 
   if (view === 'stats') {
     return (
@@ -185,6 +193,7 @@ export function OrdersView() {
         {top}
         <OrderStats onOpen={(o) => { setExtra(o); setSelected(o.id); setView('list') }} />
         {formSheet}
+        {linkSheet}
       </div>
     )
   }
@@ -192,6 +201,7 @@ export function OrdersView() {
   return (
     <div className="mt">
       {top}
+      {canLink && <OrderLinksPanel onOpenOrder={(id) => { setSearch(''); setSelected(id) }} />}
       <div className="filters or-days">
         <button className={`filter${period === 'all' ? ' on' : ''}`} onClick={() => setPeriod('all')}>{t('Any day')}</button>
         {PERIODS.map((p) => <button key={p} className={`filter${period === p ? ' on' : ''}`} onClick={() => setPeriod(p)}>{t(PERIOD_LABEL[p])}</button>)}
@@ -252,7 +262,7 @@ export function OrdersView() {
                 const left = leftOf(x)
                 return (
                   <button key={x.id} className={`mt-card${current?.id === x.id && desktop ? ' sel' : ''}${!x.closed && x.date && x.date < today ? ' late' : ''}`} onClick={() => setSelected(x.id)}>
-                    <span className="mt-row"><span className="mt-no" dir="ltr">{orderNo(x)}</span><span className="or-chips"><SyncChip o={x} /><StatusChip o={x} /></span></span>
+                    <span className="mt-row"><span className="mt-no" dir="ltr">{orderNo(x)}</span><span className="or-chips">{x.link && <span className="chip" title={t('Order link')}><Icon name="link" size={14} /></span>}<SyncChip o={x} /><StatusChip o={x} /></span></span>
                     <b dir="auto">{x.customer || t('No name')}</b>
                     <span className="t2 or-items" dir="auto">{x.items.map((i) => (i.qty > 1 ? `${i.qty}× ${i.name}` : i.name)).join(' · ')}</span>
                     <span className="mt-row">
@@ -268,6 +278,7 @@ export function OrdersView() {
       </div>
       {!desktop && current && <Sheet title={orderNo(current)} onClose={() => setSelected(null)}>{detail}</Sheet>}
       {formSheet}
+      {linkSheet}
     </div>
   )
 }
@@ -395,6 +406,8 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         {manual ? <span className="small t2">{tn('Added in the app · %s', { s: t(SOURCE_LABEL[o.source]) })}</span>
           : <span className="small t2">{tn('Website: %s', { s: t(WEB_LABEL[o.webStatus] ?? o.webStatus ?? '—') })}</span>}
         <SyncChip o={o} />
+        {o.link && <span className="chip chip-info"><Icon name="link" size={14} /> {o.linkByName ? tn('Order link by %name', { name: o.linkByName }) : t('Order link')}</span>}
+        {o.link && o.status === 'new' && paidOf(o) === 0 && <span className="small t2">{t('The customer filled the link. Call them, then record what they paid with Payment.')}</span>}
         {o.local && (o.push
           ? <span className="chip" title={t('The changes are on their way to the website order.')}>{t('Sending changes to the website')}</span>
           : <span className="chip" title={t('Changed in the app and sent to the website. The app keeps these details now.')}>{t('Changed in the app')}</span>)}

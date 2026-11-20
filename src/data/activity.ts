@@ -22,7 +22,7 @@ export const ACTIVITY_ACTS = {
   people: ['join.accepted', 'join.declined', 'member.removed', 'member.role', 'role.saved', 'role.deleted', 'code.reset'],
   settings: ['templates.saved', 'engine.run'],
   tickets: ['ticket.opened', 'ticket.step', 'ticket.edited', 'ticket.deleted', 'ticket.step_removed'],
-  orders: ['order.added', 'order.edited', 'order.step', 'order.step_removed', 'order.deleted'],
+  orders: ['order.added', 'order.edited', 'order.step', 'order.step_removed', 'order.deleted', 'order.link'],
   hr: ['hr.settings', 'hr.shifts', 'hr.fixed', 'hr.penalty', 'hr.penalty_removed', 'hr.file', 'hr.note', 'hr.leave_ok', 'hr.leave_no', 'hr.review'],
 } as const
 type AppWrites = typeof ACTIVITY_ACTS
@@ -63,6 +63,9 @@ export const ACTIVITY_TEXT: Record<string, string> = {
   'order.step_removed': 'Order step taken out',
   'order.deleted': 'Order removed from the app',
   'order.website': 'Website order changed',
+  'order.link': 'Order link made',
+  'order.link_done': 'Order link became a website order',
+  'order.link_error': 'Website refused an order link',
   'hr.settings': 'Shop location and HR settings changed',
   'hr.shifts': 'Shifts changed',
   'hr.fixed': 'Attendance fixed by hand',
