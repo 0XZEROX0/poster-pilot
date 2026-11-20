@@ -75,7 +75,7 @@ function Hero({ h }: { h: HealthState }) {
     text = t('Connect to the internet to see how the server is doing.')
   } else if (h.state === 'refused') {
     title = t('Not allowed')
-    text = t('Sign out and in again. If it stays, ask the owner for "See the activity log".')
+    text = t('Sign out and in again. If it stays, ask the owner for "See system health".')
   } else if (r) {
     const bad = tilesFor(h).filter((x) => x.level === 'bad').map((x) => x.name)
     title = level === 'good' ? t('Everything is working') : level === 'warn' ? t('Working now') : t('Something needs a look')

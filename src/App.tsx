@@ -35,7 +35,7 @@ import { APP_GROUPS, AppIcon, Launcher } from './components/Launcher'
 import { useLayout } from './layout'
 
 /** What a tab needs. A tab the person's role cannot use is not shown. */
-const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view', health: 'activity.view', brainstorm: 'brainstorm', maintenance: 'tickets', orders: 'orders' }
+const NEEDS: Partial<Record<Tab, Perm>> = { review: 'designs.approve', fix: 'fix', calendar: 'schedule', activity: 'activity.view', health: 'health.view', brainstorm: 'brainstorm', maintenance: 'tickets', orders: 'orders' }
 
 const ALL_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },

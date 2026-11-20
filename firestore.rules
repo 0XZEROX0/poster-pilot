@@ -21,7 +21,7 @@ service cloud.firestore {
       return isMember() && myRole() == 'owner';
     }
     function allPerms() {
-      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr.fix', 'hr'];
+      return ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr.fix', 'hr', 'health.view'];
     }
     function rolePath(role) {
       return /databases/$(database)/documents/roles/$(role);
