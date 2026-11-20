@@ -7,10 +7,15 @@ import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store
 import type { Data, MarketHit, Post } from '../data/types'
 import { t } from '../i18n'
 import { MissingPrices } from './PriceCheck'
+import { StageChip } from './PostRow'
 import { Chip, Empty, Icon, SearchBox, showToast } from './ui'
 
 const egp = (n: number) => `${n.toLocaleString('en-US')} EGP`
 const stockOf = (h: MarketHit) => (h.inStock === false ? t('out of stock') : h.inStock === null ? t('stock unknown') : '')
+/** On the Facebook schedule (or already on Facebook): the engine will not delete it until its schedule is cancelled. */
+const onSchedule = (p: Post) => /^scheduled/i.test(p.fbStatus) || p.fbPostId !== ''
+/** Management, or anyone who may delete posts, can delete an offer from its card. */
+const mayDelete = () => allowed('delete') || allowed('offers.manage')
 const ago = (ms: number) => new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
 
 /** Competitor prices for an offer: the cheapest same product at each item, their total, and how this offer compares. */
@@ -62,10 +67,14 @@ function MarketBox({ post: p }: { post: Post }) {
 function OfferCard({ post: p, onOpen, noBefore }: { post: Post; onOpen: (id: string) => void; noBefore: boolean }) {
   useProfiles()
   const [note, setNote] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const mine = ownOffer(p)
+  // An offer that was already approved (shown to management only): it has a poster or is getting one.
+  const approved = stageOf(p) !== 'offer'
   const rejected = offerOf(p) === 'rejected'
-  const mayDecide = allowed('offers.approve') && !mine
-  const mayEdit = allowed('offers.create') || allowed('fix') || allowed('designs.approve')
+  const mayDecide = !approved && allowed('offers.approve') && !mine
+  const mayEdit = allowed('offers.create') || allowed('fix') || allowed('designs.approve') || allowed('offers.manage')
+  const remove = () => backend.removePost(p.id).then(() => showToast(t('Deleted')))
   const approve = () => backend.updatePost(p.id, { offer: 'Approved', offerBy: myName(), offerNote: '' }).then(() => showToast(t('Offer approved. The poster is being made.')))
   const sendBack = () => backend.updatePost(p.id, { offer: 'Rejected', offerBy: myName(), offerNote: (note ?? '').trim() }).then(() => showToast(t('Offer sent back')))
   const again = () => backend.updatePost(p.id, { offer: '' }).then(() => showToast(t('Sent for approval again')))
@@ -79,10 +88,17 @@ function OfferCard({ post: p, onOpen, noBefore }: { post: Post; onOpen: (id: str
         </p>
         {noBefore && <p><Chip tone="bad">{t('No Price before')}</Chip></p>}
         {p.details && <p className="muted small" dir="auto">{p.details}</p>}
-        {!rejected && <MarketBox post={p} />}
+        {approved && <p className="post-state"><StageChip post={p} /></p>}
+        {!rejected && !approved && <MarketBox post={p} />}
         <p className="muted small">{p.createdByName ? `${t('Made by')} ${nameOf(p.createdBy, p.createdByName)}` : t('Added in the sheet')}</p>
         {rejected && <p className="alert"><b><Icon name="fix" size={18} />{t('Offer sent back')}{p.offerBy ? ` · ${p.offerBy}` : ''}</b>{p.offerNote && <span dir="auto">{p.offerNote}</span>}</p>}
-        {note !== null ? (
+        {deleting ? (
+          <div className="actions" role="alertdialog" aria-label={t('Delete this offer?')}>
+            <span>{t('Delete this offer?')}</span>
+            <button className="btn btn-danger" onClick={remove}><Icon name="trash" size={18} />{t('Delete')}</button>
+            <button className="btn btn-ghost" onClick={() => setDeleting(false)}>{t('Cancel')}</button>
+          </div>
+        ) : note !== null ? (
           <>
             <label><span>{t('Why is it sent back?')}</span><textarea dir="auto" rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
             <div className="actions">
@@ -96,9 +112,11 @@ function OfferCard({ post: p, onOpen, noBefore }: { post: Post; onOpen: (id: str
             {!rejected && mayDecide && <button className="btn" onClick={() => setNote('')}>{t('Send back')}</button>}
             {rejected && (p.createdBy === myId() || isOwner()) && <button className="btn btn-primary" onClick={again}><Icon name="redo" size={18} />{t('Send again')}</button>}
             <button className="btn btn-ghost" onClick={() => onOpen(p.id)}><Icon name={mayEdit ? 'edit' : 'expand'} size={18} />{t(mayEdit ? 'Edit' : 'View')}</button>
+            {mayDelete() && !onSchedule(p) && <button className="btn btn-ghost link-danger" onClick={() => setDeleting(true)}><Icon name="trash" size={18} />{t('Delete')}</button>}
           </div>
         )}
-        {!rejected && mine && <p className="hint">{t('Someone else has to approve your offer.')}</p>}
+        {approved && onSchedule(p) && mayDelete() && <p className="hint">{t('On the Facebook schedule: cancel its schedule first, then it can be deleted.')}</p>}
+        {!approved && !rejected && mine && <p className="hint">{t('Someone else has to approve your offer.')}</p>}
       </div>
     </article>
   )
@@ -137,7 +155,11 @@ function sortOffers(list: Post[], order: Order) {
 /** Offers waiting for approval, and the ones that were sent back to their maker. */
 export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) => void }) {
   const [query, setQuery] = useState('')
-  const all = data.posts.filter((p) => stageOf(p) === 'offer')
+  const pending = data.posts.filter((p) => stageOf(p) === 'offer')
+  // Management also sees the offers that were approved but are not posted yet, to edit or delete them.
+  const manage = allowed('offers.manage')
+  const later = manage ? data.posts.filter((p) => !p.kind && ['building', 'review', 'fix', 'scheduled'].includes(stageOf(p))) : []
+  const all = [...pending, ...later]
   // Search by item name (also category, brand and style), like the other pages, or by price (500 EGP either way).
   const [order, setOrderState] = useState<Order>(savedOrder)
   const setOrder = (o: Order) => {
@@ -154,22 +176,24 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
   const offers = want !== null && order === 'list'
     ? found.slice().sort((a, b) => Math.abs(toNumber(priceOf(a)) - want) - Math.abs(toNumber(priceOf(b)) - want))
     : sortOffers(found, order)
-  const waiting = offers.filter((p) => offerOf(p) === 'waiting')
-  const back = offers.filter((p) => offerOf(p) === 'rejected')
+  const waiting = offers.filter((p) => stageOf(p) === 'offer' && offerOf(p) === 'waiting')
+  const back = offers.filter((p) => stageOf(p) === 'offer' && offerOf(p) === 'rejected')
+  const done = offers.filter((p) => stageOf(p) !== 'offer')
   const bulk = useBulk(offers.map((p) => p.id))
   if (!all.length) return <Empty icon="offer" text={t('No offers are waiting. A new post shows up here until someone approves it.')} />
   const post = (id: string) => offers.find((p) => p.id === id)
   // Only a waiting offer that someone else made can be decided, the same as on its card.
   const mine = ownOffer
-  const open = (id: string) => { const p = post(id); return p && offerOf(p) === 'waiting' && !mine(p) ? p : null }
+  const open = (id: string) => { const p = post(id); return p && stageOf(p) === 'offer' && offerOf(p) === 'waiting' && !mine(p) ? p : null }
   const actions: BulkAction[] = [
     ...(allowed('offers.approve') ? [
       { label: 'Approve offer', icon: 'check', tone: 'primary' as const, run: (id: string) => (open(id) ? backend.updatePost(id, { offer: 'Approved', offerBy: myName(), offerNote: '' }) : false) },
       { label: 'Send back', run: (id: string) => (open(id) ? backend.updatePost(id, { offer: 'Rejected', offerBy: myName(), offerNote: '' }) : false) },
     ] : []),
     // Asks the engine for fresh competitor prices, like Check again on each card. Sent-back offers have no prices.
-    { label: 'Check prices again', icon: 'redo', run: (id: string) => { const p = post(id); return p && offerOf(p) === 'waiting' ? backend.updatePost(id, { marketAsk: Date.now() }) : false } },
-    ...(allowed('delete') ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => backend.removePost(id) }] : []),
+    { label: 'Check prices again', icon: 'redo', run: (id: string) => { const p = post(id); return p && stageOf(p) === 'offer' && offerOf(p) === 'waiting' ? backend.updatePost(id, { marketAsk: Date.now() }) : false } },
+    // A post on the Facebook schedule is skipped: the engine would refuse to delete it until its schedule is cancelled.
+    ...(mayDelete() ? [{ label: 'Delete', icon: 'trash', tone: 'danger' as const, confirm: true, run: (id: string) => { const p = post(id); return p && !onSchedule(p) ? backend.removePost(id) : false } }] : []),
   ]
   const cards = (list: Post[]) => <div className="cards">{list.map((p) => <Pick key={p.id} bulk={bulk} id={p.id} show={actions.length > 0}><OfferCard post={p} onOpen={onOpen} noBefore={priceIssues(p, data.products).missing} /></Pick>)}</div>
   return (
@@ -182,7 +206,7 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
         {actions.length > 0 && <BulkToggle bulk={bulk} />}
         <CardSize />
       </div>
-      <MissingPrices data={{ ...data, posts: all }} onOpen={onOpen} open />
+      <MissingPrices data={{ ...data, posts: pending }} onOpen={onOpen} open />
       {waiting.length > 0 && (
         <section>
           <h2 className="group">{t('Waiting for approval')} <span className="group-count">{waiting.length}</span></h2>
@@ -193,6 +217,12 @@ export function OffersView({ data, onOpen }: { data: Data; onOpen: (id: string) 
         <section>
           <h2 className="group">{t('Sent back')} <span className="group-count">{back.length}</span></h2>
           {cards(back)}
+        </section>
+      )}
+      {done.length > 0 && (
+        <section>
+          <h2 className="group">{t('Approved, not posted yet')} <span className="group-count">{done.length}</span></h2>
+          {cards(done)}
         </section>
       )}
       {offers.length === 0 && <Empty icon="search" text={t('Nothing matches.')} />}

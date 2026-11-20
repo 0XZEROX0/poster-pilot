@@ -534,7 +534,7 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   const st = (by, kind, more = {}) => ({ at: 2, by, byName: 'X', kind, note: '', ...more })
   await ok('owner makes an Orders role', setDoc(doc(boss, 'roles/orders'), { name: 'Orders', perms: ['orders', 'orders.edit'] }))
   await ok('owner makes an Orders viewer role', setDoc(doc(boss, 'roles/ordview'), { name: 'Order viewer', perms: ['orders'] }))
-  const every = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr.fix', 'hr', 'health.view']
+  const every = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr.fix', 'hr', 'health.view', 'offers.manage']
   await ok('owner saves a role with every permission ticked', setDoc(doc(boss, 'roles/allperms'), { name: 'Everything', perms: every, pages: ['prices', 'builder'], v: 9 }))
   await no('owner saves a role with an unknown permission', setDoc(doc(boss, 'roles/allperms'), { name: 'Everything', perms: [...every, 'made.up'] }))
   await ok('owner makes an order changer role', setDoc(doc(boss, 'roles/ordchg'), { name: 'Order changer', perms: ['orders', 'orders.change'] }))
@@ -684,6 +684,30 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await ok('built-in admin deletes from Facebook', updateDoc(doc(adm, 'posts/pub1'), ask('A')))
   await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'posts/pub1'), { takeDown: '' }) })
   await ok('owner deletes from Facebook', updateDoc(doc(boss, 'posts/pub1'), ask('B')))
+}
+// Manage all offers (offers.manage): management edits and deletes any offer, also after approval.
+{
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore()
+    await setDoc(doc(db, 'posts/mg1'), { items: [], feedback: '', fbStatus: '', fbPostId: '', zone: 'offer', createdBy: 'x', priceAfter: '100' })
+    await setDoc(doc(db, 'posts/mg2'), { items: [], feedback: '', fbStatus: '', fbPostId: '', zone: 'design', posterUrl: 'u', createdBy: 'x', priceAfter: '100' })
+    await setDoc(doc(db, 'posts/mg3'), { items: [], feedback: '', fbStatus: '', fbPostId: '', zone: 'design', posterUrl: 'u', createdBy: 'x', priceAfter: '100' })
+    await setDoc(doc(db, 'roles/manager'), { name: 'Manager', perms: ['offers.manage'] })
+    await setDoc(doc(db, 'roles/looker'), { name: 'Looker', perms: ['offers.view'] })
+    await setDoc(doc(db, 'members', 'u-mg'), m('u-mg@x.com', 'manager'))
+    await setDoc(doc(db, 'members', 'u-lk'), m('u-lk@x.com', 'looker'))
+  })
+  const mg = P('u-mg'), lk = P('u-lk')
+  await ok('manager edits an offer someone else made', updateDoc(doc(mg, 'posts/mg1'), { priceAfter: '90', 'appEdits.priceAfter': '90' }))
+  await ok('manager edits an approved offer and asks for a new poster', updateDoc(doc(mg, 'posts/mg2'), { priceAfter: '80', feedback: 'Redo', 'appEdits.priceAfter': '80', 'appEdits.feedback': 'Redo' }))
+  await no('manager cannot approve a poster with this permission alone', updateDoc(doc(mg, 'posts/mg2'), { feedback: 'Done', 'appEdits.feedback': 'Done' }))
+  await no('manager cannot approve an offer with this permission alone', updateDoc(doc(mg, 'posts/mg1'), { offer: 'Approved', offerBy: 'M', 'appEdits.offer': 'Approved' }))
+  await no('manager cannot schedule with this permission alone', updateDoc(doc(mg, 'posts/mg1'), { postDate: '2026-12-01', 'appEdits.postDate': '2026-12-01' }))
+  await ok('manager deletes an approved offer', updateDoc(doc(mg, 'posts/mg3'), { appDeleted: true, appDirty: true }))
+  await ok('manager deletes an offer', updateDoc(doc(mg, 'posts/mg1'), { appDeleted: true, appDirty: true }))
+  await no('a viewer cannot delete', updateDoc(doc(lk, 'posts/mg2'), { appDeleted: true }))
+  await no('a viewer cannot edit', updateDoc(doc(lk, 'posts/mg2'), { priceAfter: '1' }))
+  await ok('manager writes the history line', setDoc(doc(mg, 'log/mg1'), { postId: 'mg1', at: serverTimestamp(), by: 'u-mg', byName: 'M', act: 'deleted' }))
 }
 // Text, photo and video posts (kind, media, places).
 {

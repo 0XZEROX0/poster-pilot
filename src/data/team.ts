@@ -12,12 +12,13 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, onSnapsh
 //   roles/{id}       { name, perms, pages }                    the roles the owner made, and what each may do
 
 /** What a role may do. The same list is in firestore.rules, which is what really enforces it. */
-export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr.fix', 'hr', 'health.view'] as const
+export const PERMS = ['offers.view', 'offers.create', 'offers.approve', 'designs.approve', 'fix', 'schedule', 'delete', 'people', 'prices.edit', 'cost', 'quotes.all', 'quotes.discount', 'quotes.edit', 'templates.edit', 'activity.view', 'brainstorm', 'prices.web', 'tickets', 'tickets.edit', 'social.delete', 'orders', 'orders.edit', 'orders.change', 'orders.delete', 'hr.clock', 'hr.fix', 'hr', 'health.view', 'offers.manage'] as const
 export type Perm = (typeof PERMS)[number]
 export const PERM_LABEL: Record<Perm, [string, string]> = {
   'offers.view': ['See offers', 'See the Offers page and the price comparison, without approving or changing anything.'],
   'offers.create': ['Create offers', 'Make a new post and edit its items, prices and caption.'],
   'offers.approve': ['Approve offers', 'Approve or send back offers made by other people.'],
+  'offers.manage': ['Manage all offers', 'For management: edit any offer (products, prices, caption), also after it was approved, and delete it, as long as it is not on the Facebook schedule or posted. Approved offers show in Offers too.'],
   'designs.approve': ['Approve designs', 'Approve, redo or skip posters in Review.'],
   fix: ['Fix problems', 'Retry, change photos and ignore errors in Fix.'],
   schedule: ['Schedule', 'Set, move and cancel times in the Planner.'],
@@ -66,7 +67,7 @@ export type RoleDef = { id: string; name: string; perms: Perm[]; pages: Page[] }
 /** The two roles every system starts with. The owner can change what they may do. */
 export const BUILT_IN: RoleDef[] = [
   { id: 'admin', name: 'Admin', perms: [...PERMS], pages: [...PAGES] },
-  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'social.delete' && p !== 'orders' && p !== 'orders.edit' && p !== 'orders.change' && p !== 'orders.delete' && p !== 'hr.clock' && p !== 'hr.fix' && p !== 'hr' && p !== 'health.view'), pages: [...PAGES] },
+  { id: 'member', name: 'Member', perms: PERMS.filter((p) => p !== 'people' && p !== 'cost' && p !== 'activity.view' && p !== 'quotes.all' && p !== 'quotes.discount' && p !== 'quotes.edit' && p !== 'tickets.edit' && p !== 'social.delete' && p !== 'orders' && p !== 'orders.edit' && p !== 'orders.change' && p !== 'orders.delete' && p !== 'hr.clock' && p !== 'hr.fix' && p !== 'hr' && p !== 'health.view' && p !== 'offers.manage'), pages: [...PAGES] },
 ]
 export type Member = { uid: string; email: string; name: string; role: Role; joinedAt: number }
 export type JoinRequest = { uid: string; email: string; name: string; createdAt: number }
