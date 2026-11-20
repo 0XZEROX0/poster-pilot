@@ -9,11 +9,20 @@
 //   ig       Its time came: make the Instagram post (photo, album or reel). Instagram cannot hold a post on a schedule.
 //   igCheck  Instagram is getting the post ready: publish it when it is.
 //   fbCheck  The Facebook time passed: check that Facebook published it.
-//   note     Nothing to send: a time that is too soon / too far, or a Post now that is too old.
+//   note     Nothing to send: a time that is too far or passed, a Post now that is too old, or a time too close for
+//            Facebook's schedule (then `wait` = when, and Timers to start sets a timer for that minute).
 const ZONE = 'Africa/Cairo';
 const POST_NOW_HOURS = 2;
 const IG_LATE_HOURS = 12;
 const MAX = 6;
+// FROM THE APP (2026-11-20, from the user): Facebook only takes a scheduled post well ahead of its time, so a time less
+// than LOCAL_MIN minutes away is not put on Facebook's schedule. The post waits here instead (status "Waiting to post at
+// 17:00 from the app") and a timer (workflow "Static OS - Post at time") runs this workflow again at that minute, when it
+// is published at once like Post now. A missed time (server off) is still sent up to 2 hours late, never later.
+const LOCAL_MIN = 30;
+const LOCAL_LATE_HOURS = 2;
+const localText = at => 'Waiting to post at ' + at.toFormat('HH:mm') + ' from the app';
+const isLocal = s => /^waiting to post at/i.test(clean(s));
 const now = DateTime.now().setZone(ZONE);
 const fileId = v => (/^[\w-]{20,80}$/.test(clean(v)) ? clean(v) : '');
 const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); };
@@ -65,7 +74,17 @@ for (const j of $input.all().map(i => i.json)) {
     if (kind === 'text' && !clean(caption)) { add('note', { patch: { fbStatus: 'Facebook error: a text post needs its text. Write it and save.' } }); continue; }
     if (kind === 'image' && !photos.length) { add('note', { patch: { fbStatus: 'Facebook error: no photo was uploaded. Add a photo and save.' } }); continue; }
     if (kind === 'video' && !video) { add('note', { patch: { fbStatus: 'Facebook error: no video was uploaded. Add the video and save.' } }); continue; }
-    if (!nowFresh && when < now.plus({ minutes: 15 })) { add('note', { patch: { fbStatus: 'Facebook error: the time must be at least 15 minutes from now. Pick a later time.' } }); continue; }
+    if (!nowFresh && when < now.plus({ minutes: LOCAL_MIN })) {
+      // Too close for Facebook's schedule: wait here, then publish at once when the minute comes.
+      if (when <= now.plus({ seconds: 30 })) {
+        const inTime = isLocal(f.fbStatus) ? when >= now.minus({ hours: LOCAL_LATE_HOURS }) : when >= now.minus({ minutes: 2 });
+        if (inTime) { add('fb', { now: true, unix: Math.floor(now.toMillis() / 1000), local: now.toFormat('yyyy-MM-dd HH:mm') }); continue; }
+        add('note', { patch: { fbStatus: 'Facebook error: its time already passed. Pick a later time or press Post now.' } });
+        continue;
+      }
+      if (clean(f.fbStatus) !== localText(when)) add('note', { patch: { fbStatus: localText(when) }, wait: when.toISO() });
+      continue;
+    }
     if (!nowFresh && when > now.plus({ days: 74 })) { add('note', { patch: { fbStatus: 'Facebook error: Facebook schedules at most 75 days ahead. Pick an earlier date.' } }); continue; }
     const at = nowFresh ? now : when;
     add('fb', { now: !!nowFresh, unix: Math.floor(at.toMillis() / 1000), local: at.toFormat('yyyy-MM-dd HH:mm') });
@@ -73,6 +92,11 @@ for (const j of $input.all().map(i => i.json)) {
   }
   const wantIg = places.includes('ig') && !igPub && !isFail(f.igStatus);
   if (wantIg && clean(ex.igContainer)) { add('igCheck', { container: clean(ex.igContainer), madeAt: Number(ex.igMadeAt) || 0 }); continue; }
+  // Instagram only: Instagram has no schedule at all, so a timer starts it at its minute instead of the next 5-minute check.
+  if (wantIg && !places.includes('fb') && !nowFresh && when && when > now && when < now.plus({ minutes: LOCAL_MIN }) && !clean(ex.igContainer)) {
+    if (clean(f.igStatus) !== localText(when)) add('note', { patch: { igStatus: localText(when) }, wait: when.toISO() });
+    continue;
+  }
   if (wantIg && (nowFresh || (when && when <= now))) {
     if (!nowFresh && when < now.minus({ hours: IG_LATE_HOURS })) { add('note', { patch: { igStatus: 'Instagram error: its time passed more than 12 hours ago (the workflows were off). Set a new time.' } }); continue; }
     if (kind === 'image' && !photos.length) { add('note', { patch: { igStatus: 'Instagram error: no photo was uploaded.' } }); continue; }

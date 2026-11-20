@@ -234,6 +234,29 @@ export function whenOf(p: Post): { date: string; time: string } | null {
   return engine
 }
 
+/**
+ * Facebook only takes a scheduled post when its time is far enough ahead. A time less than LOCAL_POST_MIN minutes away
+ * is not put on Facebook's schedule: the post waits in the app and the server publishes it at that minute (like Post now).
+ * The engine marks such a post "Waiting to post at 17:00 from the app".
+ */
+export const LOCAL_POST_MIN = 30
+export const waitsInApp = (p: Pick<Post, 'fbStatus' | 'igStatus'>) => /^waiting to post at/i.test((p.fbStatus ?? '').trim()) || /^waiting to post at/i.test((p.igStatus ?? '').trim())
+
+/** Minutes from now (Cairo time) until a date and time; negative when it has passed. Null when either is missing. */
+export function minutesUntil(date: string, time: string, now = cairoNow()): number | null {
+  const d = date.match(/^(\d{4})-(\d{2})-(\d{2})$/), t = time.match(/^(\d{1,2}):(\d{2})/), n = now.time.match(/^(\d{1,2}):(\d{2})/)
+  if (!d || !t || !n) return null
+  const at = Date.UTC(+d[1], +d[2] - 1, +d[3], +t[1], +t[2])
+  const [y, m, day] = now.date.split('-').map(Number)
+  return Math.round((at - Date.UTC(y, m - 1, day, +n[1], +n[2])) / 60000)
+}
+
+/** True when a post's chosen time is too close for Facebook's schedule but still ahead: the app will post it at that minute. */
+export const postsFromApp = (date: string, time: string, now = cairoNow()) => {
+  const left = minutesUntil(date, time, now)
+  return left !== null && left >= 0 && left < LOCAL_POST_MIN
+}
+
 /** The minutes a story may wait after its post, offered in the post editor. */
 export const STORY_DELAYS = [0, 15, 30, 60, 120, 180] as const
 

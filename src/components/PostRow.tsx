@@ -1,4 +1,4 @@
-import { formatPrice, hasOffer, placesOf, priceOf, problemOf, stageOf, titleOf, whenOf } from '../data/logic'
+import { formatPrice, hasOffer, placesOf, priceOf, problemOf, stageOf, titleOf, waitsInApp, whenOf } from '../data/logic'
 import type { Post, PostResults } from '../data/types'
 import { t } from '../i18n'
 import { kindText } from './CustomPost'
@@ -20,6 +20,8 @@ export function StageChip({ post }: { post: Post }) {
   if (stage === 'skipped') return <Chip>{t('Skipped')}</Chip>
   if (stage === 'scheduled' && post.feedback === 'Cancel') return <Chip tone="warn">{t('Cancelling the schedule')}</Chip>
   if (stage === 'scheduled' && post.postNow === 'yes') return <Chip tone="info">{t('Posting now')}</Chip>
+  // Too close for Facebook's schedule: it waits in the app and the server posts it at that minute.
+  if (stage === 'scheduled' && when && waitsInApp(post)) return <Chip tone="good">{dayLabel(when.date)} · {timeLabel(when.time)} · {t('from the app')}</Chip>
   // A text, photo or video post that goes to Instagram only is not held by Facebook: its time is enough.
   if (stage === 'scheduled' && post.kind && /^posting/i.test(post.igStatus)) return <Chip tone="info">{t('Posting now')}</Chip>
   if (stage === 'scheduled' && post.kind && !placesOf(post).includes('fb')) return when ? <Chip tone="good">{dayLabel(when.date)} · {timeLabel(when.time)}</Chip> : <Chip tone="warn">{t('Needs a time')}</Chip>
