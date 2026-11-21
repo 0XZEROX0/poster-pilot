@@ -1863,3 +1863,7 @@ button.hr-person:hover { background: var(--surface-2); }
   .hl-bar { gap: 1px; }
   .hl-bar i { min-width: 1px; }
 }
+/* Orders: take back a Complete / Cancel tapped by mistake. */
+.or-undo { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 10px; border-radius: 12px; background: var(--surface-2); }
+.or-undo .btn { flex: none; }
+.mt-log li.or-undone h4 { text-decoration: line-through; opacity: 0.6; }

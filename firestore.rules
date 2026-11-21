@@ -531,7 +531,7 @@ service cloud.firestore {
     // step out or remove an order from the app (it stays on the website).
     function orderStepOk(st) {
       return st is map && st.keys().hasOnly(['at', 'by', 'byName', 'kind', 'note', 'amount', 'method', 'date', 'time', 'web'])
-        && st.kind in ['called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note', 'edited']
+        && st.kind in ['called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note', 'edited', 'undone']
         && st.note is string && st.note.size() <= 1000
         && (!('amount' in st) || (st.amount is number && st.amount >= 0 && st.amount <= 100000000));
     }

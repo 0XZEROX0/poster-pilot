@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyStep, editFields, fromWeb, leftOf, matchesOrder, progressOf, toOrder, withoutStep, type Step } from '../src/data/orders'
+import { applyStep, editFields, undoOf, whereNow, fromWeb, leftOf, matchesOrder, progressOf, toOrder, withoutStep, type Step } from '../src/data/orders'
 
 const st = (kind: Step['kind'], more: Partial<Step> = {}): Step => ({ at: 1, by: 'u', byName: 'U', kind, note: '', ...more })
 const base = toOrder('W1', { wooId: 1, number: '1', webStatus: 'on-hold', status: 'new', closed: false, customer: 'Karim Adel', phone: '01002223344', webTotal: 5299, shipping: 300, items: [{ name: 'Xigmatek Case', qty: 1, total: 4999 }], steps: [st('placed')] })
@@ -287,5 +287,44 @@ describe('switching pickup and delivery', () => {
     expect(agreedAfterShipping(1000, 300, 0)).toBe(700)
     expect(agreedAfterShipping(100, 300, 0)).toBe(0)
     expect(agreedAfterShipping(1000, 0, 200)).toBe(1200)
+  })
+})
+
+describe('undoing a mistaken Complete', () => {
+  const step = <T extends Parameters<typeof applyStep>[0]>(o: T, ...kinds: Step['kind'][]) => kinds.reduce((x, k) => ({ ...x, ...applyStep(x, st(k)) }), o)
+  const insta = { ...base, payMethod: 'Instapay' }
+  it('goes back to exactly where the order was, keeping ready, payments and the date', () => {
+    let o = step({ ...insta, ...applyStep(insta, st('paid', { amount: 300, method: 'Cash' })) }, 'confirmed', 'ready')
+    o = { ...o, webStatus: 'processing', want: '' }
+    const done = step(o, 'delivered')
+    expect(done).toMatchObject({ status: 'completed', want: 'completed', closed: true })
+    expect(undoOf(done)).toMatchObject({ kind: 'delivered', to: 'confirmed' })
+    const back = step(done, 'undone')
+    // The website never got "completed", so nothing is sent; the order is still ready for pickup and paid 300.
+    expect(back).toMatchObject({ status: 'confirmed', want: '', closed: false })
+    expect(whereNow(back)).toBe('ready')
+    expect(leftOf(back)).toBe(leftOf(o))
+    expect(undoOf(back)).toBe(null)
+  })
+  it('sends the old status back when the website already has Completed', () => {
+    const o = { ...step(insta, 'confirmed', 'delivered'), webStatus: 'completed', want: '' }
+    expect(step(o, 'undone')).toMatchObject({ status: 'confirmed', want: 'processing', closed: false })
+  })
+  it('a new order completed by mistake goes back to new (On hold), a Cash one to confirmed', () => {
+    expect(step(step(insta, 'delivered'), 'undone')).toMatchObject({ status: 'new', want: '' })
+    const cash = { ...base, payMethod: 'Cash', webStatus: 'processing', status: 'confirmed' as const }
+    expect(step(step(cash, 'delivered'), 'undone')).toMatchObject({ status: 'confirmed', want: '' })
+  })
+  it('undoes a Cancel too, and can undo again after another mistake', () => {
+    const o = step(insta, 'confirmed', 'cancelled')
+    expect(undoOf(o)).toMatchObject({ kind: 'cancelled', to: 'confirmed' })
+    const again = step(o, 'undone', 'delivered')
+    expect(undoOf(again)).toMatchObject({ kind: 'delivered', to: 'confirmed' })
+    expect(step(again, 'undone')).toMatchObject({ status: 'confirmed', closed: false })
+  })
+  it('has nothing to undo when the website completed it, or the order is open', () => {
+    const web = { ...step(insta, 'confirmed'), steps: [...step(insta, 'confirmed').steps, st('website', { web: 'completed' })], status: 'completed' as const, closed: true }
+    expect(undoOf(web)).toBe(null)
+    expect(undoOf(step(insta, 'confirmed'))).toBe(null)
   })
 })
