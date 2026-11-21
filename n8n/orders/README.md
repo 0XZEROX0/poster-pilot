@@ -45,17 +45,6 @@ App -> website: Confirm order / Open again = processing, Delivered = completed, 
 - Website requests stay >= 1.5 s apart and a burst of webhook calls starts one read (Hostinger firewall, see
   `n8n/website/README.md`).
 
-## Order links (2026-11-20)
-A customer on WhatsApp gets a link (`order.html#<token>`, `src/data/orderLinks.ts`) instead of the website checkout.
-Every run (and every 5 minutes on its own, "Every 5 minutes" -> "Links only?" stops there) starts with:
-"Find order links" (`state == 'filled'`, 1 read when none) -> "Order links to send" (`link-plan.js`) -> "Claim the links"
-(state `sending`, `updateTime` precondition, so two runs never make two orders) -> "Build website orders"
-(`link-build.js`: On hold order, linked products at the link's price, other lines and the discount as fee lines,
-pickup = local pickup + `_pickup_date`/`_pickup_time`, delivery = flat rate with the link's fee, `_static_link` meta,
-no payment) -> "Make website orders" (`orders/batch` create) -> "Save link orders" (`link-results.js`: link `done`
-with wooId/number or `error`; `orders/W<id>` written at once with `link`, `linkByName`, rep, category, day, time).
-The app starts job `orders` when it sees a filled link, and staff can send a refused link again.
-
 ## Switches
 - `Settings.dryRun` (true = read and report only, write nothing anywhere).
 - `Hook settings.hooks` (true = create/keep the two WooCommerce order webhooks on static-eg.com).

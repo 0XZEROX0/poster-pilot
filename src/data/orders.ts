@@ -129,9 +129,6 @@ export type Order = {
   local: boolean
   /** The app's changed details are waiting to be sent to the website order (the engine sends them, then empties this). */
   push: boolean
-  /** Made from an order link (its token) and who made the link; empty otherwise. Written by the engine only. */
-  link: string
-  linkByName: string
 }
 
 export const orderNo = (o: Pick<Order, 'number' | 'wooId'>) => `#${o.number || o.wooId}`
@@ -253,7 +250,6 @@ export function toOrder(id: string, d: DocumentData): Order {
     agreed: typeof d.agreed === 'number' ? d.agreed : null, customerNote: str(d.customerNote), date: str(d.date, 10), time: str(d.time, 5),
     webError: str(d.webError, 500), updatedAt: millis(d.updatedAt), steps,
     rep: str(d.rep, 80), category: str(d.category, 80), label: str(d.label, 120), shipState: str(d.shipState, 120), local: d.local === true, push: d.push === true,
-    link: str(d.link, 40), linkByName: str(d.linkByName, 200),
   }
 }
 
@@ -339,7 +335,7 @@ export function manualOrder(d: Draft, step: Step, now = Date.now()): Omit<Order,
   const { id, number } = newManualId(now)
   const f = draftFields(d)
   return {
-    id, ...f, wooId: 0, number, webStatus: '', want: '', status: d.status, closed: false, agreed: d.agreed, date: d.date, time: d.time, webError: '', steps: [step], label: '', shipState: '', local: false, push: false, link: '', linkByName: '',
+    id, ...f, wooId: 0, number, webStatus: '', want: '', status: d.status, closed: false, agreed: d.agreed, date: d.date, time: d.time, webError: '', steps: [step], label: '', shipState: '', local: false, push: false,
   }
 }
 
@@ -422,7 +418,7 @@ function demoOrders(): Order[] {
   const today = cairoNow().date
   const at = (n: number, h: number) => new Date(`${addDays(today, n)}T${String(h).padStart(2, '0')}:00:00+02:00`).getTime()
   const s = (kind: StepKind, n: number, h: number, byName: string, note = '', extra: Partial<Step> = {}): Step => ({ at: at(n, h), by: byName, byName, kind, note, ...extra })
-  const base = { email: '', want: '', webError: '', customerNote: '', agreed: null, date: '', time: '', closed: false, rep: '', category: '', label: '', shipState: '', local: false, push: false, link: '', linkByName: '' }
+  const base = { email: '', want: '', webError: '', customerNote: '', agreed: null, date: '', time: '', closed: false, rep: '', category: '', label: '', shipState: '', local: false, push: false }
   const mk = (wooId: number, webStatus: string, o: Partial<Order> & Pick<Order, 'customer' | 'phone' | 'items' | 'steps'>): Order => {
     const shipping = o.shipping ?? 0
     const webTotal = o.items.reduce((n, x) => n + x.total, 0) + shipping

@@ -14,7 +14,6 @@ const DT = "{ __rl: true, mode: 'id', value: 'qRho6PXhcLVZDIrj', cachedResultNam
 const code = (name, file, common = true) => `node({ type: 'n8n-nodes-base.code', version: 2, config: { name: ${J(name)}, parameters: { mode: 'runOnceForAllItems', language: 'javaScript', jsCode: ${R(file, common)} } } })`;
 const cond = (name, left) => `ifElse({ version: 2.2, config: { name: ${J(name)}, parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 }, conditions: [ { id: ${J(name)}, leftValue: expr(${J(left)}), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } } ], combinator: 'and' }, options: {} } } })`;
 const fsPost = (name, path, body, more = '') => `node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: ${J(name)}${more}, credentials: ${FB}, parameters: { method: 'POST', url: expr(${J(FS + path)}), authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', sendBody: true, contentType: 'json', specifyBody: 'json', jsonBody: expr(${J(body)}), options: { timeout: 60000 } } } })`;
-const LINKS = '{{ JSON.stringify({ structuredQuery: { from: [{ collectionId: "orderLinks" }], where: { fieldFilter: { field: { fieldPath: "state" }, op: "EQUAL", value: { stringValue: "filled" } } }, limit: 10 } }) }}';
 const QUERY = '{{ JSON.stringify({ structuredQuery: { from: [{ collectionId: "orders" }], where: { compositeFilter: { op: "OR", filters: [ { fieldFilter: { field: { fieldPath: "want" }, op: "IN", value: { arrayValue: { values: ["on-hold", "processing", "completed", "cancelled"].map(s => ({ stringValue: s })) } } } }, { fieldFilter: { field: { fieldPath: "push" }, op: "EQUAL", value: { booleanValue: true } } } ] } }, limit: 50 } }) }}';
 console.log(`import { workflow, node, trigger, ifElse, expr } from '@n8n/workflow-sdk';
 const hook = trigger({ type: 'n8n-nodes-base.webhook', version: 2, config: { name: 'Website order changed', parameters: { httpMethod: 'POST', path: ${J(PATH)}, responseMode: 'onReceived', options: { rawBody: true } } } });
@@ -28,19 +27,6 @@ const started = node({ type: 'n8n-nodes-base.dataTable', version: 1.1, config: {
 const hourly = trigger({ type: 'n8n-nodes-base.scheduleTrigger', version: 1.2, config: { name: 'Every hour', parameters: { rule: { interval: [ { field: 'hours', hoursInterval: 1, triggerAtMinute: 40 } ] } } } });
 const asked = trigger({ type: 'n8n-nodes-base.executeWorkflowTrigger', version: 1.1, config: { name: 'When app asks', parameters: { inputSource: 'passthrough' } } });
 const settings = node({ type: 'n8n-nodes-base.set', version: 3.4, config: { name: 'Settings', executeOnce: true, parameters: { mode: 'manual', assignments: { assignments: [ { id: 's-project', name: 'projectId', value: 'poster-pilot-8d35e', type: 'string' }, { id: 's-dry', name: 'dryRun', value: false, type: 'boolean' }, { id: 's-days', name: 'sinceDays', value: 30, type: 'number' }, { id: 's-backfill', name: 'backfill', value: '', type: 'string' } ] } } } });
-// Order links (src/data/orderLinks.ts): links customers filled in become website orders first, on every run, and every
-// 5 minutes on their own (one Firestore read when there is none; the app also starts this when it sees a filled link).
-const linkTimer = trigger({ type: 'n8n-nodes-base.scheduleTrigger', version: 1.2, config: { name: 'Every 5 minutes', parameters: { rule: { interval: [ { field: 'minutes', minutesInterval: 5 } ] } } } });
-const findLinks = ${fsPost('Find order links', ':runQuery', LINKS, ", alwaysOutputData: true, retryOnFail: true, maxTries: 2, waitBetweenTries: 3000")};
-const linkPlan = ${code('Order links to send', 'link-plan.js')};
-const claimIt = ${cond('Any link?', '{{ $json.claim }}')};
-const claim = ${fsPost('Claim the links', ':batchWrite', '{{ JSON.stringify({ writes: $json.writes }) }}', ", retryOnFail: true, maxTries: 2, waitBetweenTries: 3000")};
-const linkBuild = ${code('Build website orders', 'link-build.js')};
-const goIt = ${cond('Claimed any?', '{{ $json.go }}')};
-const createWeb = node({ type: 'n8n-nodes-base.httpRequest', version: 4.2, config: { name: 'Make website orders', onError: 'continueRegularOutput', credentials: ${WOO}, parameters: { method: 'POST', url: 'https://static-eg.com/wp-json/wc/v3/orders/batch', authentication: 'predefinedCredentialType', nodeCredentialType: 'wooCommerceApi', sendBody: true, contentType: 'json', specifyBody: 'json', jsonBody: expr('{{ JSON.stringify($json.body) }}'), options: { timeout: 60000 } } } });
-const linkResults = ${code('Save link orders', 'link-results.js')};
-const saveLinks = ${fsPost('Save link orders to the app', ':batchWrite', '{{ JSON.stringify({ writes: $json.writes }) }}', ", onError: 'continueRegularOutput', retryOnFail: true, maxTries: 3, waitBetweenTries: 5000")};
-const onlyLinks = ${cond('Links only?', "{{ $('Every 5 minutes').isExecuted }}")};
 const toSend = ${fsPost('Find orders to send', ':runQuery', QUERY, ", alwaysOutputData: true, retryOnFail: true, maxTries: 2, waitBetweenTries: 3000")};
 const sendPlan = ${code('What to send', 'send-plan.js')};
 const sendIt = ${cond('Send?', '{{ $json.send }}')};
@@ -67,10 +53,7 @@ export default workflow('website-orders', 'Static OS - Website orders')
   .add(hook).to(sign).to(check).to(remember).to(wait).to(timing).to(newest).to(started).to(settings)
   .add(hourly).to(settings)
   .add(asked).to(settings)
-  .add(linkTimer).to(settings)
-  .add(settings).to(findLinks).to(linkPlan).to(claimIt.onTrue(claim.to(linkBuild).to(goIt.onTrue(createWeb.to(linkResults).to(saveLinks).to(onlyLinks)).onFalse(onlyLinks))).onFalse(onlyLinks))
-  .add(onlyLinks.onFalse(toSend))
-  .add(toSend).to(sendPlan).to(sendIt.onTrue(readWeb.to(buildSend).to(send).to(results).to(saveSent).to(pause).to(readPlan)).onFalse(readPlan))
+  .add(settings).to(toSend).to(sendPlan).to(sendIt.onTrue(readWeb.to(buildSend).to(send).to(results).to(saveSent).to(pause).to(readPlan)).onFalse(readPlan))
   .add(readPlan).to(read).to(toCheck).to(appRead).to(decide).to(saveIt.onTrue(save.to(done)))
   .add(hookHour).to(hookSettings).to(readHooks).to(keep).to(fix)
 ;

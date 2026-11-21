@@ -315,8 +315,7 @@ service cloud.firestore {
           || (d.app == 'tickets' && ((d.act == 'ticket.opened' && can('tickets')) || (d.act in ['ticket.step', 'ticket.edited'] && can('tickets.edit'))
               || (d.act in ['ticket.deleted', 'ticket.step_removed'] && isOwner())))
           || (d.app == 'orders' && ((d.act in ['order.step', 'order.added', 'order.edited'] && can('orders.edit')) || (d.act == 'order.edited' && can('orders.change'))
-              || (d.act == 'order.deleted' && (isOwner() || can('orders.delete'))) || (d.act == 'order.step_removed' && isOwner())
-              || (d.act == 'order.link' && canOrderLinks())))
+              || (d.act == 'order.deleted' && (isOwner() || can('orders.delete'))) || (d.act == 'order.step_removed' && isOwner())))
           || (d.app == 'hr' && d.act == 'hr.fixed' && can('hr.fix'))
           || (d.app == 'hr' && d.act in ['hr.settings', 'hr.shifts', 'hr.fixed', 'hr.penalty', 'hr.penalty_removed', 'hr.file', 'hr.note', 'hr.leave_ok', 'hr.leave_no', 'hr.review'] && can('hr')));
     }
@@ -623,73 +622,6 @@ service cloud.firestore {
               && request.resource.data.steps[request.resource.data.steps.size() - 1].by == request.auth.uid)
           || isOwner());
       allow delete: if isOwner() || can('orders.delete');
-    }
-    // Order links (orderLinks/{token}): a link for a customer chatting on WhatsApp. The token is a long random code and
-    // the only thing the customer page knows; this is the one place in the database someone who is not signed in may
-    // touch. Anyone with access to Orders makes links (prices fixed in the link, one hour at most) and sees them.
-    // The customer may only read their own link (by its exact token, no listing) and fill it in once, before it
-    // expires: name, phone, email, address, note. Nothing else in the link can change from the page. The engine
-    // (service account) turns a filled link into a website order.
-    function canOrderLinks() {
-      return can('orders') || can('orders.edit') || can('orders.change') || can('orders.delete');
-    }
-    function linkFormOk(f, delivery) {
-      return f is map && f.keys().hasOnly(['name', 'phone', 'email', 'address', 'city', 'area', 'note'])
-        && f.keys().hasAll(['name', 'phone', 'email', 'address', 'city', 'area', 'note'])
-        && f.name is string && f.name.size() >= 2 && f.name.size() <= 120
-        && f.phone is string && f.phone.matches('[+]?[0-9 ]{8,20}')
-        && f.email is string && f.email.size() <= 120 && (f.email == '' || f.email.matches('[^@ ]+@[^@ ]+[.][^@ ]+'))
-        && f.address is string && f.address.size() <= 300
-        && f.city is string && f.city.size() <= 80
-        && f.area is string && f.area.size() <= 80
-        && f.note is string && f.note.size() <= 500
-        && (delivery == 'pickup' || (f.address.size() >= 5 && f.city.size() >= 2 && f.area.size() >= 2));
-    }
-    function linkKeys() {
-      return ['state', 'items', 'discount', 'delivery', 'shipping', 'date', 'time', 'total', 'note', 'rep', 'category', 'by', 'byName', 'createdAt', 'expiresAt'];
-    }
-    match /orderLinks/{token} {
-      allow get: if canOrderLinks()
-        || (resource.data.state == 'open' && resource.data.expiresAt > request.time)
-        || (resource.data.state in ['filled', 'sending', 'done', 'error'] && resource.data.createdAt > request.time - duration.value(1, 'd'));
-      allow list: if canOrderLinks();
-      allow create: if canOrderLinks()
-        && token.matches('[A-Za-z0-9]{24,40}')
-        && request.resource.data.keys().hasOnly(linkKeys())
-        && request.resource.data.keys().hasAll(linkKeys())
-        && request.resource.data.state == 'open'
-        && request.resource.data.by == request.auth.uid
-        && request.resource.data.byName is string && request.resource.data.byName.size() <= 200
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.expiresAt is timestamp
-        && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt <= request.time + duration.value(65, 'm')
-        && request.resource.data.items is list && request.resource.data.items.size() >= 1 && request.resource.data.items.size() <= 30
-        && request.resource.data.discount is number && request.resource.data.discount >= 0
-        && request.resource.data.delivery in ['pickup', 'delivery']
-        && request.resource.data.shipping is number && request.resource.data.shipping >= 0
-        && request.resource.data.total is number && request.resource.data.total >= 0
-        && request.resource.data.date is string && request.resource.data.date.size() <= 10
-        && request.resource.data.time is string && request.resource.data.time.size() <= 5
-        && request.resource.data.note is string && request.resource.data.note.size() <= 500
-        && request.resource.data.rep is string && request.resource.data.rep.size() <= 80
-        && request.resource.data.category is string && request.resource.data.category.size() <= 80;
-      // The customer sends the form (once, before it expires). Staff cancel an open link, or send a refused or stuck one again.
-      allow update: if (resource.data.state == 'open'
-          && resource.data.expiresAt > request.time
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'form', 'filledAt'])
-          && request.resource.data.state == 'filled'
-          && request.resource.data.filledAt == request.time
-          && linkFormOk(request.resource.data.form, resource.data.delivery))
-        || (canOrderLinks() && resource.data.state == 'open'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'cancelledByName'])
-          && request.resource.data.state == 'cancelled'
-          && request.resource.data.cancelledByName is string && request.resource.data.cancelledByName.size() <= 200)
-        || (canOrderLinks() && resource.data.state in ['error', 'sending']
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'webError'])
-          && request.resource.data.state == 'filled'
-          && request.resource.data.webError == '');
-      allow delete: if isOwner();
     }
     // HR. hr/settings is where the shop is (places with a radius), how accurate a phone's location must be
     // (maxAcc, meters) and the grace minutes; hr/shifts holds everyone's shifts. Everyone who clocks in reads
