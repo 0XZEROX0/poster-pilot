@@ -1691,4 +1691,12 @@ export const ar: Record<string, string> = {
   'Order link became a website order': 'لينك الطلب بقى طلب على الموقع',
   'Website refused an order link': 'الموقع رفض لينك طلب',
   'Order link · %m': 'لينك طلب · %m',
+  "Restarted %t": "أُعيد تشغيله %t",
+  "Last one %s. See What happened below.": "آخرها %s. انظر \"ماذا حدث\" بالأسفل.",
+  "All during an internet cut or a server restart. Nothing failed since.": "كلها أثناء انقطاع الإنترنت أو إعادة تشغيل السيرفر. لا شيء فشل بعدها.",
+  "Last one %s. Nothing failed in the last 2 hours.": "آخرها %s. لا شيء فشل في آخر ساعتين.",
+  "Needs a look: %w. See the yellow parts below.": "يحتاج نظرة: %w. انظر الأجزاء الصفراء بالأسفل.",
+  "Restart": "إعادة تشغيل",
+  "Server PC restarted": "جهاز السيرفر أُعيد تشغيله",
+  "Internet down at the server": "الإنترنت مقطوع عند السيرفر",
 }

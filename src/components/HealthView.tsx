@@ -34,7 +34,7 @@ function tilesFor(h: HealthState): Tile[] {
   if (down) tiles.push({ key: 'server', icon: 'server', name: t('Server PC'), level: 'bad', big: t('No answer'), small: h.lastSeen ? tn('Last heard %t.', { t: dayClock(h.lastSeen) }) : '' })
   else if (T && T.server.state !== 'none' && (T.server.up ?? -1) >= 0) {
     const up = (T.server.up ?? 0) * 1000
-    const bits = [T.server.disk && T.server.disk > 0 ? tn('Disk %n% full', { n: T.server.disk }) : '', T.server.note || ''].filter(Boolean)
+    const bits = [inRange(T.server.restarted) ? tn('Restarted %t', { t: dayClock(T.server.restarted!) }) : '', T.server.disk && T.server.disk > 0 ? tn('Disk %n% full', { n: T.server.disk }) : '', T.server.note || ''].filter(Boolean)
     tiles.push({ key: 'server', icon: 'server', name: t('Server PC'), level: T.server.state, big: tn('Up %s', { s: spanLabel(up, t) }), small: bits.join(' · ') })
   } else tiles.push({ key: 'server', icon: 'server', name: t('Server PC'), level: T ? 'good' : 'none', big: T ? t('Running') : t('Unknown'), small: T ? t('The server watchdog has not reported yet.') : '' })
   // n8n
@@ -45,7 +45,11 @@ function tilesFor(h: HealthState): Tile[] {
   else {
     const w = T.workflows
     const n = w.failed24 ?? 0
-    const small = !n ? t('No failed runs in the last 24 hours.') : w.since === 0 && w.lastOutTo ? tn('All during the internet cut. None failed since %t.', { t: clock(w.lastOutTo) }) : w.explained ? tn('%a because of the internet cut, %b other.', { a: w.explained, b: n - w.explained }) : tn('Last one %s.', { s: ago(w.lastAt || Date.now()) })
+    // The tile is only yellow or red for failures in the last 2 hours that an internet cut or a restart do not explain.
+    const small = !n ? t('No failed runs in the last 24 hours.')
+      : (w.since ?? 0) > 0 ? tn('Last one %s. See What happened below.', { s: ago(w.lastAt || Date.now()) })
+      : w.explained === n ? t('All during an internet cut or a server restart. Nothing failed since.')
+      : tn('Last one %s. Nothing failed in the last 2 hours.', { s: ago(w.lastAt || Date.now()) })
     tiles.push({ key: 'workflows', icon: 'redo', name: t('Workflows'), level: w.state, big: n ? tn('%n failed', { n }) : t('All fine'), small })
   }
   // Website
@@ -78,9 +82,10 @@ function Hero({ h }: { h: HealthState }) {
     text = t('Sign out and in again. If it stays, ask the owner for "See system health".')
   } else if (r) {
     const bad = tilesFor(h).filter((x) => x.level === 'bad').map((x) => x.name)
+    const warn = tilesFor(h).filter((x) => x.level === 'warn').map((x) => x.name)
     title = level === 'good' ? t('Everything is working') : level === 'warn' ? t('Working now') : t('Something needs a look')
     const last = [...r.events].sort((a, b) => (b.to || b.at) - (a.to || a.at)).find((e) => e.level === 'bad')
-    text = level === 'good' ? t('Server, internet, n8n and the workflows are all answering.') : level === 'warn' ? t('Something needs a look. See the yellow parts below.') : bad.join(' · ')
+    text = level === 'good' ? t('Server, internet, n8n and the workflows are all answering.') : level === 'warn' ? tn('Needs a look: %w. See the yellow parts below.', { w: warn.join(', ') }) : bad.join(' · ')
     if (level === 'good' && last && last.to) text += ' ' + tn('Last problem: %w, %t. It is fixed.', { w: t(last.title).toLowerCase(), t: fromTo(last.at, last.to) })
   }
   return (
@@ -140,7 +145,7 @@ function Timeline({ r, range, onRange, stale }: { r: HealthReport; range: '24h' 
 function Events({ h }: { h: HealthState }) {
   const list = [...(h.report?.events ?? [])].sort((a, b) => (b.to || Date.now()) - (a.to || Date.now()))
   if (h.state === 'down') list.unshift({ at: h.lastSeen || h.checkedAt, to: 0, level: 'bad', title: t('Server stopped answering'), detail: t('Check that the server PC has power and internet. Everything waits and carries on when it is back.') })
-  const tag = (l: Level, to: number) => (l === 'bad' ? (to ? t('Down') : t('Now')) : l === 'warn' ? t('Error') : t('Fixed'))
+  const tag = (l: Level, to: number, kind?: string) => (kind === 'restart' ? t('Restart') : l === 'bad' ? (to ? t('Down') : t('Now')) : l === 'warn' ? t('Error') : t('Fixed'))
   return (
     <section className="card hl-card">
       <header className="hl-card-head"><h3>{t('What happened')}</h3></header>
@@ -150,7 +155,7 @@ function Events({ h }: { h: HealthState }) {
         <ul className="hl-events">
           {list.map((e, i) => (
             <li key={i}>
-              <span className={`hl-tag hl-tag-${e.level}`}>{tag(e.level, e.to)}</span>
+              <span className={`hl-tag hl-tag-${e.level}`}>{tag(e.level, e.to, e.kind)}</span>
               <div>
                 <b dir="auto">{t(e.title)}{e.count && e.count > 1 ? ` · ${tn('%n times', { n: e.count })}` : ''}</b>
                 <p dir="auto">{t(e.detail)}{e.node ? ` (${e.node})` : ''}</p>

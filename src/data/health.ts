@@ -21,7 +21,7 @@ export type HealthRow = { key: string; label: string; cells: Level[]; uptime: nu
 export type HealthEvent = { at: number; to: number; level: Level; title: string; detail: string; kind?: string; count?: number; node?: string; people?: number }
 export type HealthTiles = {
   internet: { state: Level; since?: number; lastOut?: { from: number; to: number } | null }
-  server: { state: Level; at?: number; up?: number; disk?: number; note?: string }
+  server: { state: Level; at?: number; up?: number; disk?: number; note?: string; restarted?: number }
   n8n: { state: Level; lastCheck?: number }
   workflows: { state: Level; failed24?: number; since?: number; lastAt?: number; lastOutTo?: number; explained?: number }
   website: { state: Level; at?: number }
