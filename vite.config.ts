@@ -9,15 +9,10 @@ export default defineConfig({
   test: { include: ['tests/**/*.test.ts'] },
   build: {
     rolldownOptions: {
-      // order.html is the page customers open from an order link (small, separate from the app).
-      input: { main: 'index.html', order: 'order.html' },
       output: {
         advancedChunks: {
           groups: [
-            // The parts every Firebase page needs, apart, so the customer order page (Firestore lite) skips the app's big Firebase chunk.
-            { name: 'firebase-core', test: /node_modules[\\/](@firebase[\\/](app|util|component|logger)|firebase[\\/]app)[\\/]/, priority: 2 },
-            { name: 'firestore-lite', test: /node_modules[\\/](@firebase[\\/]firestore[\\/]dist[\\/]lite|firebase[\\/]firestore[\\/]lite)[\\/]/, priority: 2 },
-            { name: 'firebase', test: /node_modules[\\/](@firebase|firebase)[\\/]/, priority: 1 },
+            { name: 'firebase', test: /node_modules[\\/](@firebase|firebase)[\\/]/ },
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
           ],
         },
@@ -29,8 +24,6 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
-      // The customer order page is never answered with the app's page.
-      workbox: { navigateFallbackDenylist: [/order\.html/] },
       includeAssets: ['favicon.png', 'favicon-32.png', 'apple-touch-icon.png', 'static-mark.png', 'static-logo.png'],
       manifest: {
         name: 'Static OS',

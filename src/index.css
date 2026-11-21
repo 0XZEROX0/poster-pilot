@@ -1863,14 +1863,3 @@ button.hr-person:hover { background: var(--surface-2); }
   .hl-bar { gap: 1px; }
   .hl-bar i { min-width: 1px; }
 }
-
-/* Order links (Orders app) */
-.ol-panel { display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
-.ol-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.ol-head b { display: inline-flex; align-items: center; gap: 6px; }
-.ol-row { display: grid; gap: 4px; padding: 8px 0; border-top: 1px solid var(--border); min-width: 0; }
-.ol-row:first-of-type { border-top: 0; }
-.ol-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.ol-actions:empty { display: none; }
-.ol-prices { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-.ol-prices .chip { cursor: pointer; border: 0; }
