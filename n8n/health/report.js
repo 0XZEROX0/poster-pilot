@@ -50,9 +50,26 @@ const explainGap = o => {
   return { title: 'Server could not be reached', detail: 'No sign from the server. Power, internet or the link was down.' };
 };
 
+// Restarts: the watchdog sends how long the PC has been on. When that start time jumps, the PC restarted (power cut,
+// update or someone restarted it), even when n8n was back too fast for a gap to show.
+const restarts = [];
+let lastBoot = 0;
+for (const s of serverChecks) {
+  if (!(s.up >= 0)) continue;
+  const boot = s.at - s.up * 1000;
+  if (lastBoot && boot - lastBoot > 5 * MIN) {
+    const before = n8nChecks.filter(c => c.at < boot).pop();
+    const back = n8nChecks.find(c => c.at > boot);
+    restarts.push({ kind: 'restart', boot, from: before ? before.at : boot, edge: before ? before.at : boot - 10 * MIN, to: back ? back.at : s.at });
+  }
+  lastBoot = boot;
+}
+
 const inside = (t, o) => t >= (o.edge || o.from) && t <= (o.to || now);
 const internetOut = outages.filter(o => o.kind === 'internet');
-const failCause = f => (internetOut.some(o => inside(f.at, o)) ? 'internet' : '');
+const failCause = f => (internetOut.some(o => inside(f.at, o)) ? 'internet' : restarts.some(o => inside(f.at, { ...o, to: o.to + 5 * MIN })) ? 'restart' : '');
+// A gap that a restart explains is shown once, as the restart.
+for (let i = outages.length - 1; i >= 0; i--) if (outages[i].kind === 'gap' && restarts.some(r => r.boot > outages[i].from - 5 * MIN && r.boot < outages[i].to)) outages.splice(i, 1);
 
 // ---- timeline ----
 const blocks = [];
@@ -66,10 +83,10 @@ const rows = [
     const bad = c.filter(x => x.internet === 0).length;
     return bad === 0 ? 'good' : bad === c.length ? 'bad' : 'warn';
   })) },
-  { key: 'server', label: 'Server PC', cells: blocks.map(b => lvl(b, () => (within(checks, b).length ? 'good' : b.from > now - 10 * MIN ? 'good' : 'bad'))) },
+  { key: 'server', label: 'Server PC', cells: blocks.map(b => lvl(b, () => (!within(checks, b).length ? (b.from > now - 10 * MIN ? 'good' : 'bad') : restarts.some(r => r.boot >= b.from && r.boot < b.to) ? 'warn' : 'good'))) },
   { key: 'n8n', label: 'n8n engine', cells: blocks.map(b => lvl(b, () => {
     const n = within(n8nChecks, b).length;
-    const missed = outages.some(o => o.kind === 'gap' && o.from < b.to && o.to > b.from);
+    const missed = outages.some(o => o.kind === 'gap' && o.from < b.to && o.to > b.from) || restarts.some(r => r.boot >= b.from && r.boot < b.to);
     if (!n && b.from > now - 10 * MIN) return 'good';
     return !n ? 'bad' : missed ? 'warn' : 'good';
   })) },
@@ -108,7 +125,13 @@ for (const o of outages) {
     out.push({ at: o.from, to: o.to, level: 'bad', title: why.title, detail: why.detail });
   }
 }
-// Failed runs outside an internet cut, grouped by workflow + step + message.
+for (const r of restarts) {
+  const lost = fails.filter(f => failCause(f) === 'restart' && inside(f.at, { ...r, to: r.to + 5 * MIN })).length;
+  const clock = t => new Date(t).toLocaleTimeString('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit' });
+  out.push({ at: r.from, to: r.to, level: 'warn', kind: 'restart', title: 'Server PC restarted',
+    detail: `The server PC started again at ${clock(r.boot)} (a power cut, an update or someone restarted it). n8n was back at ${clock(r.to)}.${lost ? ` ${lost} workflow run${lost === 1 ? ' was' : 's were'} cut short by it; the next run${lost === 1 ? '' : 's'} carried on.` : ''}` });
+}
+// Failed runs outside an internet cut or a restart, grouped by workflow + step + message.
 const groups = {};
 for (const f of fails) {
   if (failCause(f)) continue;
@@ -135,13 +158,16 @@ const lastHeal = lastOf(healChecks.filter(h => h.website >= 0 || h.meta >= 0));
 const internetNow = internetOut.find(o => !o.to);
 const lastInternetOut = lastOf(internetOut.filter(o => o.to));
 const fails24 = fails.filter(f => f.at > now - 24 * HOUR);
-const failsSince = lastInternetOut ? fails.filter(f => f.at > lastInternetOut.to).length : fails24.length;
+// Only recent failures that the internet or a restart do not explain make the tile yellow or red. Older ones stay
+// in What happened and the timeline.
+const failsSince = fails.filter(f => f.at > now - 2 * HOUR && !failCause(f)).length;
+const lastRestart = lastOf(restarts);
 const lastFail = lastOf(fails);
 const tiles = {
   internet: lastCheck ? { state: internetNow ? 'bad' : 'good', since: internetNow ? internetNow.from : 0, lastOut: lastInternetOut ? { from: lastInternetOut.from, to: lastInternetOut.to } : null } : { state: 'none' },
-  server: lastServer ? { state: lastServer.note ? 'warn' : 'good', at: lastServer.at, up: lastServer.up, disk: lastServer.disk, note: lastServer.note } : { state: 'none', note: 'watchdog' },
+  server: lastServer ? { state: lastServer.note ? 'warn' : 'good', at: lastServer.at, up: lastServer.up, disk: lastServer.disk, note: lastServer.note, restarted: lastRestart ? lastRestart.boot : 0 } : { state: 'none', note: 'watchdog' },
   n8n: { state: 'good', lastCheck: lastN8n },
-  workflows: { state: fails24.length === 0 ? 'good' : failsSince === 0 ? 'warn' : failsSince < 3 ? 'warn' : 'bad', failed24: fails24.length, since: failsSince, lastAt: lastFail ? lastFail.at : 0, lastOutTo: lastInternetOut ? lastInternetOut.to : 0, explained: fails24.filter(f => failCause(f)).length },
+  workflows: { state: failsSince === 0 ? 'good' : failsSince < 3 ? 'warn' : 'bad', failed24: fails24.length, since: failsSince, lastAt: lastFail ? lastFail.at : 0, lastOutTo: lastInternetOut ? lastInternetOut.to : 0, explained: fails24.filter(f => failCause(f)).length },
   website: lastHeal ? { state: lastHeal.website === 0 ? 'warn' : 'good', at: lastHeal.at } : { state: 'none' },
   meta: lastHeal ? { state: lastHeal.meta === 0 ? 'bad' : 'good', at: lastHeal.at } : { state: 'none' },
   app: { state: appErrs.filter(e => e.at > now - 24 * HOUR).length ? 'warn' : 'good', today: appErrs.filter(e => e.at > now - 24 * HOUR).length },
