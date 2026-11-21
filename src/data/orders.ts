@@ -52,7 +52,7 @@ export const WEB_LABEL: Record<string, string> = {
   pending: 'Pending payment', 'on-hold': 'On hold', processing: 'Processing', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded', failed: 'Failed', 'checkout-draft': 'Draft',
 }
 
-export const STEP_KINDS = ['placed', 'called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note', 'website', 'edited'] as const
+export const STEP_KINDS = ['placed', 'called', 'confirmed', 'date', 'price', 'paid', 'ready', 'out', 'delivered', 'cancelled', 'reopened', 'note', 'website', 'edited', 'undone'] as const
 export type StepKind = (typeof STEP_KINDS)[number]
 /** What a person can add. "placed" and "website" are written by the engine (or when an order is added by hand), "edited" by the edit form. */
 export const ADDABLE: StepKind[] = ['called', 'confirmed', 'date', 'paid', 'price', 'ready', 'out', 'delivered', 'cancelled', 'note']
@@ -157,10 +157,47 @@ export function whereNow(o: Pick<Order, 'steps' | 'status'>): StepKind | null {
 /** The status a step moves the order to, if it moves it. */
 const MOVES: Partial<Record<StepKind, Status>> = { confirmed: 'confirmed', delivered: 'completed', cancelled: 'cancelled', reopened: 'confirmed' }
 
+type MoveOrder = Pick<Order, 'steps'> & { source?: Source; payMethod?: string }
+
+/** Where an order stood before anyone moved it: website orders as they arrived (Cash ones come in Processing, the rest
+ * On hold), orders added by hand as confirmed (the form does not log which one was picked). */
+function startStatus(o: MoveOrder): Status {
+  if (o.source && o.source !== 'website') return 'confirmed'
+  return /cash/i.test(o.payMethod ?? '') ? 'confirmed' : 'new'
+}
+
+/** Plays the log back: every status the order went through (the step that moved it there, -1 for the start), with
+ * each "undone" step taking the last move back. Also, for each undone step, the step it took back and where it went. */
+export function moves(o: MoveOrder) {
+  const stack: { status: Status; index: number }[] = [{ status: startStatus(o), index: -1 }]
+  const undid = new Map<number, { step: number; to: Status }>()
+  o.steps.forEach((s, i) => {
+    if (s.kind === 'undone') {
+      if (stack.length > 1) { const top = stack.pop()!; undid.set(i, { step: top.index, to: stack[stack.length - 1].status }) }
+      return
+    }
+    const to = s.kind === 'website' ? (s.web ? fromWeb(s.web) : null) : MOVES[s.kind]
+    if (to) stack.push({ status: to, index: i })
+  })
+  return { stack, undid }
+}
+
+/** What "Undo" would take back on a closed order: the Complete (or Cancel) tapped in the app, and the status the order
+ * had just before it (with its payments, date, ready / out steps all kept). Null when the last move was not that. */
+export function undoOf(o: MoveOrder & Pick<Order, 'status'>): { step: number; kind: 'delivered' | 'cancelled'; to: Status } | null {
+  if (o.status !== 'completed' && o.status !== 'cancelled') return null
+  const { stack } = moves(o)
+  if (stack.length < 2) return null
+  const top = stack[stack.length - 1], kind = o.steps[top.index]?.kind
+  if ((kind !== 'delivered' && kind !== 'cancelled') || top.status !== o.status) return null
+  const to = stack[stack.length - 2].status
+  return OPEN.includes(to) ? { step: top.index, kind, to } : null
+}
+
 /** The order after a step: its status, what to send to the website, the agreed price and the date. */
-export function applyStep(o: Pick<Order, 'steps' | 'status' | 'webStatus' | 'want' | 'agreed' | 'date' | 'time' | 'closed'> & { source?: Source }, step: Step) {
+export function applyStep(o: Pick<Order, 'steps' | 'status' | 'webStatus' | 'want' | 'agreed' | 'date' | 'time' | 'closed'> & { source?: Source; payMethod?: string }, step: Step) {
   const steps = [...o.steps, step]
-  const status = MOVES[step.kind] ?? o.status
+  const status = step.kind === 'undone' ? undoOf(o)?.to ?? o.status : MOVES[step.kind] ?? o.status
   const closed = !OPEN.includes(status)
   // Send the new status unless the website already has it. Moving back to where the website is cancels a waiting send.
   const target = TO_WEB[status] ?? ''

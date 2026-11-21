@@ -7,7 +7,7 @@ import { PERIOD_LABEL, PERIODS, periodDays, periodRange, type Period } from '../
 import { nudgeEngine } from '../data/nudge'
 import { nameOf } from '../data/profiles'
 import {
-  ADDABLE, CATEGORIES, DEFAULT_REPS, groupOf, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, periodSummary, priceOf, switchDraft, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, waMessage, waNumber, WEB_LABEL, whereNow,
+  ADDABLE, applyStep, CATEGORIES, DEFAULT_REPS, groupOf, isManual, leftOf, matchesOrder, orderNo, orders, paidOf, PAY_METHODS, periodSummary, priceOf, switchDraft, progressOf, SOURCE_LABEL, STATUS_LABEL, stepBy, timeLabel, undoOf, moves, waMessage, waNumber, WEB_LABEL, whereNow,
   type Order, type Status, type Step, type StepKind,
 } from '../data/orders'
 import { allowed, isOwner } from '../data/store'
@@ -27,14 +27,14 @@ type Sort = 'newest' | 'due'
 const STEP_TITLE: Record<StepKind, string> = {
   placed: 'Order placed on the website', called: 'Called the customer', confirmed: 'Order confirmed', date: 'Date and time set', price: 'Agreed price changed',
   paid: 'Payment received', ready: 'Ready for pickup', out: 'Out for delivery', delivered: 'Delivered, order completed', cancelled: 'Order cancelled',
-  reopened: 'Order opened again', note: 'Note', website: 'Status changed on the website', edited: 'Order details changed',
+  reopened: 'Order opened again', note: 'Note', website: 'Status changed on the website', edited: 'Order details changed', undone: 'Last step undone',
 }
 const STEP_BUTTON: Record<StepKind, string> = {
   placed: 'Placed', called: 'Called', confirmed: 'Confirm order', date: 'Date and time', price: 'Agreed price', paid: 'Payment', ready: 'Ready for pickup',
-  out: 'Out for delivery', delivered: 'Delivered (complete)', cancelled: 'Cancel order', reopened: 'Open again', note: 'Note', website: 'Website', edited: 'Edit',
+  out: 'Out for delivery', delivered: 'Delivered (complete)', cancelled: 'Cancel order', reopened: 'Open again', note: 'Note', website: 'Website', edited: 'Edit', undone: 'Undo',
 }
 const STEP_TONE: Partial<Record<StepKind, string>> = { placed: 'b', confirmed: 'b', date: 'b', paid: 'g', ready: 'o', out: 'o', delivered: 'g', cancelled: 'r', called: 'b', website: '' }
-const STEP_ICON: Partial<Record<StepKind, string>> = { placed: 'globe', called: 'whatsapp', date: 'calendar', price: 'prices', paid: 'check', note: 'edit', cancelled: 'close', website: 'globe', out: 'send', reopened: 'redo', edited: 'edit' }
+const STEP_ICON: Partial<Record<StepKind, string>> = { placed: 'globe', called: 'whatsapp', date: 'calendar', price: 'prices', paid: 'check', note: 'edit', cancelled: 'close', website: 'globe', out: 'send', reopened: 'redo', edited: 'edit', undone: 'redo' }
 const PROGRESS = ['Placed', 'Confirmed', 'Paid', 'Ready or on the way', 'Delivered']
 
 const money = (n: number) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} EGP`
@@ -322,7 +322,12 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
     setBusy(false)
   }
   const reopenable = o.status === 'completed' || o.status === 'cancelled'
-  const choices: StepKind[] = o.closed ? (reopenable ? ['reopened', 'paid', 'note'] : ['note'])
+  // A Complete or Cancel tapped by mistake is taken back with Undo (the order goes back exactly where it was);
+  // "Open again" is only offered when there is nothing to undo (for example, completed on the website).
+  const undo = undoOf(o)
+  const undid = useMemo(() => moves(o).undid, [o])
+  const undoneSteps = useMemo(() => new Set([...undid.values()].map((x) => x.step)), [undid])
+  const choices: StepKind[] = o.closed ? (undo ? ['paid', 'note'] : reopenable ? ['reopened', 'paid', 'note'] : ['note'])
     : ADDABLE.filter((k) => !(k === 'confirmed' && o.status === 'confirmed') && !(k === 'ready' && o.delivery === 'delivery') && !(k === 'out' && o.delivery === 'pickup'))
 
   function pick(k: StepKind) {
@@ -353,6 +358,22 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
     } catch (e) { refused(e) }
     setBusy(false)
   }
+  async function undoLast() {
+    if (!undo) return
+    const back = t(STATUS_LABEL[undo.to])
+    if (!confirm(manual ? tn('Undo %s? The order goes back to %b, as it was before.', { s: t(STEP_BUTTON[undo.kind]), b: back })
+      : tn('Undo %s? The order goes back to %b, as it was before, and so does the website order.', { s: t(STEP_BUTTON[undo.kind]), b: back }))) return
+    setBusy(true)
+    const step = stepBy('undone', '')
+    try {
+      await orders.addStep(o, step)
+      track('orders', 'order.step', { what: `${orderNo(o)} · ${o.customer}`, note: `${t(STEP_TITLE.undone)}: ${t(STEP_TITLE[undo.kind])} → ${back}`, ref: o.id })
+      if (!manual) tellEngine()
+      onClosed({ ...o, ...applyStep(o, step), updatedAt: Date.now() })
+      setKind(null)
+    } catch (e) { refused(e) }
+    setBusy(false)
+  }
   async function takeOut(i: number) {
     if (!confirm(t('Take this step out of the log?'))) return
     try {
@@ -370,10 +391,11 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
   }
 
   const wa = waNumber(o.phone)
-  const stepExtra = (s: Step) => s.kind === 'paid' ? `${money(s.amount ?? 0)}${s.method ? ` · ${t(s.method)}` : ''}`
+  const stepExtra = (s: Step, i: number) => s.kind === 'paid' ? `${money(s.amount ?? 0)}${s.method ? ` · ${t(s.method)}` : ''}`
     : s.kind === 'price' ? money(s.amount ?? 0)
       : s.kind === 'date' ? whenLabel({ date: s.date ?? '', time: s.time ?? '' }) || t('No date')
-        : s.kind === 'website' && s.web ? t(WEB_LABEL[s.web] ?? s.web) : ''
+        : s.kind === 'website' && s.web ? t(WEB_LABEL[s.web] ?? s.web)
+          : s.kind === 'undone' && undid.get(i) ? `${t(STEP_TITLE[o.steps[undid.get(i)!.step]?.kind ?? 'note'])} → ${t(STATUS_LABEL[undid.get(i)!.to])}` : ''
   return (
     <div className="mt-detail">
       {/* Stays at the top while the rest scrolls: who, the buttons, and how far the order got. */}
@@ -467,6 +489,12 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         <div><small>{left < 0 ? t('Paid too much') : t('Left to pay')}</small><b dir="ltr" className={left > 0 ? 'bad' : 'good'}>{money(Math.abs(left))}</b></div>
       </div>
       {canEdit && <div className="mt-add">
+        {undo && (
+          <div className="or-undo">
+            <span className="small t2">{tn('Tapped %s by mistake? Undo puts the order back to %b with everything it had.', { s: t(STEP_BUTTON[undo.kind]), b: t(STATUS_LABEL[undo.to]) })}</span>
+            <button className="btn btn-sm" disabled={busy} onClick={undoLast}><Icon name="redo" size={16} />{t(undo.kind === 'delivered' ? 'Undo complete' : 'Undo cancel')}</button>
+          </div>
+        )}
         <b>{t('Add a step')}</b>
         <div className="mt-quick">
           {choices.map((k) => <button key={k} className={`${kind === k ? 'on' : ''}${k === 'cancelled' ? ' or-cancel' : ''}`} onClick={() => pick(k)}>{t(STEP_BUTTON[k])}</button>)}
@@ -500,9 +528,9 @@ function OrderDetail({ o, onDeleted, onClosed, onEdit }: { o: Order; onDeleted: 
         <h3 className="mt-h3">{t('Event log')}</h3>
         <ol className="mt-log">
           {o.steps.map((s, i) => ({ s, i })).reverse().map(({ s, i }) => {
-            const extra = stepExtra(s)
+            const extra = stepExtra(s, i)
             return (
-              <li key={`${s.at}-${i}`}>
+              <li key={`${s.at}-${i}`} className={undoneSteps.has(i) ? 'or-undone' : undefined}>
                 <span className={`mt-dot ${STEP_TONE[s.kind] ?? ''}`}><Icon name={STEP_ICON[s.kind] ?? 'check'} size={13} /></span>
                 <div>
                   <h4>{t(s.kind === 'placed' && manual ? 'Order added in the app' : STEP_TITLE[s.kind])}{extra && <span className="or-extra" dir="auto"> · {extra}</span>}</h4>
