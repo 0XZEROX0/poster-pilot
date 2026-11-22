@@ -29,6 +29,10 @@ const mmFor = (cat, name) => {
   return DEF[c] || 200;
 };
 const dims = products.map(p => mmFor(catFor(p.name), p.name));
+// Where the person put each product in the offer editor: 0 back, 1 middle, 2 front, -1 not chosen (the layout decides).
+const LAYER = { back: 0, middle: 1, front: 2 };
+const layerFor = name => { for (const k of [1, 2, 3, 4]) { if (normName(prow['Item ' + k]) === normName(name)) { const v = LAYER[String(prow['Layer ' + k] || '').trim().toLowerCase()]; return v === undefined ? -1 : v; } } return -1; };
+const layers = products.map(p => layerFor(p.name));
 
 // 1) Names stacked, one per line. Spec words (size, resolution, Hz, ms, panel type) are taken out of each name (a monitor's specs are shown as icons),
 // but the model name after them is kept; each name is kept to 7 words.
@@ -80,7 +84,7 @@ h = h.replace('</style>', css + '</style>');
 // 3) Browser-side: cutout safety net and edge lights for every product, then the real-size placement of the slots
 // (re-checked every 150 ms for 6 s so it follows the final size of the product box).
 const script = String.raw`<script>(function(){
-var DIMS=__DIMS__;
+var DIMS=__DIMS__,LAY=__LAYERS__;
 function setup(el){
 function sync(){try{var s=el.src,ms=el.parentNode.querySelectorAll('.pm');for(var i=0;i<ms.length;i++){ms[i].style.webkitMaskImage='url("'+s+'")';ms[i].style.maskImage='url("'+s+'")';ms[i].style.display='block';}}catch(e){}}
 sync();
@@ -98,7 +102,7 @@ for(var i=0;i<W;i+=2){samp(i,0);samp(i,H-1);}
 for(var j=0;j<H;j+=2){samp(0,j);samp(W-1,j);}
 function med(a){a.sort(function(m,q){return m-q;});return a[a.length>>1];}
 var hasBg=false,br=0,bg=0,bb=0;
-if(rs.length>n*0.3){br=med(rs);bg=med(gs);bb=med(bs);var ok=0;for(var m=0;m<rs.length;m++){if(Math.abs(rs[m]-br)+Math.abs(gs[m]-bg)+Math.abs(bs[m]-bb)<=T*2.5)ok++;}hasBg=ok>rs.length*0.7;}
+if(rs.length>n*0.3){br=med(rs);bg=med(gs);bb=med(bs);var ok=0;for(var m=0;m<rs.length;m++){if(Math.abs(rs[m]-br)+Math.abs(gs[m]-bg)+Math.abs(bs[m]-bb)<=T*2.5)ok++;}hasBg=ok>rs.length*0.7;}if(hasBg&&/^data:image\/png|\.png(\?|#|$)/i.test(p.src)){var fl=0;for(var m2=0;m2<rs.length;m2++){if(Math.abs(rs[m2]-br)+Math.abs(gs[m2]-bg)+Math.abs(bs[m2]-bb)<=4)fl++;}if(fl>=rs.length*0.99)T=5;}
 if(!hasBg&&tr<n*0.3)return;
 var N=W*H,bgm=new Uint8Array(N),st=new Int32Array(N),sp=0;
 function isBg(k){var q=k*4;return d[q+3]<20||(hasBg&&Math.abs(d[q]-br)+Math.abs(d[q+1]-bg)+Math.abs(d[q+2]-bb)<=T);}
@@ -154,33 +158,41 @@ function dim(){for(i=0;i<n;i++){if(asp[i]>=1){w[i]=Ls[i];h[i]=Ls[i]/asp[i];}else
    The layout that fills the product box best wins; the row is kept unless another fills at least 15% more. Front items cover UP (35%) of the item behind. */
 var OV=0.28,UP=0.35;
 function area(i){return w[i]*h[i];}
+/* The person's choice (front / middle / back) wins: USER is true when any product has one. Products without a choice
+   count as middle. ORD() lists the products from the back to the front (ties: the bigger one further back). */
+var USER=false;for(i=0;i<n;i++){if(LAY[i]>=0)USER=true;}
+function lay(i){return LAY[i]>=0?LAY[i]:1;}
+function ORD(){var o=[];for(var j=0;j<n;j++)o.push(j);o.sort(function(p,q){return (lay(p)-lay(q))||(area(q)-area(p));});return o;}
 function rowPlan(){var b=0,mx=0,x=[],y=[],z=[],left=[],right=[],j;
 for(i=0;i<n;i++){if(Ls[i]>mx)mx=Ls[i];}
-if(n===3&&Ls[1]>=0.85*mx)b=1;else{for(i=0;i<n;i++){if(Ls[i]===mx){b=i;break;}}}
-for(i=0;i<n;i++){y[i]=0;z[i]=(i===b?1:2);if(i===b)continue;if(n===3){(left.length===0?left:right).push(i);}else{(i<b?left:right).push(i);}}
+if(USER){var ro=ORD();b=ro[0];}else if(n===3&&Ls[1]>=0.85*mx)b=1;else{for(i=0;i<n;i++){if(Ls[i]===mx){b=i;break;}}}
+for(i=0;i<n;i++){y[i]=0;z[i]=(i===b?1:2);if(USER&&i!==b)z[i]=1+ORD().indexOf(i);if(i===b)continue;if(n===3){(left.length===0?left:right).push(i);}else{(i<b?left:right).push(i);}}
 x[b]=0;var ov=OV*w[b];
 for(j=0;j<left.length;j++){var L=left[j],o=Math.min(ov,0.6*w[L]);x[L]=-w[b]/2+o-w[L]/2;}
 for(j=0;j<right.length;j++){var R=right[j],o2=Math.min(ov,0.6*w[R]);x[R]=w[b]/2-o2+w[R]/2;}
 return {name:'row',x:x,y:y,z:z};}
 function stackPlan(){var ord=[],x=[],y=[],z=[],j;for(i=0;i<n;i++)ord.push(i);
-ord.sort(function(p,q){return area(q)-area(p);});
+if(USER)ord=ORD();else ord.sort(function(p,q){return area(q)-area(p);});
 var f=ord[n-1];y[f]=0;x[f]=0;z[f]=n;
 var ok=true;for(j=n-2;j>=0;j--){var c=ord[j],fr=ord[j+1];if(w[fr]<0.55*w[c])ok=false;y[c]=Math.max(y[fr]+h[fr]-UP*h[c],y[fr]+0.18*h[fr]);x[c]=0;z[c]=j+1;}
 return {name:'stack',x:x,y:y,z:z,bad:!ok};}
-function pyramidPlan(){var hb=0,o=[],x=[],y=[],z=[];for(i=1;i<n;i++){if(area(i)>area(hb))hb=i;}
+function pyramidPlan(){var hb=0,o=[],x=[],y=[],z=[];if(USER)hb=ORD()[0];else{for(i=1;i<n;i++){if(area(i)>area(hb))hb=i;}}
 for(i=0;i<n;i++)if(i!==hb)o.push(i);
 var a=o[0],c=o[1],g=-0.06*(w[a]+w[c])/2,tot=w[a]+w[c]+g,fh=Math.max(h[a],h[c]);
 x[a]=-tot/2+w[a]/2;x[c]=tot/2-w[c]/2;y[a]=0;y[c]=0;z[a]=2;z[c]=2;
+if(USER){var po=ORD();z[a]=1+po.indexOf(a);z[c]=1+po.indexOf(c);}
 x[hb]=0;y[hb]=Math.max(fh-UP*h[hb],0.18*fh);z[hb]=1;
 return {name:'pyramid',x:x,y:y,z:z};}
 /* 4 versions of one product:
    grid    - two side by side in front, the other two side by side behind them, standing higher
    stagger - one behind the other like the stack, each one shifted a little left or right so every version shows */
-function gridPlan(){var x=[],y=[],z=[],f=[0,1],b=[2,3];
-var g=-0.06*(w[0]+w[1])/2,tot=w[0]+w[1]+g,fh=Math.max(h[0],h[1]);
-x[0]=-tot/2+w[0]/2;x[1]=tot/2-w[1]/2;y[0]=0;y[1]=0;z[0]=3;z[1]=3;
-var g2=-0.06*(w[2]+w[3])/2,tot2=w[2]+w[3]+g2,bh=Math.max(h[2],h[3]);
-x[2]=-tot2/2+w[2]/2;x[3]=tot2/2-w[3]/2;y[2]=y[3]=Math.max(fh-UP*bh,0.18*fh);z[2]=1;z[3]=2;
+function gridPlan(){var x=[],y=[],z=[],q=[0,1,2,3];
+if(USER){var go=ORD();q=[go[2],go[3],go[0],go[1]];}
+var A=q[0],B=q[1],C=q[2],D=q[3];
+var g=-0.06*(w[A]+w[B])/2,tot=w[A]+w[B]+g,fh=Math.max(h[A],h[B]);
+x[A]=-tot/2+w[A]/2;x[B]=tot/2-w[B]/2;y[A]=0;y[B]=0;z[A]=3;z[B]=3;
+var g2=-0.06*(w[C]+w[D])/2,tot2=w[C]+w[D]+g2,bh=Math.max(h[C],h[D]);
+x[C]=-tot2/2+w[C]/2;x[D]=tot2/2-w[D]/2;y[C]=y[D]=Math.max(fh-UP*bh,0.18*fh);z[C]=1;z[D]=2;
 return {name:'grid',x:x,y:y,z:z};}
 function staggerPlan(){var S=stackPlan(),ord=[],j;for(i=0;i<n;i++)ord.push(i);ord.sort(function(p,q){return S.z[q]-S.z[p];});
 for(j=1;j<ord.length;j++){S.x[ord[j]]=(j%2?-1:1)*0.1*w[ord[j]];}S.name='stagger';return S;}
@@ -194,7 +206,7 @@ P.score=vis*P.k*P.k/(SW*SH);return P;}
 function plan(){dim();if(n===4){var A=[fit(gridPlan()),fit(staggerPlan()),fit(stackPlan())],B=A[0];for(var q4=1;q4<A.length;q4++){if(!A[q4].bad&&A[q4].score>B.score)B=A[q4];}return B;}
 var R=fit(rowPlan()),best=R,c=[fit(stackPlan())];if(n===3)c.push(fit(pyramidPlan()));
 for(var q=0;q<c.length;q++){if(!c[q].bad&&c[q].score>best.score)best=c[q];}
-if(best!==R&&best.score<R.score*1.15)best=R;return best;}
+if(!USER&&best!==R&&best.score<R.score*1.15)best=R;return best;}
 var P,it;
 for(it=0;it<4;it++){P=plan();var bumped=false;
 for(i=0;i<n;i++){var lg=Math.max(w[i],h[i])*P.k,mn=0.26*SH;if(w[i]>=1.6*h[i])mn=Math.max(mn,0.42*SW);if(lg<mn-0.5){Ls[i]=Ls[i]*mn/lg;bumped=true;}}
@@ -206,7 +218,7 @@ its[i].style.cssText='position:absolute;flex:none;min-width:0;margin:0;left:'+(S
 }catch(e){}}
 var els=document.querySelectorAll('img.mp');for(var q0=0;q0<els.length;q0++)setup(els[q0]);
 var tick=setInterval(sizeItems,150);setTimeout(function(){clearInterval(tick);},6000);
-})();</script>`.replace('__DIMS__', JSON.stringify(dims));
+})();</script>`.replace('__DIMS__', JSON.stringify(dims)).replace('__LAYERS__', JSON.stringify(layers));
 h = h.replace('</body>', script + '</body>');
 item.screenshot_request.html = h;
 return { json: item };

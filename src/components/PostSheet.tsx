@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import { buildCaption, cairoNow, formatPrice, itemName, listPriceOf, maxItems, nextFreeSlot, placesOf, postsFromApp, priceIssues, stageOf, titleOf, waitsInApp, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
-import type { Data, Post, PostItem, PostPlaces, Product } from '../data/types'
+import type { Data, ItemLayer, Post, PostItem, PostPlaces, Product } from '../data/types'
 import { t } from '../i18n'
 import { customProblem, MediaPicker, PlacesPicker } from './CustomPost'
 import { problemText } from './FixView'
@@ -164,6 +164,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   // after approval only someone who may approve offers or posters, or management, so an approved offer is not changed behind their back.
   const mayChangeItems = !posted && !custom && (stage === 'offer' ? mayEdit : allowed('offers.approve') || mayReview || mayManage)
   const itemsChanged = JSON.stringify(draft.items.map((it) => [it.category, it.name])) !== JSON.stringify(post.items.map((it) => [it.category, it.name]))
+  const layersChanged = JSON.stringify(draft.items.map((it) => it.layer ?? '')) !== JSON.stringify(post.items.map((it) => it.layer ?? ''))
   const priceChanged = draft.priceBefore !== post.priceBefore || draft.priceAfter !== post.priceAfter
   // Items the price list cannot price, worked out on the unsaved changes so the warning goes away once fixed.
   const prices = priceIssues({ ...post, items: draft.items, priceBefore: draft.priceBefore }, data.products)
@@ -303,6 +304,12 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
               {post.variants && it.label !== undefined && (
                 <label><span>{t('Version name')}</span><input dir="auto" value={it.label} placeholder={t('Colour or name, e.g. Jungle Panda')} onChange={(e) => setItem(i, { label: e.target.value })} /></label>
               )}
+              {draft.items.length > 1 && (
+                <div className="item-layer">
+                  <span>{t('Place on the poster')}</span>
+                  <LayerPicker count={draft.items.length} value={it.layer ?? ''} onChange={(layer) => setItem(i, { layer })} />
+                </div>
+              )}
               {it.photoMissing && problem && <p className="problem-title"><Icon name="fix" size={16} />{t('No photo was found for this item.')}</p>}
               <label>
                 <span>{t('Photo link')}</span>
@@ -325,6 +332,9 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             ) : (
               <button type="button" className="btn btn-ghost add-item" onClick={() => { setAdding(true); setSwapping(-1) }}><Icon name="plus" size={18} />{t('Add a product')}</button>
             )
+          )}
+          {!posted && !custom && draft.items.length > 1 && layersChanged && stage !== 'offer' && !itemsChanged && !priceChanged && (
+            <p className="hint">{t('Saving makes the poster again with the products in this order. It comes back to Review; its date and time stay.')}</p>
           )}
           {mayChangeItems && stage !== 'offer' && (itemsChanged || priceChanged) && (
             <p className="hint">{t(onFacebook ? 'Saving makes a new poster. It comes back to Review, and its old version is taken off the Facebook schedule. Approve it again to keep its time.' : 'Saving makes a new poster. It comes back to Review; its date and time stay.')}</p>
@@ -432,4 +442,24 @@ function photoInUse(post: Post, i: number) {
   if (own) return own
   const lines = String((post as Post & { ex?: { productImage?: string } }).ex?.productImage ?? '').split('\n')
   return (lines[i] ?? '').trim()
+}
+
+const LAYERS: { value: ItemLayer; label: string }[] = [
+  { value: '', label: 'Auto' },
+  { value: 'back', label: 'At the back' },
+  { value: 'middle', label: 'In the middle' },
+  { value: 'front', label: 'In front' },
+]
+/**
+ * Where a product stands on a poster with more than one product. Auto lets the poster builder decide (biggest at the
+ * back). Middle is offered only when there are 3 or more products.
+ */
+function LayerPicker({ count, value, onChange }: { count: number; value: ItemLayer; onChange: (v: ItemLayer) => void }) {
+  return (
+    <div className="seg layer-seg" role="group" aria-label={t('Place on the poster')}>
+      {LAYERS.filter((l) => count > 2 || l.value !== 'middle').map((l) => (
+        <button key={l.value || 'auto'} type="button" className={value === l.value ? 'on' : ''} aria-pressed={value === l.value} onClick={() => onChange(l.value)}>{t(l.label)}</button>
+      ))}
+    </div>
+  )
 }

@@ -1659,4 +1659,9 @@ export const ar: Record<string, string> = {
   "Restart": "إعادة تشغيل",
   "Server PC restarted": "جهاز السيرفر أُعيد تشغيله",
   "Internet down at the server": "الإنترنت مقطوع عند السيرفر",
+  "Place on the poster": "مكانه في البوستر",
+  "At the back": "في الخلف",
+  "In the middle": "في المنتصف",
+  "In front": "في الأمام",
+  "Saving makes the poster again with the products in this order. It comes back to Review; its date and time stay.": "الحفظ يصنع البوستر من جديد بالمنتجات بهذا الترتيب. يرجع للمراجعة، ويبقى التاريخ والوقت.",
 }
