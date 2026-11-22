@@ -33,6 +33,10 @@ group('history entries for app changes', () => {
     expect(e?.changes).toEqual([{ f: 'priceAfter', from: '5,899', to: '5,499' }])
     expect(describe(post(), { details: 'new' })).toEqual({ act: 'edited', changes: [{ f: 'details', from: '', to: 'new' }] })
     expect(describe(post(), { items: [{ category: 'MB', name: 'Board B', manualPhoto: 'http://p', nextPhoto: false }] })?.changes?.[0].f).toBe('photos')
+    // Front / middle / back on a poster with more than one product.
+    const two = post({ items: [{ category: 'CPU', name: 'Cpu A', manualPhoto: '', nextPhoto: false }, { category: 'Cooler', name: 'Cooler B', manualPhoto: '', nextPhoto: false }] })
+    const placed = describe(two, { items: [{ ...two.items[0], layer: 'front' }, { ...two.items[1], layer: 'back' }] })?.changes?.[0]
+    expect(placed).toEqual({ f: 'layers', from: 'auto, auto', to: 'front, back' })
     expect(describe(post(), { priceAfter: '5,899' })).toBeNull()
   })
   it('notes price checks and ignored problems', () => {

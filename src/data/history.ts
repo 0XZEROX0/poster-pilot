@@ -59,7 +59,7 @@ export const ACT_TEXT: Record<string, string> = {
 
 export const FIELD_TEXT: Record<string, string> = {
   items: 'Items', priceBefore: 'Price before', priceAfter: 'Price after', style: 'Style', details: 'Details', caption: 'Caption',
-  captionStyle: 'Caption style', postDate: 'Date', postTime: 'Time', photos: 'Photos', story: 'Story', storyDelay: 'Story time',
+  captionStyle: 'Caption style', postDate: 'Date', postTime: 'Time', photos: 'Photos', layers: 'Place on the poster', story: 'Story', storyDelay: 'Story time',
 }
 
 /** The story choice as short text for the history: "Facebook + Instagram", "-" for none, or minutes after the post. */
@@ -98,6 +98,9 @@ export function changesOf(before: Post | undefined, patch: Partial<Post>): LogCh
     if (itemsText(was) !== itemsText(patch.items)) out.push({ f: 'items', from: short(itemsText(was)), to: short(itemsText(patch.items)) })
     else if (photosText(was) !== photosText(patch.items) || JSON.stringify(was.map((i) => i.manualPhoto)) !== JSON.stringify(patch.items.map((i) => i.manualPhoto)))
       out.push({ f: 'photos', from: '', to: short(patch.items.map((i) => (i.manualPhoto ? i.manualPhoto : i.nextPhoto ? 'next photo' : '')).filter(Boolean).join(' | ') || '-') })
+    // Which product stands in front, in the middle or at the back.
+    const layers = (items: Post['items']) => items.map((i) => i.layer || 'auto').join(', ')
+    if (itemsText(was) === itemsText(patch.items) && layers(was) !== layers(patch.items)) out.push({ f: 'layers', from: layers(was), to: layers(patch.items) })
   }
   return out
 }

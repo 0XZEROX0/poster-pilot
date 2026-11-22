@@ -18,7 +18,15 @@ export type PostItem = {
   label?: string
   /** The sheet column the item was in (1 to 4), set by the engine. The offer editor numbers them again in their order. */
   slot?: number
+  /**
+   * Where this product stands on a poster with more than one product: in front, in the middle or at the back.
+   * Not set (or empty): the poster builder decides (the biggest product goes to the back).
+   */
+  layer?: ItemLayer
 }
+
+/** Where a product stands on a poster with more than one product. */
+export type ItemLayer = '' | 'front' | 'middle' | 'back'
 
 /**
  * A post the person writes and uploads in the app instead of a product poster: 'text' (Facebook only, Instagram does
