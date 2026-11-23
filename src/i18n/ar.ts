@@ -1672,7 +1672,6 @@ export const ar: Record<string, string> = {
   "Not added to the website": "لم يُضف إلى الموقع",
   "Being hidden on the website": "جاري الإخفاء من الموقع",
   "Hidden on the website": "مخفي على الموقع",
-  "Website page": "صفحة الموقع",
   "Asked to add to the website": "طُلبت إضافته إلى الموقع",
   "Asked to hide on the website": "طُلب إخفاؤه من الموقع",
   "Added to the website, goes live with the post": "أُضيف إلى الموقع، ويظهر مع نزول البوست",

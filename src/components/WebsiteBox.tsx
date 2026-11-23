@@ -35,8 +35,9 @@ export function WebsiteBox({ post, draft, canEdit, onChange, onRetry }: {
             {t(state.text)}
             {post.webAdd === 'scheduled' && at ? ` ${dayLabel(at[0])} · ${timeLabel(at[1] ?? '')}` : ''}
           </Chip>
-          {post.webLink && (post.webAdd === 'live' || post.webAdd === 'scheduled') && (
-            <a className="link" href={post.webLink} target="_blank" rel="noreferrer"><Icon name="globe" size={16} />{t(post.webAdd === 'live' ? 'Open on the website' : 'Website page')}</a>
+          {/* A scheduled product has no public page until it goes live. */}
+          {post.webLink && post.webAdd === 'live' && (
+            <a className="link" href={post.webLink} target="_blank" rel="noreferrer"><Icon name="globe" size={16} />{t('Open on the website')}</a>
           )}
         </p>
       )}
