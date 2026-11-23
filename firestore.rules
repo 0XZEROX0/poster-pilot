@@ -107,6 +107,12 @@ service cloud.firestore {
           || (can('social.delete') && now.get('takeDown', '') == 'asked' && was.get('takeDown', '') in ['', 'failed']
             && now.get('takeDownAt', 0) is int && now.get('takeDownBy', '') is string && now.get('takeDownBy', '').size() <= 200
             && was.get('fbStatus', '') == 'Published'))
+        // "Also add to the website" (static-eg.com) belongs to scheduling: turned on ('asked'), off ('remove' or ''), or tried
+        // again. With it on, a change the website product follows (a new price, an approval, a new time) asks again
+        // ('asked') whoever makes that change. Where the website product stands (webProductId, webLink, webNote, webAt) is engine only.
+        && (!keys.hasAny(['webAdd'])
+          || (now.get('webAdd', '') in ['asked', 'remove', '']
+            && (can('schedule') || (now.get('webAdd', '') == 'asked' && was.get('webAdd', '') in ['working', 'waiting', 'scheduled', 'live', 'failed']))))
         && (!keys.hasAny(['ignoredProblem']) || can('fix'))
         // "Ignore" on a missing Price before: the products it was ignored for (a change of products shows it again).
         && (!keys.hasAny(['priceIgnored']) || (canAny(['offers.approve', 'designs.approve', 'fix', 'offers.manage']) && now.get('priceIgnored', '') is string && now.get('priceIgnored', '').size() <= 2000))
@@ -123,7 +129,7 @@ service cloud.firestore {
         // Only the fields the app is meant to change. Everything else is written by the engine only: competitor prices,
         // where a post stands (zone, order, the workflow queues `q`), what Facebook and the poster maker report, and
         // the workflows' own notes (`ex`: Facebook photo ids, story ids...), so nobody can point a workflow at another post.
-        && keys.hasOnly(['postDate', 'postTime', 'postNow', 'story', 'storyDelay', 'storyDesign', 'feedback', 'appDeleted', 'takeDown', 'takeDownAt', 'takeDownBy',
+        && keys.hasOnly(['postDate', 'postTime', 'postNow', 'story', 'storyDelay', 'storyDesign', 'feedback', 'appDeleted', 'takeDown', 'takeDownAt', 'takeDownBy', 'webAdd',
           'ignoredProblem', 'priceIgnored', 'photoAsk', 'marketAsk', 'retriedAt', 'items', 'variants', 'title', 'company', 'priceBefore', 'priceAfter', 'style', 'details',
           'caption', 'captionStyle', 'media', 'places', 'offer', 'offerNote', 'offerBy', 'appEdits', 'appDirty', 'appEditedAt']);
     }

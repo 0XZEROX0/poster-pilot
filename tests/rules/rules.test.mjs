@@ -688,6 +688,27 @@ await ok('owner saves pricer again without website prices', setDoc(doc(boss, 'ro
   await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'posts/pub1'), { takeDown: '' }) })
   await ok('owner deletes from Facebook', updateDoc(doc(boss, 'posts/pub1'), ask('B')))
 }
+// Also add to the website (webAdd): scheduling turns it on and off; with it on, an approval asks again.
+{
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore()
+    await setDoc(doc(db, 'posts/web1'), { items: [], feedback: '', fbStatus: '', fbPostId: '', zone: 'design', posterUrl: 'u', createdBy: 'x' })
+    await setDoc(doc(db, 'posts/web2'), { items: [], feedback: '', fbStatus: '', fbPostId: '', zone: 'design', posterUrl: 'u', createdBy: 'x', webAdd: 'live', webProductId: 5 })
+    await setDoc(doc(db, 'roles/webrev'), { name: 'Design approver', perms: ['designs.approve'] })
+    await setDoc(doc(db, 'members', 'u-wrv'), m('u-wrv@x.com', 'webrev'))
+  })
+  const wrv = P('u-wrv')
+  await no('plain member adds to the website', updateDoc(doc(plain, 'posts/web1'), { webAdd: 'asked' }))
+  await no('reviewer adds to the website', updateDoc(doc(wrv, 'posts/web1'), { webAdd: 'asked' }))
+  await no('scheduler marks it live', updateDoc(doc(sch, 'posts/web1'), { webAdd: 'live' }))
+  await no('scheduler writes the website product', updateDoc(doc(sch, 'posts/web1'), { webAdd: 'asked', webProductId: 7 }))
+  await no('scheduler writes the website note', updateDoc(doc(sch, 'posts/web1'), { webNote: 'x' }))
+  await ok('scheduler adds to the website', updateDoc(doc(sch, 'posts/web1'), { webAdd: 'asked' }))
+  await ok('scheduler turns it off', updateDoc(doc(sch, 'posts/web1'), { webAdd: '' }))
+  await ok('reviewer approves, the website product follows', updateDoc(doc(wrv, 'posts/web2'), { feedback: 'Done', webAdd: 'asked' }))
+  await no('reviewer hides it on the website', updateDoc(doc(wrv, 'posts/web2'), { webAdd: 'remove' }))
+  await ok('scheduler hides it on the website', updateDoc(doc(sch, 'posts/web2'), { webAdd: 'remove' }))
+}
 // Manage all offers (offers.manage): management edits and deletes any offer, also after approval.
 {
   await env.withSecurityRulesDisabled(async (c) => {

@@ -1,7 +1,7 @@
 import type { Backend } from './backend'
 import { DEMO_POSTER, demoData, demoPhotoChoices, demoVersionPhotos } from './demo'
 import { describe, describeDelete, describeNew } from './history'
-import { buildCaption, cairoNow, storyTo } from './logic'
+import { buildCaption, cairoNow, storyTo, webAskFor } from './logic'
 import type { Data, LogEntry, Post } from './types'
 
 const KEY = 'posterpilot.demo.v2'
@@ -74,6 +74,16 @@ export function createLocalBackend(): Backend {
       if (!p) return
       // No poster is made for an offer nobody approved yet.
       if (p.offer === '' || p.offer === 'Rejected') return
+      if (p.webAdd === 'asked' || p.webAdd === 'remove') {
+        // Also add to the website: made at once and live with the post (the demo has no real website).
+        const now = cairoNow()
+        const stamp = `${now.date} ${now.time}`
+        const posted = p.fbStatus === 'Published'
+        if (p.webAdd === 'remove') patchPost(id, { webAdd: 'removed', webNote: `Hidden on the website. ${stamp}` })
+        else if (!p.posterUrl || (p.feedback !== 'Done' && !posted)) patchPost(id, { webAdd: 'waiting', webNote: 'Waits for the poster to be approved.' })
+        else if (!posted && !(p.postDate && p.postTime)) patchPost(id, { webAdd: 'waiting', webNote: 'Waits for a date and time.' })
+        else patchPost(id, { webAdd: posted ? 'live' : 'scheduled', webProductId: 1, webLink: 'https://static-eg.com/product-category/static-friday/', webAt: posted ? stamp : `${p.postDate} ${p.postTime}`, webNote: stamp })
+      }
       if (p.takeDown === 'asked') {
         // Delete from Facebook and Instagram: gone from both.
         const now = cairoNow()
@@ -122,8 +132,10 @@ export function createLocalBackend(): Backend {
       engine(id)
       return id
     },
-    async updatePost(id, patch) {
+    async updatePost(id, given) {
       const before = data.posts.find((p) => p.id === id)
+      const webAsk = webAskFor(before, given)
+      const patch: Partial<Post> = webAsk ? { ...given, webAdd: webAsk } : given
       note(id, describe(before, patch))
       const next: Partial<Post> = { ...patch }
       // As in the sheet: a new decision or time on a scheduled post takes it off the schedule first.
