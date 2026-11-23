@@ -4,6 +4,7 @@ import { collection, deleteField, doc, getDocs, limit, onSnapshot, query, server
 import { track } from './activity'
 import type { Backend } from './backend'
 import { describe, describeDelete, describeNew } from './history'
+import { webAskFor } from './logic'
 import { engineReachable, nudgeEngine, runEngineNow, type EngineJob } from './nudge'
 import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry, type Post, type Product, type Results, type VersionPhotos } from './types'
 
@@ -21,7 +22,7 @@ import { emptyData, type CaptionTemplate, type Data, type Health, type LogEntry,
 // tell what the person changed and carry it out. `appDirty` is true while something is waiting, so
 // the engine can ask for just those posts. The engine removes each entry when it is done.
 
-const APP_ONLY = new Set(['ignoredProblem', 'priceIgnored', 'offerNote', 'offerBy', 'marketAsk', 'photoAsk', 'storyDesign', 'takeDown', 'takeDownAt', 'takeDownBy'])
+const APP_ONLY = new Set(['ignoredProblem', 'priceIgnored', 'offerNote', 'offerBy', 'marketAsk', 'photoAsk', 'storyDesign', 'takeDown', 'takeDownAt', 'takeDownBy', 'webAdd'])
 
 const blankPost: Omit<Post, 'id'> = {
   order: 0, items: [], company: '', priceBefore: '', priceAfter: '', style: '', details: '', posterUrl: '', photoStatus: '', feedback: '',
@@ -104,7 +105,10 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       nudgeEngine(getAuth(db.app), post.kind ? ['app'] : ['app', 'market'])
       return ref.id
     },
-    async updatePost(id, patch) {
+    async updatePost(id, given) {
+      // With "Also add to the website" on, a new price, product, approval or time brings the website product up to date.
+      const webAsk = webAskFor(known.get(id), given)
+      const patch: Partial<Post> = webAsk ? { ...given, webAdd: webAsk } : given
       const edits: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(patch)) {
         edits[key] = value
@@ -123,6 +127,8 @@ export function createFirestoreBackend(db: Firestore, zones: () => string[] | nu
       if (patch.photoAsk) jobs.push('photos')
       // "Delete from Facebook and Instagram": its own workflow, started at once.
       if (patch.takeDown === 'asked') jobs.push('takedown')
+      // "Also add to the website": its own workflow, started at once.
+      if (patch.webAdd === 'asked' || patch.webAdd === 'remove') jobs.push('offerweb')
       if (jobs.length) nudgeEngine(getAuth(db.app), jobs)
     },
     async removePost(id) {

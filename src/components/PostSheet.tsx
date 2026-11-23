@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
-import { buildCaption, cairoNow, formatPrice, itemName, listPriceOf, maxItems, nextFreeSlot, placesOf, postsFromApp, priceIssues, stageOf, titleOf, waitsInApp, whenOf } from '../data/logic'
+import { buildCaption, cairoNow, formatPrice, itemName, listPriceOf, maxItems, nextFreeSlot, placesOf, postsFromApp, priceIssues, stageOf, titleOf, waitsInApp, webOn, whenOf } from '../data/logic'
 import { allowed, backend, isOwner, myId, myName, ownOffer } from '../data/store'
 import type { Data, ItemLayer, Post, PostItem, PostPlaces, Product } from '../data/types'
 import { t } from '../i18n'
@@ -14,6 +14,7 @@ import { ignorePrice, mayIgnorePrice, unignorePrice } from './PriceCheck'
 import { StageChip } from './PostRow'
 import { STORIES_ON, StoryBox } from './StoryBox'
 import { Sheet } from './Sheet'
+import { WebsiteBox } from './WebsiteBox'
 import { Icon, showToast } from './ui'
 
 // The story editor (and its drawing library) loads only when it is opened.
@@ -80,6 +81,8 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
     // The story choice: where it goes and how long after the post.
     if ((draft.story ?? '') !== (post.story ?? '')) out.story = draft.story ?? ''
     if ((draft.storyDelay ?? '') !== (post.storyDelay ?? '')) out.storyDelay = draft.storyDelay ?? ''
+    // "Also add to the website" turned on or off.
+    if (webOn(draft) !== webOn(post)) out.webAdd = draft.webAdd ?? ''
     return out
   }
   async function save(extra: Partial<Post>, message: string) {
@@ -132,6 +135,11 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
   async function retryStory() {
     await backend.updatePost(post.id, { story: post.story ?? '', storyDelay: post.storyDelay ?? '' })
     showToast(t('The story will be tried again'))
+  }
+  /** The website product could not be made: ask again (the engine tries once more). */
+  async function retryWeb() {
+    await backend.updatePost(post.id, { webAdd: 'asked' })
+    showToast(t('It will be tried again'))
   }
   async function remove() {
     await backend.removePost(post.id)
@@ -380,6 +388,7 @@ export function PostSheet({ post, data, onClose }: { post: Post; data: Data; onC
             </>
           )}
           {STORIES_ON && !custom && stage !== 'offer' && (mayPlan || post.story) && <StoryBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryStory} onDesign={() => setDesigning(true)} />}
+          {!custom && stage !== 'offer' && !removed && (mayPlan || post.webAdd) && <WebsiteBox post={post} draft={draft} canEdit={mayPlan} onChange={set} onRetry={retryWeb} />}
           {designing && <Suspense fallback={null}><StoryEditor post={post} onClose={() => setDesigning(false)} /></Suspense>}
           <label>
             <span>{t(custom === 'text' ? 'Text' : 'Caption')}</span>

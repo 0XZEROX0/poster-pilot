@@ -1,4 +1,4 @@
-import { KIND_LABEL, titleOf } from './logic'
+import { KIND_LABEL, titleOf, webOn } from './logic'
 import type { LogChange, LogEntry, Post } from './types'
 
 // The history of every offer and post: what happened, who did it and when.
@@ -38,6 +38,12 @@ export const ACT_TEXT: Record<string, string> = {
   'fb.removed': 'Removed from Facebook',
   'ig.removed': 'Removed from Instagram',
   'takedown.error': 'Could not remove from Facebook or Instagram',
+  'website.add': 'Asked to add to the website',
+  'website.remove': 'Asked to hide on the website',
+  'website.scheduled': 'Added to the website, goes live with the post',
+  'website.live': 'Live on the website',
+  'website.hidden': 'Hidden on the website',
+  'website.error': 'Could not add to the website',
   'sheet.added': 'Written into the sheet',
   'poster.building': 'Poster being made',
   'poster.built': 'Poster ready',
@@ -130,6 +136,9 @@ export function describe(before: Post | undefined, patch: Partial<Post>): Omit<L
     if (!(f === 'Done' && before?.feedback === 'Cancel' && moved)) return { act, ...whenNote, ...extra }
   }
   if (moved) return { act: date && time ? 'schedule.set' : 'schedule.cleared', ...whenNote, ...extra }
+  // "Also add to the website" turned on or off. (A change it follows is logged as that change; a toggle saved with an approval or a new time is logged as that.)
+  if (patch.webAdd === 'asked' && !webOn(before ?? {})) return { act: 'website.add' }
+  if (patch.webAdd === 'remove' || (patch.webAdd === '' && before?.webAdd)) return { act: 'website.remove' }
   if (patch.ignoredProblem && patch.ignoredProblem !== before?.ignoredProblem) return { act: 'problem.ignored', note: short(patch.ignoredProblem, 300) }
   // A missing Price before set aside (logged), or shown again (nothing to log).
   if ('priceIgnored' in patch) return patch.priceIgnored ? { act: 'problem.ignored', note: 'No Price before' } : null

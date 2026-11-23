@@ -29,8 +29,9 @@ const RETRY_MS = [3000, 10000, 30000]
  * - website: send price list changes to the website; pull: read changes made on the website
  * - orders: send order status changes to the website and read new orders
  * - takedown: delete published posts from Facebook and Instagram (posts with takeDown 'asked')
+ * - offerweb: add offers to the website, or hide them again (posts with webAdd 'asked' or 'remove')
  */
-export type EngineJob = 'app' | 'lists' | 'poster' | 'queue' | 'changes' | 'captions' | 'status' | 'instagram' | 'move' | 'market' | 'photos' | 'website' | 'pull' | 'takedown' | 'orders'
+export type EngineJob = 'app' | 'lists' | 'poster' | 'queue' | 'changes' | 'captions' | 'status' | 'instagram' | 'move' | 'market' | 'photos' | 'website' | 'pull' | 'takedown' | 'orders' | 'offerweb'
 
 /**
  * How the last knock went:

@@ -473,3 +473,30 @@ export const PRICE_IGNORE_PERMS = ['offers.approve', 'designs.approve', 'fix'] a
 
 /** Posts (not published, not skipped) that show no Price before or have an item the price list cannot price. */
 export const postsMissingPrice = (posts: Post[], products: Product[]) => posts.filter((p) => priceIssues(p, products).missing)
+
+// ---------- "Also add to the website" (post.webAdd) ----------
+/** The website option is on for this post (asked, being made, waiting, scheduled, live or failed). */
+export const webOn = (p: Pick<Post, 'webAdd'>) => !!p.webAdd && p.webAdd !== 'remove' && p.webAdd !== 'removed'
+/** Changes that the website product follows: its name, prices, poster (approved again after a redo) and when it goes live. */
+const WEB_FIELDS = ['postDate', 'postTime', 'postNow', 'priceBefore', 'priceAfter', 'items', 'title', 'feedback'] as const
+/**
+ * The webAdd to save with a change, or undefined to leave it: when the website option is on, a change the website
+ * product follows asks the engine to bring the product up to date again.
+ */
+export function webAskFor(before: Pick<Post, 'webAdd'> & Partial<Pick<Post, 'kind'>> | undefined, patch: Partial<Post>): 'asked' | undefined {
+  if (!before || before.kind || 'webAdd' in patch || !webOn(before) || before.webAdd === 'asked') return undefined
+  return WEB_FIELDS.some((k) => k in patch) ? 'asked' : undefined
+}
+/** Where the website product stands, in words for the post editor. */
+export function webStateOf(p: Pick<Post, 'webAdd' | 'webAt' | 'webNote' | 'webLink'>): { tone: 'good' | 'info' | 'bad' | 'neutral'; text: string } | null {
+  switch (p.webAdd) {
+    case 'asked': case 'working': return { tone: 'info', text: 'Being added to the website' }
+    case 'waiting': return { tone: 'neutral', text: 'Waiting' }
+    case 'scheduled': return { tone: 'info', text: 'On the website from' }
+    case 'live': return { tone: 'good', text: 'On the website' }
+    case 'failed': return { tone: 'bad', text: 'Not added to the website' }
+    case 'remove': return { tone: 'info', text: 'Being hidden on the website' }
+    case 'removed': return { tone: 'neutral', text: 'Hidden on the website' }
+    default: return null
+  }
+}

@@ -122,6 +122,19 @@ export type Post = {
   takeDownBy?: string
   /** Engine only: what Facebook and Instagram answered, with the Cairo time. */
   takeDownNote?: string
+  /**
+   * "Also add to the website": the offer goes on static-eg.com as a product under Static Friday, with the poster as its
+   * photo, Price before crossed out and Price after as the price. It goes live when the post goes out.
+   * The app writes 'asked' (on, or something changed) or 'remove' (off); the engine then writes where it stands:
+   * 'working', 'waiting' (no approved poster or no date and time yet), 'scheduled' (made, goes live at webAt),
+   * 'live', 'failed' (see webNote), 'removed' (hidden on the website again). '' or missing: off.
+   */
+  webAdd?: WebAdd
+  /** Engine only: the website product, its page, what happened last (with the Cairo time), and when it goes live (Cairo 'YYYY-MM-DD HH:mm'). */
+  webProductId?: number
+  webLink?: string
+  webNote?: string
+  webAt?: string
   /** App only: the error text the person chose to ignore. The problem is hidden while the text stays the same. */
   ignoredProblem?: string
   /** App only: a missing Price before the person chose to ignore, for these products (category|name per item). Empty: shown again. */
@@ -137,6 +150,8 @@ export type Post = {
   /** Engine only: every photo the website has for each item, for the photo picker. */
   photoChoices?: PhotoChoices
 }
+
+export type WebAdd = '' | 'asked' | 'working' | 'waiting' | 'scheduled' | 'live' | 'failed' | 'remove' | 'removed'
 
 /** One photo of a product on the website: the full photo and a small one for the picker. */
 export type WebPhoto = { src: string; thumb: string; /** The website option this photo belongs to ("Jungle Panda"), when it is an option's own photo. */ label?: string }
