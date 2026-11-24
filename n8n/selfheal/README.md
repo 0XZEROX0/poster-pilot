@@ -6,6 +6,8 @@ Two parts, added 2026-11-18 after a day when website order alerts and the app's 
 Every 15 minutes (`node build.cjs` prints the workflow, `decide.js` is the Code node):
 - **Website order alerts stalled** (newest website order changed > 15 min ago, no order alert after it): kicks the
   website's background queue (`wp-cron.php`) every run. Still stalled after 45 min: one line in the app's Activity page.
+  An order the hourly read already put in the app (`orders/W<id>` updatedAt after the website change, node "Is it in
+  the app?") does not count, because WooCommerce never re-sends an alert that failed while the server was off.
 - **Facebook/Instagram token**: `GET /me` with "Meta Page Token". A real Facebook error: one line in Activity.
 - Activity lines (`app: engine`, `act: health.problem | health.fixed`, by System) are written once when a problem
   starts and once when it is fixed (state in the workflow's static data). No WhatsApp or other outside alerts.

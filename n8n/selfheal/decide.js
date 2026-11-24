@@ -3,7 +3,9 @@
 // once when it starts and once when it is fixed (no WhatsApp or other outside alerts, by the owner's choice).
 //  1. Website order alerts stalled: the newest website order changed more than 15 min ago but no order alert reached
 //     n8n after it. Fix: kick the website's background queue (WP-Cron) every run. If still stalled after 45 min, tell
-//     the app (orders still arrive through the hourly read).
+//     the app (orders still arrive through the hourly read). An order the hourly read already put in the app does
+//     not count: WooCommerce never re-sends an alert that failed (for example while the server PC was off), so
+//     without this the warning stayed on until the next new order (2026-11-24 power cut).
 //  2. Facebook/Instagram token: a cheap /me call. If it fails, tell the app (only a person can make a new token).
 const sd = $getWorkflowStaticData('global');
 sd.open = sd.open || {};
@@ -21,15 +23,19 @@ const order = first('Read newest website order');
 const timing = first('Read hook timing');
 const modified = order.date_modified_gmt ? Date.parse(order.date_modified_gmt + 'Z') : 0;
 const lastHook = Number(timing.lastHook || 0);
-const stalled = modified > 0 && now - modified > 15 * MIN && modified > lastHook + MIN;
+const appDoc = first('Is it in the app?');
+const appAt = appDoc.fields && appDoc.fields.updatedAt ? Date.parse(appDoc.fields.updatedAt.timestampValue) : 0;
+const inApp = appAt > 0 && appAt >= modified;
+const stalled = modified > 0 && now - modified > 15 * MIN && modified > lastHook + MIN && !inApp;
 if (stalled) {
   kickCron = true;
   sd.stallSince = sd.stallSince || modified;
   if (now - sd.stallSince > 45 * MIN) problem('webhooks', 'Website order alerts are stuck',
     `No order alert has reached n8n since ${cairo(lastHook || sd.stallSince)}. Orders still come into the app every hour at :40. ` +
-    'On the website, open WooCommerce > Status > Scheduled Actions > In-progress and cancel the job that has been running for a long time.');
+    'If the server PC was off, this clears by itself at the next :40 read. Otherwise, on the website, open WooCommerce > Status > Scheduled Actions > In-progress and cancel the job that has been running for a long time.');
 } else if (modified > 0) {
-  if (sd.stallSince) fixed('webhooks', 'Website order alerts work again', 'Orders reach the app within a minute again.');
+  if (sd.stallSince || sd.open.webhooks) fixed('webhooks', 'Website order alerts work again', inApp && modified > lastHook + MIN
+    ? `Website order #${order.id} is in the app now (read by the hourly check).` : 'Orders reach the app within a minute again.');
   sd.stallSince = 0;
 }
 
@@ -47,4 +53,4 @@ const base = `projects/${$('Settings').first().json.projectId}/databases/(defaul
 const ev = v => ({ stringValue: String(v) });
 const rid = () => 'H' + now.toString(36) + Math.random().toString(36).slice(2, 8);
 const writes = lines.map(l => ({ update: { name: `${base}/activity/${rid()}`, fields: { app: ev('engine'), act: ev(l.act), what: ev(l.what), ...(l.note ? { note: ev(l.note) } : {}), by: ev('system'), byName: ev('System'), at: { timestampValue: new Date(now).toISOString() } } }, currentDocument: { exists: false } }));
-return [{ json: { kickCron, writes, count: writes.length, open: Object.keys(sd.open) } }];
+return [{ json: { kickCron, stalled, inApp, writes, count: writes.length, open: Object.keys(sd.open) } }];
